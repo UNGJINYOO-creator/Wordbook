@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.SpanStyle
@@ -140,14 +142,29 @@ fun TypingQuiz(
     val blanks = pattern.count { it == '_' }
     var typed by remember(word.id) { mutableStateOf("") }
     val focus = remember { FocusRequester() }
-    LaunchedEffect(word.id) { runCatching { focus.requestFocus() } }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // requestFocus alone does nothing when the field is still focused after the keyboard was
+    // hidden, so the keyboard is shown explicitly too.
+    val openKeyboard = {
+        runCatching { focus.requestFocus() }
+        keyboard?.show()
+        Unit
+    }
+    LaunchedEffect(word.id) { openKeyboard() }
 
     fun filled(): String {
         var k = 0
         return pattern.map { c -> if (c == '_') typed.getOrNull(k++) ?: '_' else c }.joinToString("")
     }
 
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = { if (answered == null) openKeyboard() },
+        ),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         // Kept compact so the keyboard (even a floating one) never covers the answer.
         Text(
             if (dictation) "발음을 듣고 단어를 쓰세요" else "빈칸을 채워 단어를 쓰세요",
@@ -207,7 +224,7 @@ fun TypingQuiz(
             letterSpacing = if (len <= 8) 6.sp else 2.sp,
             maxLines = 1,
             softWrap = false,
-            modifier = Modifier.clickable { runCatching { focus.requestFocus() } },
+            modifier = Modifier.clickable(onClick = openKeyboard),
         )
         // Invisible field that receives the keyboard input.
         BasicTextField(
@@ -232,7 +249,7 @@ fun TypingQuiz(
             true -> Text("정답!", color = RightGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             false -> Text("정답: ${word.text}", color = WrongRed, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             null -> Text(
-                "남은 글자 ${blanks - typed.length}개 · 지우기는 키보드 ⌫",
+                "남은 글자 ${blanks - typed.length}개 · 키보드가 없으면 단어를 누르세요",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
             )
