@@ -43,8 +43,8 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
     // Pronunciation like "[əbǽndən]" or "/ˈæp.əl/"
     // (Korean in brackets is part of a meaning: "연결[접속]하다")
     private val phoneticRegex = Regex("\\[[^\\]가-힣]*]|/[^/가-힣]*/")
-    // Circled part-of-speech badge in front of a meaning: "명 인터넷", "(동) 발명하다"
-    private val posBadgeRegex = Regex("^[^가-힣]*[(\\[]?[명동형부전접대감][)\\]]?\\s+")
+    // Bracketed part-of-speech badge in front of a meaning: "(동) 발명하다"
+    private val bracketBadgeRegex = Regex("^[(\\[][명동형부전접대감][)\\]]\\s*")
 
     private val stopWords = setOf(
         "a", "an", "the", "and", "or", "but", "if", "of", "to", "in", "on", "at", "by", "for",
@@ -124,7 +124,9 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
                 words.map { it.lowercase() }.filter { it.length >= 2 && it !in stopWords }.forEach { add(it, "") }
             }
         }
-        return result.values.toList()
+        val words = result.values.toList()
+        val cleaned = MeaningCheck.cleanPage(words.map { it.meaning })
+        return words.mapIndexed { i, w -> w.copy(meaning = cleaned[i]) }
     }
 
     private fun looksLikeHeadword(e: Entry, korean: List<OcrLine>): Boolean =
@@ -136,8 +138,9 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
         return centreGap < 0.8f * max(e.height, k.height) && k.left >= e.right - e.height
     }
 
+    // Part-of-speech badges are removed per page in MeaningCheck.cleanPage.
     private fun cleanMeaning(s: String): String =
-        posBadgeRegex.replace(s.trim(), "").trim().trim(':', '-', '=', '·', ',').trim()
+        bracketBadgeRegex.replace(s.trim(), "").trim().trim(':', '-', '=', '·', ',').trim()
 
     /** 4. Korean line on the same row to the right (nearest), else directly below and left-aligned. */
     private fun findMeaning(e: OcrLine, korean: List<OcrLine>, used: MutableSet<OcrLine>): OcrLine? {

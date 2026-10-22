@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,8 +66,9 @@ class Candidate(val text: String, meaning: String, selected: Boolean, val alread
     var selected by mutableStateOf(selected)
     /** Where the current meaning came from, shown under the word. */
     var source by mutableStateOf(if (meaning.isBlank()) "" else "사진")
-    /** Machine translation offered when it disagrees with the photo's meaning. */
+    /** Alternative meaning offered on a button: the translation, or the photo's text if it was replaced. */
     var suggestion by mutableStateOf<String?>(null)
+    var suggestionSource by mutableStateOf("")
 }
 
 class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -106,7 +109,7 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         candidates.addAll(words.map {
             Candidate(it.text, it.meaning, selected = it.text !in saved, alreadySaved = it.text in saved)
         })
-        val fromPhoto = candidates.count { !MeaningCheck.looksGarbled(it.meaning) }
+        val fromPhoto = candidates.count { !MeaningCheck.suspicious(it.meaning) }
         val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)"
 
         status = "번역 모델 준비 중… (처음 한 번만 다운로드해요)"
@@ -118,16 +121,21 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
             candidates.filter { MeaningCheck.looksGarbled(it.meaning) }.forEach { it.meaning = ""; it.source = "" }
             return
         }
-        // Check every word: broken or missing photo meanings are replaced by the translation;
-        // a clean photo meaning is kept, with the translation offered if the two disagree.
+        // Second check on every word: a broken photo meaning is replaced by the translation
+        // (the photo text stays available on a button); a clean one is kept, with the
+        // translation offered when the two don't share any syllable.
         candidates.forEachIndexed { i, c ->
             status = "뜻 확인 중… ${i + 1}/${candidates.size}"
             val translated = runCatching { EnKoTranslator.translate(c.text) }.getOrDefault("")
-            if (MeaningCheck.looksGarbled(c.meaning)) {
-                c.meaning = translated
-                c.source = if (translated.isBlank()) "" else "번역"
+            if (MeaningCheck.suspicious(c.meaning)) {
+                if (translated.isNotBlank()) {
+                    if (c.meaning.isNotBlank()) { c.suggestion = c.meaning; c.suggestionSource = "사진" }
+                    c.meaning = translated
+                    c.source = "번역 (사진 뜻이 이상해서)"
+                }
             } else if (translated.isNotBlank() && MeaningCheck.disagree(c.meaning, translated)) {
                 c.suggestion = translated
+                c.suggestionSource = "번역"
             }
         }
         busy = false
@@ -214,6 +222,7 @@ fun ScanScreen(
                 TextButton(onClick = { vm.setAll(false) }) { Text("전체 해제") }
             }
             HorizontalDivider()
+            var showRaw by remember { mutableStateOf(false) }
             LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(vm.candidates, key = { _, c -> c.text }) { _, c ->
                     Row(
@@ -236,14 +245,35 @@ fun ScanScreen(
                                 value = c.meaning,
                                 onValueChange = { c.meaning = it; c.source = "" },
                                 placeholder = { Text("뜻") },
-                                singleLine = true,
+                                maxLines = 3,
                             )
                             c.suggestion?.let { s ->
-                                TextButton(onClick = { c.meaning = s; c.source = "번역"; c.suggestion = null }) {
-                                    Text("번역으로 바꾸기: $s", style = MaterialTheme.typography.labelSmall)
+                                TextButton(onClick = {
+                                    val previous = c.meaning
+                                    val previousSource = if (c.suggestionSource == "번역") "사진" else "번역"
+                                    c.meaning = s
+                                    c.source = c.suggestionSource
+                                    c.suggestion = previous
+                                    c.suggestionSource = previousSource
+                                }) {
+                                    Text("${c.suggestionSource} 뜻으로: $s", style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
+                    }
+                }
+                item {
+                    TextButton(onClick = { showRaw = !showRaw }, modifier = Modifier.padding(8.dp)) {
+                        Text(if (showRaw) "인식 원문 숨기기" else "빠진 단어가 있나요? 인식 원문 보기")
+                    }
+                }
+                if (showRaw) {
+                    items(WordExtractor.lastLines) { l ->
+                        Text(
+                            "[${l.height}] ${l.text}",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+                        )
                     }
                 }
             }

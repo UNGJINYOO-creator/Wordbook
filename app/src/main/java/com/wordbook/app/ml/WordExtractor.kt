@@ -13,6 +13,10 @@ import kotlinx.coroutines.withContext
 object WordExtractor {
     @Volatile private var dictionary: Set<String>? = null
 
+    /** Raw OCR lines of the last photo, shown on the scan screen to diagnose missed words. */
+    @Volatile var lastLines: List<OcrLine> = emptyList()
+        private set
+
     private suspend fun dictionary(context: Context): Set<String> =
         dictionary ?: withContext(Dispatchers.IO) {
             context.assets.open("words.txt").bufferedReader().useLines { it.toHashSet() }
@@ -41,6 +45,7 @@ object WordExtractor {
         } finally {
             recognizer.close()
         }
+        lastLines = lines.sortedWith(compareBy({ it.top }, { it.left }))
         return VocabPairer { isWord(dict, it) }.pair(lines)
     }
 }

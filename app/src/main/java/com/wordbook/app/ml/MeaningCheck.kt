@@ -2,6 +2,51 @@ package com.wordbook.app.ml
 
 /** Heuristics for deciding whether a meaning read from the photo can be trusted. */
 object MeaningCheck {
+    /** Syllables a circled part-of-speech badge (명/동/형/부...) is often misread as. */
+    private const val BADGE_CHARS = "명영몡멍동둥등형헝혐협부브전접대감관"
+    private val leadingSymbols = Regex("^[^가-힣A-Za-z(\\[~]+")
+
+    /**
+     * Cleans the meanings found on one page. Vocabulary books put a circled badge (명, 동, 형...)
+     * before each meaning; OCR reads it as a symbol ("@", "®") or as a syllable glued to the
+     * meaning ("동발명하다", "영웹사이트"). When most meanings on the page start that way it's a
+     * badge, so it's removed.
+     */
+    fun cleanPage(raw: List<String>): List<String> {
+        val trimmed = raw.map { it.trim() }
+        val hadSymbol = trimmed.map { leadingSymbols.containsMatchIn(it) }
+        val stage1 = trimmed.map { leadingSymbols.replace(it, "").trim() }
+        val nonEmpty = stage1.count { it.isNotEmpty() }
+        val badgeLike = stage1.indices.count { i ->
+            hadSymbol[i] || (stage1[i].length > 2 && stage1[i][0] in BADGE_CHARS)
+        }
+        val badgeMode = nonEmpty >= 2 && badgeLike >= nonEmpty * 0.4
+        return stage1.mapIndexed { i, m ->
+            var r = m
+            if (r.length > 2 && r[0] in BADGE_CHARS && (r[1] == ' ' || (badgeMode && !hadSymbol[i]))) {
+                r = r.substring(1).trim()
+            }
+            tidy(r)
+        }
+    }
+
+    /** Strips trailing punctuation and a dangling one-syllable fragment ("즉석의 긴" -> "즉석의"). */
+    private fun tidy(m: String): String {
+        var r = m.trim().trimEnd('.', ',', ';', ':', '·', '-').trim()
+        val parts = r.split(' ')
+        if (parts.size >= 2 && parts.last().length == 1 && hangul.matches(parts.last())) {
+            r = parts.dropLast(1).joinToString(" ").trimEnd(',', ';').trim()
+        }
+        return r
+    }
+
+    /** Broken in a way the page cleanup can't fix: unbalanced brackets or garbled text. */
+    fun suspicious(meaning: String): Boolean {
+        if (looksGarbled(meaning)) return true
+        return meaning.count { it == '[' } != meaning.count { it == ']' } ||
+            meaning.count { it == '(' } != meaning.count { it == ')' }
+    }
+
     // "(= Net)" style cross-references are fine to keep in a meaning.
     private val englishRef = Regex("\\(\\s*=?\\s*[A-Za-z][A-Za-z .'-]*\\)")
     private val hangul = Regex("[\\uAC00-\\uD7A3]")
