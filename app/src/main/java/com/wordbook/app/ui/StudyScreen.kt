@@ -363,7 +363,7 @@ fun StudyScreen(
     val tts = rememberTts()
     Scaffold(
         topBar = {
-            TopAppBar(
+            AppTopBar(
                 title = {
                     Text(
                         if (vm.finished) "학습 결과"
@@ -403,10 +403,7 @@ fun StudyScreen(
                     ) {
                         val progress = vm.index / vm.roundSize.toFloat()
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            LinearProgressIndicator(
-                                progress = { progress },
-                                modifier = Modifier.weight(1f),
-                            )
+                            ThickProgress(progress, Modifier.weight(1f))
                             Text(
                                 "${(progress * 100).roundToInt()}%",
                                 style = MaterialTheme.typography.titleMedium,
@@ -563,7 +560,8 @@ private fun SwipeCard(
                     cameraDistance = 12f * density.density
                 },
             shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(6.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         ) {
             val showingBack = rotation > 90f
             // The side shown first is the "front"; with backFirst the meaning comes first.
@@ -661,18 +659,14 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
         } else {
             Spacer(Modifier.weight(1f))
         }
-        if (vm.everMissed.isNotEmpty()) {
-            Button(onClick = { vm.restart(onlyMissed = true) }, modifier = Modifier.fillMaxWidth()) {
-                Text("틀린 단어만 다시 학습")
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (vm.everMissed.isNotEmpty()) PrimaryButton("틀린 단어만 다시 학습", { vm.restart(onlyMissed = true) })
+            SecondaryButton("처음부터 다시", { vm.restart(onlyMissed = false) })
+            if (vm.telegramReady) {
+                SecondaryButton("텔레그램으로 결과 보내기", vm::sendTelegram)
+                vm.telegramStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
+            SecondaryButton("끝내기", onBack)
         }
-        OutlinedButton(onClick = { vm.restart(onlyMissed = false) }, modifier = Modifier.fillMaxWidth()) {
-            Text("처음부터 다시")
-        }
-        if (vm.telegramReady) {
-            OutlinedButton(onClick = vm::sendTelegram, modifier = Modifier.fillMaxWidth()) { Text("텔레그램으로 결과 보내기") }
-            vm.telegramStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-        }
-        OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("끝내기") }
     }
 }

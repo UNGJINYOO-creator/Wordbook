@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -177,8 +178,10 @@ fun ScanScreen(
 ) {
     val selectedCount = vm.candidates.count { it.selected }
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            TopAppBar(
+            AppTopBar(
+                containerColor = MaterialTheme.colorScheme.surface,
                 title = { Text("단어 고르기") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
@@ -187,11 +190,12 @@ fun ScanScreen(
         },
         bottomBar = {
             if (vm.candidates.isNotEmpty()) {
-                Button(
-                    onClick = { vm.save(onSaved) },
+                PrimaryButton(
+                    "단어 ${selectedCount}개 저장",
+                    { vm.save(onSaved) },
+                    Modifier.padding(16.dp).navigationBarsPadding(),
                     enabled = selectedCount > 0 && !vm.busy,
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                ) { Text("단어 ${selectedCount}개 저장") }
+                )
             }
         },
     ) { padding ->

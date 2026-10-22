@@ -116,8 +116,8 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("내 단어장") },
+            AppTopBar(
+                title = { Text("내 단어장", style = MaterialTheme.typography.headlineMedium) },
                 actions = {
                     if (decks.isNotEmpty()) {
                         TextButton(onClick = { editing = !editing }) { Text(if (editing) "완료" else "편집") }
@@ -133,10 +133,16 @@ fun HomeScreen(
         },
         floatingActionButton = {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SmallFloatingActionButton(onClick = {
+                SmallFloatingActionButton(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    onClick = {
                     pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }) { Icon(Icons.Default.PhotoLibrary, contentDescription = "앨범에서 선택") }
                 ExtendedFloatingActionButton(
+                    shape = ButtonShape,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                     onClick = {
                         val uri = newPhotoUri(context)
                         pendingUri = uri.toString()
@@ -166,10 +172,14 @@ fun HomeScreen(
                     item(key = "review") {
                         Card(
                             onClick = onReview,
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                            ),
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("오늘 복습 ${dueCount}개", style = MaterialTheme.typography.titleMedium)
                                     Text("잊어버리기 전에 다시 볼 단어예요", style = MaterialTheme.typography.bodySmall)
@@ -213,8 +223,13 @@ private fun DeckCard(deck: DeckSummary, editing: Boolean, onDelete: () -> Unit, 
     val date = remember(deck.createdAt) {
         SimpleDateFormat("yyyy.MM.dd", Locale.KOREA).format(Date(deck.createdAt))
     }
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Column(Modifier.padding(16.dp)) {
+    Card(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(deck.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                 if (editing) {
@@ -225,15 +240,15 @@ private fun DeckCard(deck: DeckSummary, editing: Boolean, onDelete: () -> Unit, 
             }
             Spacer(Modifier.height(4.dp))
             Row {
-                Text("$date · 단어 ${deck.wordCount}개", style = MaterialTheme.typography.bodySmall)
+                Text("$date · 단어 ${deck.wordCount}개", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 Spacer(Modifier.weight(1f))
                 val percent = if (deck.wordCount == 0) 0 else deck.knownCount * 100 / deck.wordCount
-                Text("외움 ${deck.knownCount}/${deck.wordCount} · $percent%", style = MaterialTheme.typography.bodySmall)
+                Text("$percent%", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             }
-            Spacer(Modifier.height(8.dp))
-            LinearProgressIndicator(
-                progress = { if (deck.wordCount == 0) 0f else deck.knownCount / deck.wordCount.toFloat() },
-                modifier = Modifier.fillMaxWidth(),
+            Spacer(Modifier.height(14.dp))
+            ThickProgress(
+                if (deck.wordCount == 0) 0f else deck.knownCount / deck.wordCount.toFloat(),
+                Modifier.fillMaxWidth(),
             )
         }
     }

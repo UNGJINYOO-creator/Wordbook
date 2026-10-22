@@ -71,7 +71,7 @@ private fun AutoAdvance(answered: Boolean?, onNext: () -> Unit) {
     }
     if (answered == false) {
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("다음") }
+        PrimaryButton("다음", onNext)
     }
 }
 
@@ -103,13 +103,18 @@ fun ChoiceQuiz(
                         ButtonDefaults.outlinedButtonColors(containerColor = RightGreen, contentColor = Color.White)
                     answered == false && c.id == pickedId ->
                         ButtonDefaults.outlinedButtonColors(containerColor = WrongRed, contentColor = Color.White)
-                    else -> ButtonDefaults.outlinedButtonColors()
+                    else -> ButtonDefaults.outlinedButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    )
                 }
                 OutlinedButton(
                     onClick = { if (answered == null) onPick(c) },
                     colors = colors,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                ) { Text(label, fontSize = 18.sp, maxLines = 2, textAlign = TextAlign.Center) }
+                    shape = ButtonShape,
+                    border = null,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                ) { Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, textAlign = TextAlign.Center) }
             }
         }
         AutoAdvance(answered, onNext)

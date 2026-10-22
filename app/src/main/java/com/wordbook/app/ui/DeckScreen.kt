@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -139,8 +141,10 @@ fun DeckScreen(
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
-            TopAppBar(
+            AppTopBar(
+                containerColor = MaterialTheme.colorScheme.surface,
                 title = { Text(deck?.name ?: "", modifier = Modifier.clickable { showRename = true }) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
@@ -168,7 +172,7 @@ fun DeckScreen(
                     pendingUri = uri.toString()
                     takePicture.launch(uri)
                 }) { Icon(Icons.Default.CameraAlt, "사진 찍어 단어 추가") }
-                FloatingActionButton(onClick = { showAdd = true }) { Icon(Icons.Default.Add, "카드 추가") }
+                FloatingActionButton(onClick = { showAdd = true }, shape = ButtonShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { Icon(Icons.Default.Add, "카드 추가") }
             }
         },
     ) { padding ->
@@ -177,19 +181,14 @@ fun DeckScreen(
             contentPadding = PaddingValues(bottom = 200.dp),
         ) {
             item {
-                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(
-                        onClick = { onStudy(vm.deckId, false) },
-                        enabled = words.isNotEmpty(),
-                        modifier = Modifier.weight(1f),
-                    ) { Text("학습 ($studyCount)") }
-                    OutlinedButton(
-                        onClick = { onStudy(vm.deckId, true) },
-                        enabled = unknownCount > 0,
-                        modifier = Modifier.weight(1f),
-                    ) { Text("모르는 것만 ($unknownCount)") }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    PrimaryButton("학습 $studyCount", { onStudy(vm.deckId, false) }, Modifier.weight(1f), enabled = words.isNotEmpty())
+                    SecondaryButton("모르는 것만 $unknownCount", { onStudy(vm.deckId, true) }, Modifier.weight(1f), enabled = unknownCount > 0)
                 }
-                HorizontalDivider()
+                Spacer(Modifier.height(8.dp))
             }
             if (words.isEmpty()) {
                 item {
@@ -203,7 +202,7 @@ fun DeckScreen(
             items(words, key = { it.id }) { word ->
                 ListItem(
                     headlineContent = {
-                        Text(word.text)
+                        Text(word.text, style = MaterialTheme.typography.titleMedium)
                     },
                     supportingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
