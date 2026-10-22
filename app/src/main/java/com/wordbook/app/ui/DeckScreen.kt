@@ -205,13 +205,13 @@ fun DeckScreen(
                     headlineContent = { Text(word.text) },
                     supportingContent = { Text(word.meaning.ifBlank { "(뜻 없음)" }) },
                     leadingContent = {
-                        // Tap to toggle "확실히 알아요"; mastered cards are skipped in regular study.
+                        // Tap to toggle "외웠어요"; mastered cards are skipped in regular study.
                         IconButton(onClick = { vm.toggleMastered(word) }) {
                             Icon(
                                 if (word.mastered) Icons.Default.DoneAll else Icons.Default.CheckCircle,
                                 contentDescription = when {
-                                    word.mastered -> "확실히 알아요"
-                                    word.known -> "알아요"
+                                    word.mastered -> "외웠어요"
+                                    word.known -> "헷갈려요"
                                     else -> "아직"
                                 },
                                 tint = when {

@@ -255,29 +255,17 @@ fun StudyScreen(
                             )
                         }
                         Spacer(Modifier.height(16.dp))
+                        // One guide line instead of buttons: the gestures themselves are the controls.
                         Text(
-                            "탭: 해석 보기 · ← 알아요 · ↑ 확실히 알아요 · ↓ 몰라요",
+                            "카드를 탭하면 해석이 보여요",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
-                            textAlign = TextAlign.Center,
                         )
-                        Spacer(Modifier.height(12.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Button(
-                                onClick = { vm.mark(Answer.UNKNOWN) },
-                                colors = ButtonDefaults.buttonColors(containerColor = UnknownRed),
-                                modifier = Modifier.weight(1f),
-                            ) { Text("몰라요") }
-                            Button(
-                                onClick = { vm.mark(Answer.KNOWN) },
-                                colors = ButtonDefaults.buttonColors(containerColor = KnownGreen),
-                                modifier = Modifier.weight(1f),
-                            ) { Text("알아요") }
-                            Button(
-                                onClick = { vm.mark(Answer.MASTERED) },
-                                colors = ButtonDefaults.buttonColors(containerColor = MasteredBlue),
-                                modifier = Modifier.weight(1f),
-                            ) { Text("확실히") }
+                        Spacer(Modifier.height(8.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                            Text("↓ 몰라요", color = UnknownRed, fontWeight = FontWeight.Bold)
+                            Text("← 헷갈려요", color = KnownGreen, fontWeight = FontWeight.Bold)
+                            Text("↑ 외웠어요", color = MasteredBlue, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -306,7 +294,7 @@ private fun SwipeCard(
     val offsetY = remember { Animatable(0f) }
     val rotation by animateFloatAsState(if (flipped) 180f else 0f, tween(350), label = "flip")
 
-    // Swipe feedback: green check (left), blue double check (up), red X (down).
+    // Swipe feedback: green check (left, 헷갈려요), blue double check (up, 외웠어요), red X (down, 몰라요).
     val leftProgress = (-offsetX.value / threshold).coerceIn(0f, 1f)
     val upProgress = (-offsetY.value / threshold).coerceIn(0f, 1f)
     val downProgress = (offsetY.value / threshold).coerceIn(0f, 1f)
@@ -408,7 +396,7 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
         Text("수고했어요!", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
         Text(
-            "${vm.sessionSize}개 중 처음에 맞힌 카드 ${vm.firstTryKnown}개 (확실히 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",
+            "${vm.sessionSize}개 중 처음에 맞힌 카드 ${vm.firstTryKnown}개 (외웠어요 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",
             style = MaterialTheme.typography.bodyLarge,
         )
         Spacer(Modifier.height(16.dp))

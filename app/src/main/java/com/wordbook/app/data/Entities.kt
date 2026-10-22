@@ -38,7 +38,7 @@ data class Word(
     val meaning: String,
     /** Marked as "known" in the most recent flashcard session. */
     val known: Boolean = false,
-    /** Swiped up ("확실히 알아요"): skipped in regular study sessions. */
+    /** Swiped up ("외웠어요"): skipped in regular study sessions. */
     val mastered: Boolean = false,
     val correctCount: Int = 0,
     val wrongCount: Int = 0,
