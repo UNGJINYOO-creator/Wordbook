@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -377,7 +379,7 @@ fun StudyScreen(
         },
     ) { padding ->
         Box(
-            Modifier.fillMaxSize().padding(padding).pointerInput(Unit) {
+            Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).pointerInput(Unit) {
                 // Any touch counts as studying; nothing is consumed so gestures still work.
                 awaitPointerEventScope {
                     while (true) {
@@ -391,7 +393,13 @@ fun StudyScreen(
                 vm.loading -> {}
                 vm.finished -> Summary(vm, onBack)
                 else -> vm.current?.let { word ->
-                    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    // imePadding keeps the content above the keyboard in typing quizzes.
+                    val typing = vm.mode == StudyMode.SPELLING || vm.mode == StudyMode.DICTATION
+                    Column(
+                        Modifier.fillMaxSize().imePadding()
+                            .padding(horizontal = 24.dp, vertical = if (typing) 8.dp else 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         val progress = vm.index / vm.roundSize.toFloat()
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             LinearProgressIndicator(
@@ -412,7 +420,7 @@ fun StudyScreen(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
                         }
-                        Spacer(Modifier.height(24.dp))
+                        Spacer(Modifier.height(if (typing) 8.dp else 24.dp))
                         val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
                         // Speak automatically for dictation, and for every card when the setting is on.
                         LaunchedEffect(word.id, vm.round, tts != null) {

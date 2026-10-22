@@ -47,10 +47,10 @@ private val WrongRed = Color(0xFFC62828)
 private fun MeaningPrompt(word: Word) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         if (word.pos.isNotEmpty()) {
-            PosBadge(word.pos, fontSize = 16.sp)
-            Spacer(Modifier.height(8.dp))
+            PosBadge(word.pos, fontSize = 14.sp)
+            Spacer(Modifier.height(4.dp))
         }
-        Text(word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 26.sp, textAlign = TextAlign.Center)
+        Text(word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 20.sp, textAlign = TextAlign.Center)
     }
 }
 
@@ -64,7 +64,7 @@ private fun AutoAdvance(answered: Boolean?, onNext: () -> Unit) {
         }
     }
     if (answered == false) {
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(8.dp))
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) { Text("다음") }
     }
 }
@@ -86,9 +86,9 @@ fun ChoiceQuiz(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
         )
-        Spacer(Modifier.height(16.dp))
-        if (reverse) Text(word.text, fontSize = 36.sp, fontWeight = FontWeight.Bold) else MeaningPrompt(word)
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(8.dp))
+        if (reverse) Text(word.text, fontSize = 30.sp, fontWeight = FontWeight.Bold) else MeaningPrompt(word)
+        Spacer(Modifier.height(20.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             choices.forEach { c ->
                 val label = if (reverse) c.meaning else c.text
@@ -131,34 +131,49 @@ fun TypingQuiz(
     val dictation = pattern == null
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        // Kept compact so the keyboard (even a floating one) never covers the answer.
         Text(
             if (dictation) "발음을 듣고 단어를 쓰세요" else "빈칸을 채워 단어를 쓰세요",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.outline,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(6.dp))
         if (dictation) {
-            FilledIconButton(onClick = onSpeak, modifier = Modifier.size(72.dp)) {
-                Icon(Icons.AutoMirrored.Filled.VolumeUp, "다시 듣기", modifier = Modifier.size(40.dp))
+            FilledIconButton(onClick = onSpeak, modifier = Modifier.size(52.dp)) {
+                Icon(Icons.AutoMirrored.Filled.VolumeUp, "다시 듣기", modifier = Modifier.size(30.dp))
             }
-            Spacer(Modifier.height(12.dp))
-            if (word.pos.isNotEmpty()) PosBadge(word.pos, fontSize = 16.sp)
+            Spacer(Modifier.height(6.dp))
+            if (word.pos.isNotEmpty()) PosBadge(word.pos, fontSize = 14.sp)
             // The meaning would give the answer away before the word is heard; show it afterwards.
             if (answered != null) {
-                Spacer(Modifier.height(8.dp))
-                Text(word.meaning, fontSize = 20.sp, textAlign = TextAlign.Center)
+                Spacer(Modifier.height(4.dp))
+                Text(word.meaning, fontSize = 18.sp, textAlign = TextAlign.Center)
             }
         } else {
             MeaningPrompt(word)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(10.dp))
+            // Spaced letters read better, but long words must still fit on one line.
+            val p = pattern!!
             Text(
-                pattern!!.map { if (it == '_') '_' else it }.joinToString(" "),
-                fontSize = 32.sp,
+                if (p.length <= 9) p.toList().joinToString(" ") else p,
+                fontSize = when {
+                    p.length <= 9 -> 26.sp
+                    p.length <= 13 -> 22.sp
+                    else -> 18.sp
+                },
                 fontFamily = FontFamily.Monospace,
-                letterSpacing = 2.sp,
+                letterSpacing = if (p.length <= 9) 0.sp else 2.sp,
+                maxLines = 1,
+                softWrap = false,
             )
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
+        when (answered) {
+            true -> Text("정답!", color = RightGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            false -> Text("정답: ${word.text}", color = WrongRed, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            null -> {}
+        }
+        if (answered != null) Spacer(Modifier.height(6.dp))
         OutlinedTextField(
             value = input,
             onValueChange = { if (answered == null) input = it; onActivity() },
@@ -172,15 +187,13 @@ fun TypingQuiz(
             keyboardActions = KeyboardActions(onDone = { if (answered == null && input.isNotBlank()) onSubmit(input) }),
             modifier = Modifier.fillMaxWidth().focusRequester(focus),
         )
-        Spacer(Modifier.height(12.dp))
-        when (answered) {
-            null -> Button(
+        if (answered == null) {
+            Spacer(Modifier.height(8.dp))
+            Button(
                 onClick = { onSubmit(input) },
                 enabled = input.isNotBlank(),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("확인") }
-            true -> Text("정답!", color = RightGreen, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            false -> Text("정답: ${word.text}", color = WrongRed, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
         AutoAdvance(answered, onNext)
     }
