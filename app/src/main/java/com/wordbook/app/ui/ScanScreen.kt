@@ -52,6 +52,7 @@ import com.wordbook.app.data.Deck
 import com.wordbook.app.data.Word
 import androidx.room.withTransaction
 import com.wordbook.app.ml.EnKoTranslator
+import com.wordbook.app.ml.MeaningCheck
 import com.wordbook.app.ml.WordExtractor
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -61,6 +62,10 @@ import java.util.Locale
 class Candidate(val text: String, meaning: String, selected: Boolean, val alreadySaved: Boolean) {
     var meaning by mutableStateOf(meaning)
     var selected by mutableStateOf(selected)
+    /** Where the current meaning came from, shown under the word. */
+    var source by mutableStateOf(if (meaning.isBlank()) "" else "사진")
+    /** Machine translation offered when it disagrees with the photo's meaning. */
+    var suggestion by mutableStateOf<String?>(null)
 }
 
 class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -101,22 +106,28 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         candidates.addAll(words.map {
             Candidate(it.text, it.meaning, selected = it.text !in saved, alreadySaved = it.text in saved)
         })
-        val fromPhoto = candidates.count { it.meaning.isNotBlank() }
-        val missing = candidates.filter { it.meaning.isBlank() }
+        val fromPhoto = candidates.count { !MeaningCheck.looksGarbled(it.meaning) }
         val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)"
 
-        if (missing.isNotEmpty()) {
-            status = "번역 모델 준비 중… (처음 한 번만 다운로드해요)"
-            try {
-                EnKoTranslator.ensureModel()
-                missing.forEachIndexed { i, c ->
-                    status = "뜻이 없는 단어 번역 중… ${i + 1}/${missing.size}"
-                    c.meaning = runCatching { EnKoTranslator.translate(c.text) }.getOrDefault("")
-                }
-            } catch (e: Exception) {
-                busy = false
-                status = "$found. 번역 모델을 받지 못해 나머지 뜻은 직접 입력해 주세요."
-                return
+        status = "번역 모델 준비 중… (처음 한 번만 다운로드해요)"
+        try {
+            EnKoTranslator.ensureModel()
+        } catch (e: Exception) {
+            busy = false
+            status = "$found. 번역 모델을 받지 못해 비어 있는 뜻은 직접 입력해 주세요."
+            candidates.filter { MeaningCheck.looksGarbled(it.meaning) }.forEach { it.meaning = ""; it.source = "" }
+            return
+        }
+        // Check every word: broken or missing photo meanings are replaced by the translation;
+        // a clean photo meaning is kept, with the translation offered if the two disagree.
+        candidates.forEachIndexed { i, c ->
+            status = "뜻 확인 중… ${i + 1}/${candidates.size}"
+            val translated = runCatching { EnKoTranslator.translate(c.text) }.getOrDefault("")
+            if (MeaningCheck.looksGarbled(c.meaning)) {
+                c.meaning = translated
+                c.source = if (translated.isBlank()) "" else "번역"
+            } else if (translated.isNotBlank() && MeaningCheck.disagree(c.meaning, translated)) {
+                c.suggestion = translated
             }
         }
         busy = false
@@ -212,18 +223,27 @@ fun ScanScreen(
                         Checkbox(checked = c.selected, onCheckedChange = { c.selected = it })
                         Column(Modifier.weight(1f)) {
                             Text(c.text, style = MaterialTheme.typography.titleMedium)
+                            if (c.source.isNotEmpty()) {
+                                Text("뜻: ${c.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                            }
                             if (c.alreadySaved) {
                                 Text("이미 저장된 단어", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                             }
                         }
                         Spacer(Modifier.width(8.dp))
-                        OutlinedTextField(
-                            value = c.meaning,
-                            onValueChange = { c.meaning = it },
-                            placeholder = { Text("뜻") },
-                            singleLine = true,
-                            modifier = Modifier.weight(1.3f),
-                        )
+                        Column(Modifier.weight(1.3f)) {
+                            OutlinedTextField(
+                                value = c.meaning,
+                                onValueChange = { c.meaning = it; c.source = "" },
+                                placeholder = { Text("뜻") },
+                                singleLine = true,
+                            )
+                            c.suggestion?.let { s ->
+                                TextButton(onClick = { c.meaning = s; c.source = "번역"; c.suggestion = null }) {
+                                    Text("번역으로 바꾸기: $s", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
                     }
                 }
             }
