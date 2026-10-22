@@ -78,6 +78,10 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.BlankLevel
+import com.wordbook.app.data.DailyStats
+import com.wordbook.app.net.Telegram
+import kotlinx.coroutines.delay
+import androidx.compose.ui.input.pointer.PointerEventPass
 import com.wordbook.app.data.Srs
 import com.wordbook.app.data.StudyMode
 import com.wordbook.app.data.StudySettings
@@ -107,6 +111,21 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private var shuffle = true
     private var repeatMissed = true
     val autoSpeak: Boolean get() = settings.autoSpeak
+
+    // Study timer: counts only while the screen is being touched; pauses after idleSeconds.
+    private val stats = DailyStats(app)
+    private val idleMs = settings.idleSeconds * 1000L
+    val goalMs = settings.dailyGoalMinutes * 60_000L
+    private var lastTouch = System.currentTimeMillis()
+    var todayMs by mutableStateOf(stats.studyMs)
+        private set
+    var paused by mutableStateOf(false)
+        private set
+    var goalReached by mutableStateOf(goalMs > 0 && stats.studyMs >= goalMs)
+        private set
+    var telegramStatus by mutableStateOf<String?>(null)
+        private set
+    val telegramReady: Boolean get() = settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()
 
     private var queue = listOf<Word>()
     var index by mutableStateOf(0)
@@ -165,6 +184,38 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             sessionWords = order(sessionWords).let { if (limit > 0) it.take(limit) else it }
             start(sessionWords)
             loading = false
+        }
+        viewModelScope.launch {
+            while (true) {
+                delay(1000)
+                if (loading || finished) continue
+                paused = System.currentTimeMillis() - lastTouch > idleMs
+                if (!paused) {
+                    stats.addStudyMs(1000)
+                    todayMs = stats.studyMs
+                    checkGoal()
+                }
+            }
+        }
+    }
+
+    fun touch() {
+        lastTouch = System.currentTimeMillis()
+        paused = false
+    }
+
+    private fun checkGoal() {
+        if (goalMs <= 0 || todayMs < goalMs || stats.goalNotified) return
+        stats.goalNotified = true
+        goalReached = true
+        if (telegramReady) sendTelegram()
+    }
+
+    fun sendTelegram() {
+        viewModelScope.launch {
+            telegramStatus = "텔레그램으로 보내는 중…"
+            val error = Telegram.send(settings.telegramToken, settings.telegramChatId, stats.summary(settings.dailyGoalMinutes))
+            telegramStatus = if (error == null) "텔레그램으로 학습 결과를 보냈어요" else "텔레그램 전송 실패: $error"
         }
     }
 
@@ -235,12 +286,14 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     }
 
     fun pick(choice: Word) {
+        touch()
         val word = current ?: return
         pickedId = choice.id
         answered = choice.id == word.id
     }
 
     fun submit(input: String) {
+        touch()
         val word = current ?: return
         answered = input.trim().equals(word.text.trim(), ignoreCase = true)
     }
@@ -249,7 +302,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     fun next() = mark(if (answered == true) Answer.KNOWN else Answer.UNKNOWN)
 
     fun mark(answer: Answer) {
+        touch()
         val word = current ?: return
+        stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
         viewModelScope.launch {
             val fresh = dao.getWord(word.id) ?: return@launch
             val result = when (answer) {
@@ -317,10 +372,21 @@ fun StudyScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
+                actions = { StudyTimer(vm) },
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(
+            Modifier.fillMaxSize().padding(padding).pointerInput(Unit) {
+                // Any touch counts as studying; nothing is consumed so gestures still work.
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent(PointerEventPass.Initial)
+                        vm.touch()
+                    }
+                }
+            },
+        ) {
             when {
                 vm.loading -> {}
                 vm.finished -> Summary(vm, onBack)
@@ -336,6 +402,14 @@ fun StudyScreen(
                                 "${(progress * 100).roundToInt()}%",
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(start = 12.dp),
+                            )
+                        }
+                        if (vm.goalReached || vm.telegramStatus != null) {
+                            Text(
+                                listOfNotNull(if (vm.goalReached) "🎉 오늘 목표 시간 달성!" else null, vm.telegramStatus).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 8.dp),
                             )
                         }
                         Spacer(Modifier.height(24.dp))
@@ -362,6 +436,7 @@ fun StudyScreen(
                                     pattern = if (vm.mode == StudyMode.SPELLING) vm.pattern else null,
                                     answered = vm.answered,
                                     onSubmit = vm::submit,
+                                    onActivity = vm::touch,
                                     onNext = vm::next,
                                     onSpeak = { speak() },
                                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
@@ -521,10 +596,34 @@ private fun SwipeBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, co
     ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(64.dp)) }
 }
 
+private fun formatTime(ms: Long): String {
+    val sec = ms / 1000
+    return "%d:%02d".format(sec / 60, sec % 60)
+}
+
+/** "⏱ 3:12 / 10:00" in the top bar; shows a pause sign while the timer is stopped. */
+@Composable
+private fun StudyTimer(vm: StudyViewModel) {
+    val goal = if (vm.goalMs > 0) " / ${formatTime(vm.goalMs)}" else ""
+    Text(
+        (if (vm.paused) "⏸ " else "⏱ ") + formatTime(vm.todayMs) + goal,
+        style = MaterialTheme.typography.titleSmall,
+        color = if (vm.paused) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(end = 16.dp),
+    )
+}
+
 @Composable
 private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("수고했어요!", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "오늘 학습 시간 ${formatTime(vm.todayMs)}" +
+                if (vm.goalMs > 0) (if (vm.todayMs >= vm.goalMs) " · 목표 달성 🎉" else " · 목표까지 ${formatTime(vm.goalMs - vm.todayMs)}") else "",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
         Spacer(Modifier.height(8.dp))
         Text(
             "${vm.sessionSize}개 중 처음에 맞힌 카드 ${vm.firstTryKnown}개 (외웠어요 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",
@@ -558,6 +657,10 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
         }
         OutlinedButton(onClick = { vm.restart(onlyMissed = false) }, modifier = Modifier.fillMaxWidth()) {
             Text("처음부터 다시")
+        }
+        if (vm.telegramReady) {
+            OutlinedButton(onClick = vm::sendTelegram, modifier = Modifier.fillMaxWidth()) { Text("텔레그램으로 결과 보내기") }
+            vm.telegramStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         }
         OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("끝내기") }
     }

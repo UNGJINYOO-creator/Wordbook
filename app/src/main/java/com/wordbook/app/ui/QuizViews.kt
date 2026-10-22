@@ -123,6 +123,7 @@ fun TypingQuiz(
     onNext: () -> Unit,
     onSpeak: () -> Unit,
     modifier: Modifier = Modifier,
+    onActivity: () -> Unit = {},
 ) {
     var input by remember(word.id) { mutableStateOf("") }
     val focus = remember { FocusRequester() }
@@ -160,7 +161,7 @@ fun TypingQuiz(
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(
             value = input,
-            onValueChange = { if (answered == null) input = it },
+            onValueChange = { if (answered == null) input = it; onActivity() },
             singleLine = true,
             label = { Text("영어 단어") },
             keyboardOptions = KeyboardOptions(

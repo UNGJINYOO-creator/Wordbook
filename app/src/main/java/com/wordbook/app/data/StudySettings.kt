@@ -34,4 +34,22 @@ class StudySettings(context: Context) {
     var sessionSize: Int
         get() = prefs.getInt("sessionSize", 0)
         set(v) = prefs.edit().putInt("sessionSize", v).apply()
+
+    /** The study timer pauses after this many seconds without a touch. */
+    var idleSeconds: Int
+        get() = prefs.getInt("idleSeconds", 20)
+        set(v) = prefs.edit().putInt("idleSeconds", v).apply()
+
+    /** Minimum study time per day in minutes, 0 = no goal. */
+    var dailyGoalMinutes: Int
+        get() = prefs.getInt("dailyGoal", 0)
+        set(v) = prefs.edit().putInt("dailyGoal", v).apply()
+
+    var telegramToken: String
+        get() = prefs.getString("tgToken", "") ?: ""
+        set(v) = prefs.edit().putString("tgToken", v.trim()).apply()
+
+    var telegramChatId: String
+        get() = prefs.getString("tgChat", "") ?: ""
+        set(v) = prefs.edit().putString("tgChat", v.trim()).apply()
 }
