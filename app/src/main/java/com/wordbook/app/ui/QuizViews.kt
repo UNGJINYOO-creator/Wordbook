@@ -6,7 +6,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -16,7 +17,6 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,7 +29,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -111,13 +117,14 @@ fun ChoiceQuiz(
 }
 
 /**
- * Spelling (fill the blanks in [pattern]) or dictation (no pattern, listen and type).
- * The whole word is typed either way, which is simpler on a phone keyboard than single letters.
+ * Spelling (fill the blanks in [pattern]) or dictation (every letter blank, listen first).
+ * Typed letters drop into the blanks one by one; the answer is checked when the last blank is filled.
  */
 @Composable
 fun TypingQuiz(
     word: Word,
-    pattern: String?,
+    pattern: String,
+    dictation: Boolean,
     answered: Boolean?,
     onSubmit: (String) -> Unit,
     onNext: () -> Unit,
@@ -125,10 +132,15 @@ fun TypingQuiz(
     modifier: Modifier = Modifier,
     onActivity: () -> Unit = {},
 ) {
-    var input by remember(word.id) { mutableStateOf("") }
+    val blanks = pattern.count { it == '_' }
+    var typed by remember(word.id) { mutableStateOf("") }
     val focus = remember { FocusRequester() }
     LaunchedEffect(word.id) { runCatching { focus.requestFocus() } }
-    val dictation = pattern == null
+
+    fun filled(): String {
+        var k = 0
+        return pattern.map { c -> if (c == '_') typed.getOrNull(k++) ?: '_' else c }.joinToString("")
+    }
 
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         // Kept compact so the keyboard (even a floating one) never covers the answer.
@@ -151,49 +163,74 @@ fun TypingQuiz(
             }
         } else {
             MeaningPrompt(word)
-            Spacer(Modifier.height(10.dp))
-            // Spaced letters read better, but long words must still fit on one line.
-            val p = pattern!!
-            Text(
-                if (p.length <= 9) p.toList().joinToString(" ") else p,
-                fontSize = when {
-                    p.length <= 9 -> 26.sp
-                    p.length <= 13 -> 22.sp
-                    else -> 18.sp
-                },
-                fontFamily = FontFamily.Monospace,
-                letterSpacing = if (p.length <= 9) 0.sp else 2.sp,
-                maxLines = 1,
-                softWrap = false,
-            )
         }
+        Spacer(Modifier.height(12.dp))
+
+        // The word with blanks; typed letters appear in place (tap it to bring the keyboard back).
+        val shown = filled()
+        val primary = MaterialTheme.colorScheme.primary
+        val muted = MaterialTheme.colorScheme.outline
+        var k = 0
+        val styled = buildAnnotatedString {
+            pattern.forEachIndexed { i, c ->
+                if (c == '_') {
+                    val ch = shown[i]
+                    val isNext = k == typed.length && answered == null
+                    k++
+                    withStyle(
+                        SpanStyle(
+                            color = if (ch == '_') muted else primary,
+                            fontWeight = FontWeight.Bold,
+                            textDecoration = if (ch != '_') TextDecoration.Underline else null,
+                            background = if (isNext) primary.copy(alpha = 0.15f) else Color.Transparent,
+                        )
+                    ) { append(ch) }
+                } else {
+                    append(c)
+                }
+            }
+        }
+        val len = pattern.length
+        Text(
+            styled,
+            fontSize = when {
+                len <= 8 -> 30.sp
+                len <= 12 -> 24.sp
+                else -> 19.sp
+            },
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = if (len <= 8) 6.sp else 2.sp,
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.clickable { runCatching { focus.requestFocus() } },
+        )
+        // Invisible field that receives the keyboard input.
+        BasicTextField(
+            value = typed,
+            onValueChange = { v ->
+                if (answered != null) return@BasicTextField
+                typed = v.filter { it.isLetter() }.take(blanks)
+                onActivity()
+                if (typed.length == blanks) onSubmit(filled())
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Password,
+                imeAction = ImeAction.Done,
+            ),
+            modifier = Modifier.size(1.dp).alpha(0f).focusRequester(focus),
+        )
         Spacer(Modifier.height(8.dp))
         when (answered) {
             true -> Text("정답!", color = RightGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             false -> Text("정답: ${word.text}", color = WrongRed, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            null -> {}
-        }
-        if (answered != null) Spacer(Modifier.height(6.dp))
-        OutlinedTextField(
-            value = input,
-            onValueChange = { if (answered == null) input = it; onActivity() },
-            singleLine = true,
-            label = { Text("영어 단어") },
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.None,
-                autoCorrectEnabled = false,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { if (answered == null && input.isNotBlank()) onSubmit(input) }),
-            modifier = Modifier.fillMaxWidth().focusRequester(focus),
-        )
-        if (answered == null) {
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = { onSubmit(input) },
-                enabled = input.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("확인") }
+            null -> Text(
+                "남은 글자 ${blanks - typed.length}개 · 지우기는 키보드 ⌫",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
         }
         AutoAdvance(answered, onNext)
     }

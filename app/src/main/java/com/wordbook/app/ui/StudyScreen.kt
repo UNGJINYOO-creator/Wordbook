@@ -270,10 +270,11 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val letters = text.indices.filter { text[it].isLetter() }
         if (level == BlankLevel.HARD) return text.map { if (it.isLetter()) '_' else it }.joinToString("")
         val ratio = if (level == BlankLevel.EASY) 0.3 else 0.5
-        // Keep the first letter as a hint on longer words.
+        // One continuous run of blanks, typed in order. Keep the first letter as a hint on longer words.
         val candidates = if (letters.size > 3) letters.drop(1) else letters
         val count = (letters.size * ratio).roundToInt().coerceIn(1, candidates.size)
-        val blanks = candidates.shuffled().take(count).toSet()
+        val startAt = (0..candidates.size - count).random()
+        val blanks = candidates.subList(startAt, startAt + count).toSet()
         return text.mapIndexed { i, c -> if (i in blanks) '_' else c }.joinToString("")
     }
 
@@ -441,7 +442,9 @@ fun StudyScreen(
                                 )
                                 StudyMode.SPELLING, StudyMode.DICTATION -> TypingQuiz(
                                     word = word,
-                                    pattern = if (vm.mode == StudyMode.SPELLING) vm.pattern else null,
+                                    pattern = if (vm.mode == StudyMode.SPELLING) vm.pattern
+                                    else word.text.map { if (it.isLetter()) '_' else it }.joinToString(""),
+                                    dictation = vm.mode == StudyMode.DICTATION,
                                     answered = vm.answered,
                                     onSubmit = vm::submit,
                                     onActivity = vm::touch,
