@@ -41,7 +41,8 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
     // Leading list numbering: "1.", "12)", "③"
     private val numberingRegex = Regex("^[\\s\\d.)\\]①-⑳-]+")
     // Pronunciation like "[əbǽndən]" or "/ˈæp.əl/"
-    private val phoneticRegex = Regex("\\[[^\\]]*]|/[^/]*/")
+    // (Korean in brackets is part of a meaning: "연결[접속]하다")
+    private val phoneticRegex = Regex("\\[[^\\]가-힣]*]|/[^/가-힣]*/")
     // Circled part-of-speech badge in front of a meaning: "명 인터넷", "(동) 발명하다"
     private val posBadgeRegex = Regex("^[^가-힣]*[(\\[]?[명동형부전접대감][)\\]]?\\s+")
 
@@ -129,9 +130,10 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
     private fun looksLikeHeadword(e: Entry, korean: List<OcrLine>): Boolean =
         e.english.size <= 2 && (e.korean != null || korean.any { k -> sameRowRight(e.line, k) })
 
+    // Books often align the meaning with the top of the (taller) headword, so compare centres loosely.
     private fun sameRowRight(e: OcrLine, k: OcrLine): Boolean {
-        val overlap = min(e.bottom, k.bottom) - max(e.top, k.top)
-        return overlap > 0.3f * min(e.height, k.height) && k.left >= e.right - e.height
+        val centreGap = abs((e.top + e.bottom) - (k.top + k.bottom)) / 2f
+        return centreGap < 0.8f * max(e.height, k.height) && k.left >= e.right - e.height
     }
 
     private fun cleanMeaning(s: String): String =
