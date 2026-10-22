@@ -36,6 +36,8 @@ data class Word(
     val deckId: Long,
     val text: String,
     val meaning: String,
+    /** Part of speech: "명", "동", "형", "부" or "" when unknown. */
+    val pos: String = "",
     /** Marked as "known" in the most recent flashcard session. */
     val known: Boolean = false,
     /** Swiped up ("외웠어요"): skipped in regular study sessions. */

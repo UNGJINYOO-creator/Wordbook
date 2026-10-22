@@ -6,13 +6,24 @@ object MeaningCheck {
     private const val BADGE_CHARS = "명영몡멍동둥등형헝혐협부브전접대감관"
     private val leadingSymbols = Regex("^[^가-힣A-Za-z(\\[~]+")
 
+    /** A cleaned meaning and the part of speech ("명", "동", "형", "부" or "") read from its badge. */
+    data class Cleaned(val meaning: String, val pos: String)
+
+    private fun badgePos(c: Char): String = when (c) {
+        '명', '영', '몡', '멍' -> "명"
+        '동', '둥', '등' -> "동"
+        '형', '헝', '혐', '협' -> "형"
+        '부', '브' -> "부"
+        else -> ""
+    }
+
     /**
      * Cleans the meanings found on one page. Vocabulary books put a circled badge (명, 동, 형...)
      * before each meaning; OCR reads it as a symbol ("@", "®") or as a syllable glued to the
      * meaning ("동발명하다", "영웹사이트"). When most meanings on the page start that way it's a
-     * badge, so it's removed.
+     * badge: it's removed and kept as the part of speech.
      */
-    fun cleanPage(raw: List<String>): List<String> {
+    fun cleanPage(raw: List<String>): List<Cleaned> {
         val trimmed = raw.map { it.trim() }
         val hadSymbol = trimmed.map { leadingSymbols.containsMatchIn(it) }
         val stage1 = trimmed.map { leadingSymbols.replace(it, "").trim() }
@@ -23,16 +34,66 @@ object MeaningCheck {
         val badgeMode = nonEmpty >= 2 && badgeLike >= nonEmpty * 0.4
         return stage1.mapIndexed { i, m ->
             var r = m
+            var pos = ""
             if (r.length > 2 && r[0] in BADGE_CHARS && (r[1] == ' ' || (badgeMode && !hadSymbol[i]))) {
+                pos = badgePos(r[0])
                 r = r.substring(1).trim()
             }
-            tidy(r)
+            val meaning = tidy(repairBrackets(r))
+            Cleaned(meaning, pos.ifEmpty { if (looksGarbled(meaning)) "" else posFromMeaning(meaning) })
+        }
+    }
+
+    /**
+     * Fixes brackets OCR half-read without changing the meaning's form:
+     * a stray "]" is dropped ("연결접속]하다" -> "연결접속하다"), and an unclosed "[" or "("
+     * cuts the rest ("도움이 되는[유한" -> "도움이 되는").
+     */
+    fun repairBrackets(m: String): String {
+        val out = StringBuilder()
+        val open = ArrayDeque<Int>()
+        for (ch in m) {
+            when (ch) {
+                '[', '(' -> { open.addLast(out.length); out.append(ch) }
+                ']', ')' -> if (open.isNotEmpty()) { open.removeLast(); out.append(ch) }
+                else -> out.append(ch)
+            }
+        }
+        val cut = open.firstOrNull() ?: return out.toString()
+        return out.substring(0, cut).trim()
+    }
+
+    /** Part of speech guessed from a Korean meaning's ending. */
+    fun posFromMeaning(meaning: String): String {
+        val first = meaning.split(',', ';').first().replace(Regex("\\[[^\\]]*]|\\([^)]*\\)"), "").trim()
+        if (first.isEmpty()) return ""
+        return when {
+            first.endsWith("다") -> "동"
+            first.endsWith("히") || first.endsWith("게") || first.endsWith("에") || first.endsWith("로") -> "부"
+            listOf("한", "는", "운", "된", "인", "의", "은", "할", "적인", "있는").any { first.endsWith(it) } -> "형"
+            else -> "명"
+        }
+    }
+
+    /** Part of speech guessed from the English word's suffix ("" if unclear). */
+    fun posFromEnglish(word: String): String {
+        val w = word.lowercase()
+        if (' ' in w) return ""
+        return when {
+            w.endsWith("ly") && w.length > 4 -> "부"
+            listOf("ful", "able", "ible", "ous", "ive", "ent", "ant", "less", "ical", "ic", "al").any { w.endsWith(it) && w.length > it.length + 2 } -> "형"
+            listOf("tion", "sion", "ment", "ness", "ity", "ance", "ence", "ship").any { w.endsWith(it) } -> "명"
+            else -> ""
         }
     }
 
     /** Strips trailing punctuation and a dangling one-syllable fragment ("즉석의 긴" -> "즉석의"). */
     private fun tidy(m: String): String {
         var r = m.trim().trimEnd('.', ',', ';', ':', '·', '-').trim()
+        // "내려받다. 다운로드하다" -> "내려받다, 다운로드하다"
+        r = r.replace(Regex("([가-힣])\\.\\s+(?=[가-힣])"), "$1, ")
+        // "( Net)" -> "(= Net)"
+        r = r.replace(Regex("\\(\\s*=?\\s*([A-Za-z])"), "(= $1")
         val parts = r.split(' ')
         if (parts.size >= 2 && parts.last().length == 1 && hangul.matches(parts.last())) {
             r = parts.dropLast(1).joinToString(" ").trimEnd(',', ';').trim()

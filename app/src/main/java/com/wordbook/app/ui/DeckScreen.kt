@@ -76,17 +76,17 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     val deck = dao.observeDeck(deckId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val words = dao.observeWords(deckId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private suspend fun meaningOrTranslate(text: String, meaning: String): String =
+    private suspend fun meaningOrTranslate(text: String, meaning: String, pos: String): String =
         meaning.ifBlank {
-            runCatching { EnKoTranslator.ensureModel(); EnKoTranslator.translate(text) }.getOrDefault("")
+            runCatching { EnKoTranslator.ensureModel(); EnKoTranslator.translateAs(text, pos) }.getOrDefault("")
         }
 
-    fun addWord(text: String, meaning: String) = viewModelScope.launch {
-        dao.insertWord(Word(deckId = deckId, text = text, meaning = meaningOrTranslate(text, meaning)))
+    fun addWord(text: String, meaning: String, pos: String) = viewModelScope.launch {
+        dao.insertWord(Word(deckId = deckId, text = text, meaning = meaningOrTranslate(text, meaning, pos), pos = pos))
     }
 
-    fun updateWord(word: Word, text: String, meaning: String) = viewModelScope.launch {
-        dao.updateWord(word.copy(text = text, meaning = meaningOrTranslate(text, meaning)))
+    fun updateWord(word: Word, text: String, meaning: String, pos: String) = viewModelScope.launch {
+        dao.updateWord(word.copy(text = text, meaning = meaningOrTranslate(text, meaning, pos), pos = pos))
     }
 
     fun toggleMastered(word: Word) = viewModelScope.launch {
@@ -202,7 +202,12 @@ fun DeckScreen(
             }
             items(words, key = { it.id }) { word ->
                 ListItem(
-                    headlineContent = { Text(word.text) },
+                    headlineContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(word.text)
+                            PosBadge(word.pos, Modifier.padding(start = 6.dp))
+                        }
+                    },
                     supportingContent = { Text(word.meaning.ifBlank { "(뜻 없음)" }) },
                     leadingContent = {
                         // Tap to toggle "외웠어요"; mastered cards are skipped in regular study.
@@ -234,8 +239,9 @@ fun DeckScreen(
             title = "카드 추가",
             initialText = "",
             initialMeaning = "",
+            initialPos = "",
             onDismiss = { showAdd = false },
-            onConfirm = { t, m -> vm.addWord(t, m); showAdd = false },
+            onConfirm = { t, m, p -> vm.addWord(t, m, p); showAdd = false },
         )
     }
     editing?.let { w ->
@@ -243,8 +249,9 @@ fun DeckScreen(
             title = "카드 수정",
             initialText = w.text,
             initialMeaning = w.meaning,
+            initialPos = w.pos,
             onDismiss = { editing = null },
-            onConfirm = { t, m -> vm.updateWord(w, t, m); editing = null },
+            onConfirm = { t, m, p -> vm.updateWord(w, t, m, p); editing = null },
             onDelete = { vm.deleteWord(w); editing = null },
         )
     }

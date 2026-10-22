@@ -30,30 +30,40 @@ class MeaningCheckTest {
 
 class CleanPageTest {
     @Test
-    fun removesMisreadBadgesFromPhoneScreenshot() {
+    fun cleansPhoneOcrOutputAndKeepsPartOfSpeech() {
         // Meanings exactly as the phone OCR returned them for the sample page.
         val raw = listOf(
             "영발명(품)", "영웹사이트", "동연결접속]하다", "내려받다. 다운로드하다", "동발명하다.",
             "@편리한 간편한", "@도움이 되는[유한", "@즉각적인 즉석의 긴", "명 화면, 스크린",
+            "인터넷 ( Net)", "부 급속히, 순식간에",
         )
         val cleaned = MeaningCheck.cleanPage(raw)
         org.junit.Assert.assertEquals(
             listOf(
-                "발명(품)", "웹사이트", "연결접속]하다", "내려받다. 다운로드하다", "발명하다",
-                "편리한 간편한", "도움이 되는[유한", "즉각적인 즉석의", "화면, 스크린",
+                "발명(품)", "웹사이트", "연결접속하다", "내려받다, 다운로드하다", "발명하다",
+                "편리한 간편한", "도움이 되는", "즉각적인 즉석의", "화면, 스크린",
+                "인터넷 (= Net)", "급속히, 순식간에",
             ),
-            cleaned,
+            cleaned.map { it.meaning },
         )
-        // Still broken after cleanup -> replaced by the translation.
-        assertTrue(MeaningCheck.suspicious(cleaned[2]))
-        assertTrue(MeaningCheck.suspicious(cleaned[6]))
-        assertFalse(MeaningCheck.suspicious(cleaned[0]))
-        assertFalse(MeaningCheck.suspicious(cleaned[5]))
+        org.junit.Assert.assertEquals(
+            listOf("명", "명", "동", "동", "동", "형", "형", "형", "명", "명", "부"),
+            cleaned.map { it.pos },
+        )
+        cleaned.forEach { assertFalse(it.meaning, MeaningCheck.suspicious(it.meaning)) }
     }
 
     @Test
     fun keepsMeaningsOnPagesWithoutBadges() {
         val cleaned = MeaningCheck.cleanPage(listOf("동물", "컴퓨터", "화면", "대단한"))
-        org.junit.Assert.assertEquals(listOf("동물", "컴퓨터", "화면", "대단한"), cleaned)
+        org.junit.Assert.assertEquals(listOf("동물", "컴퓨터", "화면", "대단한"), cleaned.map { it.meaning })
+    }
+
+    @Test
+    fun partOfSpeechFromEnglish() {
+        org.junit.Assert.assertEquals("형", MeaningCheck.posFromEnglish("helpful"))
+        org.junit.Assert.assertEquals("부", MeaningCheck.posFromEnglish("rapidly"))
+        org.junit.Assert.assertEquals("명", MeaningCheck.posFromEnglish("invention"))
+        org.junit.Assert.assertEquals("", MeaningCheck.posFromEnglish("connect"))
     }
 }

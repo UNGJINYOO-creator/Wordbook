@@ -5,7 +5,12 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** An English word/phrase found in the photo, with the Korean meaning printed next to it (if any). */
-data class ExtractedWord(val text: String, val meaning: String)
+data class ExtractedWord(
+    val text: String,
+    val meaning: String,
+    /** "명", "동", "형", "부" or "" when unknown. */
+    val pos: String = "",
+)
 
 /** One OCR text line. Plain Kotlin (no Android types) so the pairing logic is unit-testable. */
 data class OcrLine(
@@ -126,7 +131,9 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
         }
         val words = result.values.toList()
         val cleaned = MeaningCheck.cleanPage(words.map { it.meaning })
-        return words.mapIndexed { i, w -> w.copy(meaning = cleaned[i]) }
+        return words.mapIndexed { i, w ->
+            w.copy(meaning = cleaned[i].meaning, pos = cleaned[i].pos.ifEmpty { MeaningCheck.posFromEnglish(w.text) })
+        }
     }
 
     private fun looksLikeHeadword(e: Entry, korean: List<OcrLine>): Boolean =

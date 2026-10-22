@@ -61,8 +61,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class Candidate(val text: String, meaning: String, selected: Boolean, val alreadySaved: Boolean) {
+class Candidate(val text: String, meaning: String, pos: String, selected: Boolean, val alreadySaved: Boolean) {
     var meaning by mutableStateOf(meaning)
+    var pos by mutableStateOf(pos)
     var selected by mutableStateOf(selected)
     /** Where the current meaning came from, shown under the word. */
     var source by mutableStateOf(if (meaning.isBlank()) "" else "사진")
@@ -107,7 +108,7 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         val saved = dao.allWordTexts().toSet()
         // Words already in some deck start unchecked so they aren't duplicated by accident.
         candidates.addAll(words.map {
-            Candidate(it.text, it.meaning, selected = it.text !in saved, alreadySaved = it.text in saved)
+            Candidate(it.text, it.meaning, it.pos, selected = it.text !in saved, alreadySaved = it.text in saved)
         })
         val fromPhoto = candidates.count { !MeaningCheck.suspicious(it.meaning) }
         val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)"
@@ -126,7 +127,8 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         // translation offered when the two don't share any syllable.
         candidates.forEachIndexed { i, c ->
             status = "뜻 확인 중… ${i + 1}/${candidates.size}"
-            val translated = runCatching { EnKoTranslator.translate(c.text) }.getOrDefault("")
+            // Translate as the same part of speech as the book (connect -> 연결하다, not 연결).
+            val translated = runCatching { EnKoTranslator.translateAs(c.text, c.pos) }.getOrDefault("")
             if (MeaningCheck.suspicious(c.meaning)) {
                 if (translated.isNotBlank()) {
                     if (c.meaning.isNotBlank()) { c.suggestion = c.meaning; c.suggestionSource = "사진" }
@@ -145,14 +147,14 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     fun setAll(selected: Boolean) = candidates.forEach { it.selected = selected }
 
     fun save(onSaved: (Long) -> Unit) = viewModelScope.launch {
-        val chosen = candidates.filter { it.selected }.map { it.text to it.meaning.trim() }
+        val chosen = candidates.filter { it.selected }.map { it to it.meaning.trim() }
         val deckId = if (targetDeckId >= 0) {
-            dao.insertWords(chosen.map { (t, m) -> Word(deckId = targetDeckId, text = t, meaning = m) })
+            dao.insertWords(chosen.map { (c, m) -> Word(deckId = targetDeckId, text = c.text, meaning = m, pos = c.pos) })
             targetDeckId
         } else {
             db.withTransaction {
                 val id = dao.insertDeck(Deck(name = deckName.ifBlank { "새 단어장" }))
-                dao.insertWords(chosen.map { (t, m) -> Word(deckId = id, text = t, meaning = m) })
+                dao.insertWords(chosen.map { (c, m) -> Word(deckId = id, text = c.text, meaning = m, pos = c.pos) })
                 id
             }
         }
@@ -231,7 +233,10 @@ fun ScanScreen(
                     ) {
                         Checkbox(checked = c.selected, onCheckedChange = { c.selected = it })
                         Column(Modifier.weight(1f)) {
-                            Text(c.text, style = MaterialTheme.typography.titleMedium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(c.text, style = MaterialTheme.typography.titleMedium)
+                                PosChips(c.pos) { c.pos = it }
+                            }
                             if (c.source.isNotEmpty()) {
                                 Text("뜻: ${c.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                             }

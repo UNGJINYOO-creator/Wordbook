@@ -2,6 +2,9 @@ package com.wordbook.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -38,23 +41,28 @@ fun CardEditDialog(
     title: String,
     initialText: String,
     initialMeaning: String,
+    initialPos: String,
     onDismiss: () -> Unit,
-    onConfirm: (text: String, meaning: String) -> Unit,
+    onConfirm: (text: String, meaning: String, pos: String) -> Unit,
     onDelete: (() -> Unit)? = null,
 ) {
     var text by remember { mutableStateOf(initialText) }
     var meaning by remember { mutableStateOf(initialMeaning) }
+    var pos by remember { mutableStateOf(initialPos) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(text, { text = it }, label = { Text("앞면 (영어 단어)") }, singleLine = true)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(text, { text = it }, label = { Text("앞면 (영어 단어)") }, singleLine = true, modifier = Modifier.weight(1f))
+                    PosChips(pos) { pos = it }
+                }
                 OutlinedTextField(meaning, { meaning = it }, label = { Text("뒷면 (뜻) · 비우면 자동 번역") })
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(text.trim(), meaning.trim()) }, enabled = text.isNotBlank()) { Text("저장") }
+            TextButton(onClick = { onConfirm(text.trim(), meaning.trim(), pos) }, enabled = text.isNotBlank()) { Text("저장") }
         },
         dismissButton = {
             if (onDelete != null) TextButton(onClick = onDelete) { Text("삭제") }

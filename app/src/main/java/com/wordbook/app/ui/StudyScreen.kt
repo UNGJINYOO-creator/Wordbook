@@ -367,11 +367,19 @@ private fun SwipeCard(
                         IconButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "발음 듣기") }
                     }
                 } else {
-                    Text(
-                        word.meaning.ifBlank { "(뜻 없음)" },
-                        fontSize = 30.sp,
-                        textAlign = TextAlign.Center,
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PosOptions.firstOrNull { it.first == word.pos }?.let { (code, label) ->
+                            PosBadge(code, fontSize = 16.sp)
+                            Spacer(Modifier.height(4.dp))
+                            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                            Spacer(Modifier.height(12.dp))
+                        }
+                        Text(
+                            word.meaning.ifBlank { "(뜻 없음)" },
+                            fontSize = 30.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
         }
@@ -404,7 +412,15 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
             Text("틀렸던 단어", style = MaterialTheme.typography.titleMedium)
             LazyColumn(Modifier.weight(1f)) {
                 items(vm.everMissed, key = { it.id }) { w ->
-                    ListItem(headlineContent = { Text(w.text) }, supportingContent = { Text(w.meaning) })
+                    ListItem(
+                        headlineContent = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(w.text)
+                                PosBadge(w.pos, Modifier.padding(start = 6.dp))
+                            }
+                        },
+                        supportingContent = { Text(w.meaning) },
+                    )
                 }
             }
         } else {
