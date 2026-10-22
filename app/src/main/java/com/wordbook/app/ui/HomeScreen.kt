@@ -198,7 +198,8 @@ private fun DeckCard(deck: DeckSummary, editing: Boolean, onDelete: () -> Unit, 
             Row {
                 Text("$date · 단어 ${deck.wordCount}개", style = MaterialTheme.typography.bodySmall)
                 Spacer(Modifier.weight(1f))
-                Text("외움 ${deck.knownCount}/${deck.wordCount}", style = MaterialTheme.typography.bodySmall)
+                val percent = if (deck.wordCount == 0) 0 else deck.knownCount * 100 / deck.wordCount
+                Text("외움 ${deck.knownCount}/${deck.wordCount} · $percent%", style = MaterialTheme.typography.bodySmall)
             }
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(

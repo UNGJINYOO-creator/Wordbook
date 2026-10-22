@@ -229,10 +229,18 @@ fun StudyScreen(
                 vm.finished -> Summary(vm, onBack)
                 else -> vm.current?.let { word ->
                     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        LinearProgressIndicator(
-                            progress = { vm.index / vm.roundSize.toFloat() },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        val progress = vm.index / vm.roundSize.toFloat()
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                "${(progress * 100).roundToInt()}%",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(start = 12.dp),
+                            )
+                        }
                         Spacer(Modifier.height(24.dp))
                         // key() resets swipe offset & flip animation for each new card.
                         key(word.id, vm.round) {
