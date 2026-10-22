@@ -15,6 +15,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        // Modern phones are all 64-bit ARM; dropping other ABIs keeps the APK much smaller
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     // Fixed debug key (committed) so every CI build can be installed over the previous one
