@@ -45,9 +45,10 @@ class MainActivity : ComponentActivity() {
                     ) {
                         ScanScreen(
                             onBack = { nav.popBackStack() },
-                            onSaved = { deckId ->
-                                nav.navigate("deck/$deckId") { popUpTo("home") }
+                            onStudy = { deckId ->
+                                nav.navigate("study/$deckId") { popUpTo("home") }
                             },
+                            onHome = { nav.popBackStack("home", inclusive = false) },
                         )
                     }
                     composable(

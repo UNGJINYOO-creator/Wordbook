@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -173,10 +174,21 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 @Composable
 fun ScanScreen(
     onBack: () -> Unit,
-    onSaved: (Long) -> Unit,
+    onStudy: (deckId: Long) -> Unit,
+    onHome: () -> Unit,
     vm: ScanViewModel = viewModel(factory = ScanViewModel.Factory),
 ) {
     val selectedCount = vm.candidates.count { it.selected }
+    var savedDeckId by remember { mutableStateOf<Long?>(null) }
+    savedDeckId?.let { id ->
+        AlertDialog(
+            onDismissRequest = { savedDeckId = null; onHome() },
+            title = { Text("단어 ${selectedCount}개를 저장했어요") },
+            text = { Text("바로 학습할까요?") },
+            confirmButton = { TextButton(onClick = { savedDeckId = null; onStudy(id) }) { Text("예, 학습할래요") } },
+            dismissButton = { TextButton(onClick = { savedDeckId = null; onHome() }) { Text("아니오") } },
+        )
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
@@ -192,7 +204,7 @@ fun ScanScreen(
             if (vm.candidates.isNotEmpty()) {
                 PrimaryButton(
                     "단어 ${selectedCount}개 저장",
-                    { vm.save(onSaved) },
+                    { vm.save { id -> savedDeckId = id } },
                     Modifier.padding(16.dp).navigationBarsPadding(),
                     enabled = selectedCount > 0 && !vm.busy,
                 )

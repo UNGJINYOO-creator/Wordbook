@@ -1,5 +1,6 @@
 package com.wordbook.app.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,6 +56,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var chatId by remember { mutableStateOf(settings.telegramChatId) }
     var tgStatus by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    // Settings apply immediately; a short toast confirms that the change was saved.
+    val saved = { Toast.makeText(context, "저장됐어요", Toast.LENGTH_SHORT).show() }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -70,10 +73,10 @@ fun SettingsScreen(onBack: () -> Unit) {
             Section("학습 방식")
             StudyMode.entries.forEach { m ->
                 Row(
-                    Modifier.fillMaxWidth().clickable { mode = m; settings.mode = m }.padding(horizontal = 8.dp, vertical = 4.dp),
+                    Modifier.fillMaxWidth().clickable { mode = m; settings.mode = m; saved() }.padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    RadioButton(selected = mode == m, onClick = { mode = m; settings.mode = m })
+                    RadioButton(selected = mode == m, onClick = { mode = m; settings.mode = m; saved() })
                     Column {
                         Text(m.label, style = MaterialTheme.typography.bodyLarge)
                         Text(m.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
@@ -93,7 +96,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 BlankLevel.entries.forEach { b ->
                     FilterChip(
                         selected = blank == b,
-                        onClick = { blank = b; settings.blankLevel = b },
+                        onClick = { blank = b; settings.blankLevel = b; saved() },
                         label = { Text(b.label) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
@@ -106,7 +109,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 listOf(0 to "전부", 10 to "10", 20 to "20", 30 to "30", 50 to "50").forEach { (n, label) ->
                     FilterChip(
                         selected = size == n,
-                        onClick = { size = n; settings.sessionSize = n },
+                        onClick = { size = n; settings.sessionSize = n; saved() },
                         label = { Text(label) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
@@ -115,14 +118,14 @@ fun SettingsScreen(onBack: () -> Unit) {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Row(
-                Modifier.fillMaxWidth().clickable { autoSpeak = !autoSpeak; settings.autoSpeak = autoSpeak }.padding(16.dp),
+                Modifier.fillMaxWidth().clickable { autoSpeak = !autoSpeak; settings.autoSpeak = autoSpeak; saved() }.padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
                     Text("발음 자동 재생", style = MaterialTheme.typography.bodyLarge)
                     Text("카드가 나올 때마다 발음을 들려줘요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
-                Switch(checked = autoSpeak, onCheckedChange = { autoSpeak = it; settings.autoSpeak = it })
+                Switch(checked = autoSpeak, onCheckedChange = { autoSpeak = it; settings.autoSpeak = it; saved() })
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -132,7 +135,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 listOf(0 to "끔", 5 to "5분", 10 to "10분", 15 to "15분", 20 to "20분", 30 to "30분", 60 to "60분").forEach { (n, label) ->
                     FilterChip(
                         selected = goal == n,
-                        onClick = { goal = n; settings.dailyGoalMinutes = n },
+                        onClick = { goal = n; settings.dailyGoalMinutes = n; saved() },
                         label = { Text(label) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
@@ -143,7 +146,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                 listOf(10, 20, 30, 60).forEach { n ->
                     FilterChip(
                         selected = idle == n,
-                        onClick = { idle = n; settings.idleSeconds = n },
+                        onClick = { idle = n; settings.idleSeconds = n; saved() },
                         label = { Text("${n}초") },
                         modifier = Modifier.padding(end = 8.dp),
                     )
