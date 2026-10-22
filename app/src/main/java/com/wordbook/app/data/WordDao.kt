@@ -50,14 +50,18 @@ interface WordDao {
     @Update
     suspend fun updateDeck(deck: Deck)
 
-    @Query("UPDATE words SET known = 1, correctCount = correctCount + 1 WHERE id = :id")
-    suspend fun markKnown(id: Long)
+    @Query("SELECT * FROM words WHERE id = :id")
+    suspend fun getWord(id: Long): Word?
 
-    @Query("UPDATE words SET known = 1, mastered = 1, correctCount = correctCount + 1 WHERE id = :id")
-    suspend fun markMastered(id: Long)
+    @Query("SELECT * FROM words")
+    suspend fun getAllWords(): List<Word>
 
-    @Query("UPDATE words SET known = 0, mastered = 0, wrongCount = wrongCount + 1 WHERE id = :id")
-    suspend fun markUnknown(id: Long)
+    /** Words learned before whose review time has come. */
+    @Query("SELECT * FROM words WHERE box > 0 AND dueAt <= :now")
+    suspend fun getDueWords(now: Long): List<Word>
+
+    @Query("SELECT COUNT(*) FROM words WHERE box > 0 AND dueAt <= :now")
+    fun observeDueCount(now: Long): Flow<Int>
 
     @Delete
     suspend fun deleteWord(word: Word)

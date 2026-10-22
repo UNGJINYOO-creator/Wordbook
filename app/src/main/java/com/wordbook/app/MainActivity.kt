@@ -13,6 +13,7 @@ import androidx.navigation.navArgument
 import com.wordbook.app.ui.DeckScreen
 import com.wordbook.app.ui.HomeScreen
 import com.wordbook.app.ui.ScanScreen
+import com.wordbook.app.ui.SettingsScreen
 import com.wordbook.app.ui.StudyScreen
 import com.wordbook.app.ui.theme.WordBookTheme
 
@@ -28,7 +29,12 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             onPhoto = { uri -> nav.navigate("scan?uri=${Uri.encode(uri.toString())}&deckId=-1") },
                             onOpenDeck = { id -> nav.navigate("deck/$id") },
+                            onReview = { nav.navigate("study/-1?onlyUnknown=false&review=true") },
+                            onSettings = { nav.navigate("settings") },
                         )
+                    }
+                    composable("settings") {
+                        SettingsScreen(onBack = { nav.popBackStack() })
                     }
                     composable(
                         "scan?uri={uri}&deckId={deckId}",
@@ -59,10 +65,11 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     composable(
-                        "study/{deckId}?onlyUnknown={onlyUnknown}",
+                        "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}",
                         arguments = listOf(
                             navArgument("deckId") { type = NavType.LongType },
                             navArgument("onlyUnknown") { type = NavType.BoolType; defaultValue = false },
+                            navArgument("review") { type = NavType.BoolType; defaultValue = false },
                         ),
                     ) {
                         StudyScreen(onBack = { nav.popBackStack() })

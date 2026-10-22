@@ -43,6 +43,10 @@ data class Word(
     /** Swiped up ("외웠어요"): skipped in regular study sessions. */
     val mastered: Boolean = false,
     val correctCount: Int = 0,
+    /** Review box (0 = new, higher = longer until the next review), see [com.wordbook.app.data.Srs]. */
+    val box: Int = 0,
+    /** When the word is due for review (epoch millis); only meaningful once box > 0. */
+    val dueAt: Long = 0,
     val wrongCount: Int = 0,
 )
 

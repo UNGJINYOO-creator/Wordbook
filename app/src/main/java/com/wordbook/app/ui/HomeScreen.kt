@@ -23,8 +23,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -69,6 +71,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val decks = dao.observeDecks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // Counted when the home screen opens; good enough since reviews come due in whole days.
+    val dueCount = dao.observeDueCount(System.currentTimeMillis())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     fun createEmptyDeck(name: String, onCreated: (Long) -> Unit) = viewModelScope.launch {
         onCreated(dao.insertDeck(Deck(name = name)))
     }
@@ -87,10 +93,13 @@ internal fun newPhotoUri(context: Context): Uri {
 fun HomeScreen(
     onPhoto: (Uri) -> Unit,
     onOpenDeck: (Long) -> Unit,
+    onReview: () -> Unit,
+    onSettings: () -> Unit,
     vm: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
     val decks by vm.decks.collectAsStateWithLifecycle()
+    val dueCount by vm.dueCount.collectAsStateWithLifecycle()
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
     var showNewDeck by rememberSaveable { mutableStateOf(false) }
@@ -115,6 +124,9 @@ fun HomeScreen(
                     }
                     IconButton(onClick = { showNewDeck = true }) {
                         Icon(Icons.Default.Add, contentDescription = "빈 단어장 만들기")
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Default.Settings, contentDescription = "학습 설정")
                     }
                 },
             )
@@ -150,6 +162,23 @@ fun HomeScreen(
                 contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 160.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (dueCount > 0) {
+                    item(key = "review") {
+                        Card(
+                            onClick = onReview,
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("오늘 복습 ${dueCount}개", style = MaterialTheme.typography.titleMedium)
+                                    Text("잊어버리기 전에 다시 볼 단어예요", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Text("시작 ›", style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
+                }
                 items(decks, key = { it.id }) { deck ->
                     DeckCard(deck, editing, onDelete = { deckToDelete = deck }) { onOpenDeck(deck.id) }
                 }

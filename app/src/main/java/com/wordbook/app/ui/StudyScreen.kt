@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -43,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
@@ -74,6 +77,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wordbook.app.data.AppDatabase
+import com.wordbook.app.data.BlankLevel
+import com.wordbook.app.data.Srs
+import com.wordbook.app.data.StudyMode
+import com.wordbook.app.data.StudySettings
 import com.wordbook.app.data.Word
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -88,14 +95,18 @@ enum class Answer { KNOWN, MASTERED, UNKNOWN }
 
 class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).wordDao()
+    private val settings = StudySettings(app)
+    /** -1 with [review] = today's reviews across all decks. */
     private val deckId: Long = checkNotNull(handle.get<Long>("deckId"))
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
+    val review: Boolean = handle.get<Boolean>("review") ?: false
 
     var loading by mutableStateOf(true)
         private set
     var backFirst by mutableStateOf(false)
     private var shuffle = true
     private var repeatMissed = true
+    val autoSpeak: Boolean get() = settings.autoSpeak
 
     private var queue = listOf<Word>()
     var index by mutableStateOf(0)
@@ -106,6 +117,21 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     var finished by mutableStateOf(false)
         private set
 
+    // Current question (for quiz modes).
+    var mode by mutableStateOf(StudyMode.CARD)
+        private set
+    var choices by mutableStateOf(listOf<Word>())
+        private set
+    var pattern by mutableStateOf("")
+        private set
+    /** null = not answered yet, true/false = right/wrong. */
+    var answered by mutableStateOf<Boolean?>(null)
+        private set
+    var pickedId by mutableStateOf<Long?>(null)
+        private set
+
+    /** All words, for wrong options in multiple choice. */
+    private var pool = listOf<Word>()
     private var sessionWords = listOf<Word>()
     /** Words missed at least once in this session (for the summary report). */
     val everMissed = mutableStateListOf<Word>()
@@ -121,14 +147,22 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     init {
         viewModelScope.launch {
-            val deck = dao.getDeck(deckId)
-            shuffle = deck?.shuffle ?: true
-            repeatMissed = deck?.repeatMissed ?: true
-            backFirst = deck?.backFirst ?: false
-            val all = dao.getWords(deckId)
-            // Mastered cards are skipped, unless that leaves nothing to study.
-            sessionWords = if (onlyUnknown) all.filter { !it.known }
-            else all.filter { !it.mastered }.ifEmpty { all }
+            if (review) {
+                pool = dao.getAllWords()
+                sessionWords = dao.getDueWords(System.currentTimeMillis())
+            } else {
+                val deck = dao.getDeck(deckId)
+                shuffle = deck?.shuffle ?: true
+                repeatMissed = deck?.repeatMissed ?: true
+                backFirst = deck?.backFirst ?: false
+                val all = dao.getWords(deckId)
+                pool = all.takeIf { it.size >= 4 } ?: dao.getAllWords()
+                // Mastered cards are skipped, unless that leaves nothing to study.
+                sessionWords = if (onlyUnknown) all.filter { !it.known }
+                else all.filter { !it.mastered }.ifEmpty { all }
+            }
+            val limit = settings.sessionSize
+            sessionWords = order(sessionWords).let { if (limit > 0) it.take(limit) else it }
             start(sessionWords)
             loading = false
         }
@@ -139,9 +173,55 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private fun start(words: List<Word>) {
         queue = order(words)
         index = 0
-        flipped = false
         finished = queue.isEmpty()
         missedThisRound.clear()
+        prepare()
+    }
+
+    /** Sets up the question for the current word. */
+    private fun prepare() {
+        flipped = false
+        answered = null
+        pickedId = null
+        val word = current ?: return
+        var m = when (settings.mode) {
+            // Gets harder as the word climbs the review boxes.
+            StudyMode.STAGED -> when (word.box) {
+                0 -> StudyMode.CARD
+                1 -> StudyMode.CHOICE
+                2 -> StudyMode.SPELLING
+                else -> StudyMode.DICTATION
+            }
+            StudyMode.MIXED -> listOf(StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION).random()
+            else -> settings.mode
+        }
+        val others = pool.filter { it.id != word.id && !it.text.equals(word.text, true) }.distinctBy { it.text.lowercase() }
+        if (m == StudyMode.CHOICE && others.size < 3) m = StudyMode.CARD
+        if (m != StudyMode.CARD && word.text.length < 2) m = StudyMode.CARD
+        mode = m
+        if (m == StudyMode.CHOICE) {
+            // Prefer wrong options with the same part of speech so the answer isn't obvious.
+            val same = others.filter { it.pos == word.pos && word.pos.isNotEmpty() }.shuffled()
+            val wrong = (same + others.shuffled()).distinctBy { it.id }.take(3)
+            choices = (wrong + word).shuffled()
+        }
+        if (m == StudyMode.SPELLING) pattern = makePattern(word)
+    }
+
+    private fun makePattern(word: Word): String {
+        val level = when (settings.blankLevel) {
+            BlankLevel.AUTO -> if (word.box <= 2) BlankLevel.EASY else if (word.box == 3) BlankLevel.NORMAL else BlankLevel.HARD
+            else -> settings.blankLevel
+        }
+        val text = word.text
+        val letters = text.indices.filter { text[it].isLetter() }
+        if (level == BlankLevel.HARD) return text.map { if (it.isLetter()) '_' else it }.joinToString("")
+        val ratio = if (level == BlankLevel.EASY) 0.3 else 0.5
+        // Keep the first letter as a hint on longer words.
+        val candidates = if (letters.size > 3) letters.drop(1) else letters
+        val count = (letters.size * ratio).roundToInt().coerceIn(1, candidates.size)
+        val blanks = candidates.shuffled().take(count).toSet()
+        return text.mapIndexed { i, c -> if (i in blanks) '_' else c }.joinToString("")
     }
 
     fun restart(onlyMissed: Boolean) {
@@ -154,14 +234,30 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         start(words)
     }
 
+    fun pick(choice: Word) {
+        val word = current ?: return
+        pickedId = choice.id
+        answered = choice.id == word.id
+    }
+
+    fun submit(input: String) {
+        val word = current ?: return
+        answered = input.trim().equals(word.text.trim(), ignoreCase = true)
+    }
+
+    /** After a quiz answer has been shown. */
+    fun next() = mark(if (answered == true) Answer.KNOWN else Answer.UNKNOWN)
+
     fun mark(answer: Answer) {
         val word = current ?: return
         viewModelScope.launch {
-            when (answer) {
-                Answer.KNOWN -> dao.markKnown(word.id)
-                Answer.MASTERED -> dao.markMastered(word.id)
-                Answer.UNKNOWN -> dao.markUnknown(word.id)
+            val fresh = dao.getWord(word.id) ?: return@launch
+            val result = when (answer) {
+                Answer.KNOWN -> Srs.Result.RIGHT
+                Answer.MASTERED -> Srs.Result.EASY
+                Answer.UNKNOWN -> Srs.Result.WRONG
             }
+            dao.updateWord(Srs.apply(fresh, result))
         }
         if (answer != Answer.UNKNOWN) {
             if (round == 1) firstTryKnown++
@@ -172,7 +268,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         }
         if (index + 1 < queue.size) {
             index++
-            flipped = false
+            prepare()
         } else if (repeatMissed && missedThisRound.isNotEmpty()) {
             round++
             start(missedThisRound.toList())
@@ -213,6 +309,7 @@ fun StudyScreen(
                 title = {
                     Text(
                         if (vm.finished) "학습 결과"
+                        else if (vm.review && vm.round == 1) "오늘 복습 · ${vm.index + 1}/${vm.roundSize}"
                         else if (vm.round > 1) "다시 보기 ${vm.round - 1}회차 · ${vm.index + 1}/${vm.roundSize}"
                         else "${vm.index + 1} / ${vm.roundSize}"
                     )
@@ -242,30 +339,58 @@ fun StudyScreen(
                             )
                         }
                         Spacer(Modifier.height(24.dp))
-                        // key() resets swipe offset & flip animation for each new card.
-                        key(word.id, vm.round) {
-                            SwipeCard(
-                                word = word,
-                                backFirst = vm.backFirst,
-                                flipped = vm.flipped,
-                                onFlip = { vm.flipped = !vm.flipped },
-                                onSpeak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") },
-                                onResult = vm::mark,
-                                modifier = Modifier.weight(1f),
-                            )
+                        val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
+                        // Speak automatically for dictation, and for every card when the setting is on.
+                        LaunchedEffect(word.id, vm.round, tts != null) {
+                            if (tts != null && (vm.mode == StudyMode.DICTATION || vm.autoSpeak)) speak()
                         }
-                        Spacer(Modifier.height(16.dp))
-                        // One guide line instead of buttons: the gestures themselves are the controls.
-                        Text(
-                            "카드를 탭하면 해석이 보여요",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                            Text("↓ 몰라요", color = UnknownRed, fontWeight = FontWeight.Bold)
-                            Text("← 헷갈려요", color = KnownGreen, fontWeight = FontWeight.Bold)
-                            Text("↑ 외웠어요", color = MasteredBlue, fontWeight = FontWeight.Bold)
+                        // key() resets swipe offset, flip animation and typed text for each new question.
+                        key(word.id, vm.round) {
+                            when (vm.mode) {
+                                StudyMode.CHOICE -> ChoiceQuiz(
+                                    word = word,
+                                    choices = vm.choices,
+                                    reverse = vm.backFirst,
+                                    answered = vm.answered,
+                                    pickedId = vm.pickedId,
+                                    onPick = vm::pick,
+                                    onNext = vm::next,
+                                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                                )
+                                StudyMode.SPELLING, StudyMode.DICTATION -> TypingQuiz(
+                                    word = word,
+                                    pattern = if (vm.mode == StudyMode.SPELLING) vm.pattern else null,
+                                    answered = vm.answered,
+                                    onSubmit = vm::submit,
+                                    onNext = vm::next,
+                                    onSpeak = { speak() },
+                                    modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                                )
+                                else -> Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    SwipeCard(
+                                        word = word,
+                                        backFirst = vm.backFirst,
+                                        flipped = vm.flipped,
+                                        onFlip = { vm.flipped = !vm.flipped },
+                                        onSpeak = { speak() },
+                                        onResult = vm::mark,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Spacer(Modifier.height(16.dp))
+                                    // One guide line instead of buttons: the gestures themselves are the controls.
+                                    Text(
+                                        "카드를 탭하면 해석이 보여요",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                                        Text("↓ 몰라요", color = UnknownRed, fontWeight = FontWeight.Bold)
+                                        Text("← 헷갈려요", color = KnownGreen, fontWeight = FontWeight.Bold)
+                                        Text("↑ 외웠어요", color = MasteredBlue, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
