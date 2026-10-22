@@ -55,6 +55,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -75,6 +77,7 @@ import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.Word
 import kotlinx.coroutines.launch
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private val KnownGreen = Color(0xFF2E7D32)
@@ -245,7 +248,7 @@ fun StudyScreen(
                         }
                         Spacer(Modifier.height(16.dp))
                         Text(
-                            "탭: 뒤집기 · ← 알아요 · ↑ 확실히 알아요 · ↓ 몰라요",
+                            "탭: 해석 보기 · ← 알아요 · ↑ 확실히 알아요 · ↓ 몰라요",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                             textAlign = TextAlign.Center,
@@ -287,7 +290,10 @@ private fun SwipeCard(
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val threshold = with(density) { 120.dp.toPx() }
+    // A short drag or a quick flick is enough to answer.
+    val threshold = with(density) { 48.dp.toPx() }
+    val flingVelocity = with(density) { 600.dp.toPx() }
+    val velocity = remember { VelocityTracker() }
     val offsetX = remember { Animatable(0f) }
     val offsetY = remember { Animatable(0f) }
     val rotation by animateFloatAsState(if (flipped) 180f else 0f, tween(350), label = "flip")
@@ -304,7 +310,9 @@ private fun SwipeCard(
             .graphicsLayer { rotationZ = offsetX.value / 40f }
             .pointerInput(word.id) {
                 detectDragGestures(
+                    onDragStart = { velocity.resetTracking() },
                     onDrag = { change, drag ->
+                        velocity.addPointerInputChange(change)
                         change.consume()
                         scope.launch {
                             offsetX.snapTo(offsetX.value + drag.x)
@@ -312,15 +320,19 @@ private fun SwipeCard(
                         }
                     },
                     onDragEnd = {
+                        val v = velocity.calculateVelocity()
                         scope.launch {
+                            val x = offsetX.value
+                            val y = offsetY.value
+                            val horizontal = abs(x) >= abs(y)
                             when {
-                                offsetX.value < -threshold -> {
+                                horizontal && (x < -threshold || v.x < -flingVelocity) -> {
                                     offsetX.animateTo(-size.width * 1.5f, tween(200)); onResult(Answer.KNOWN)
                                 }
-                                offsetY.value < -threshold -> {
+                                !horizontal && (y < -threshold || v.y < -flingVelocity) -> {
                                     offsetY.animateTo(-size.height * 1.5f, tween(200)); onResult(Answer.MASTERED)
                                 }
-                                offsetY.value > threshold -> {
+                                !horizontal && (y > threshold || v.y > flingVelocity) -> {
                                     offsetY.animateTo(size.height * 1.5f, tween(200)); onResult(Answer.UNKNOWN)
                                 }
                                 else -> {
