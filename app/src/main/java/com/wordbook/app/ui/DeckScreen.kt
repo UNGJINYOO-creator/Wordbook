@@ -203,12 +203,14 @@ fun DeckScreen(
             items(words, key = { it.id }) { word ->
                 ListItem(
                     headlineContent = {
+                        Text(word.text)
+                    },
+                    supportingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(word.text)
-                            PosBadge(word.pos, Modifier.padding(start = 6.dp))
+                            PosBadge(word.pos, Modifier.padding(end = 6.dp))
+                            Text(word.meaning.ifBlank { "(뜻 없음)" })
                         }
                     },
-                    supportingContent = { Text(word.meaning.ifBlank { "(뜻 없음)" }) },
                     leadingContent = {
                         // Tap to toggle "외웠어요"; mastered cards are skipped in regular study.
                         IconButton(onClick = { vm.toggleMastered(word) }) {

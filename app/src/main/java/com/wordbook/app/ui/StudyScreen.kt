@@ -368,10 +368,8 @@ private fun SwipeCard(
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PosOptions.firstOrNull { it.first == word.pos }?.let { (code, label) ->
-                            PosBadge(code, fontSize = 16.sp)
-                            Spacer(Modifier.height(4.dp))
-                            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.outline)
+                        if (word.pos.isNotEmpty()) {
+                            PosBadge(word.pos, fontSize = 18.sp)
                             Spacer(Modifier.height(12.dp))
                         }
                         Text(
@@ -414,12 +412,14 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
                 items(vm.everMissed, key = { it.id }) { w ->
                     ListItem(
                         headlineContent = {
+                            Text(w.text)
+                        },
+                        supportingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(w.text)
-                                PosBadge(w.pos, Modifier.padding(start = 6.dp))
+                                PosBadge(w.pos, Modifier.padding(end = 6.dp))
+                                Text(w.meaning)
                             }
                         },
-                        supportingContent = { Text(w.meaning) },
                     )
                 }
             }

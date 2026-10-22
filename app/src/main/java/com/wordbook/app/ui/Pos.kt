@@ -34,12 +34,12 @@ private fun posColor(pos: String) = when (pos) {
     else -> Color(0xFF9E9E9E)
 }
 
-/** Small coloured part-of-speech label, e.g. [동]. Shows nothing for an unknown part of speech. */
+/** Small coloured part-of-speech label, e.g. [동사]. Shows nothing for an unknown part of speech. */
 @Composable
 fun PosBadge(pos: String, modifier: Modifier = Modifier, fontSize: TextUnit = 12.sp) {
-    if (pos.isEmpty()) return
+    val label = PosOptions.firstOrNull { it.first == pos }?.second ?: return
     Text(
-        pos,
+        label,
         color = Color.White,
         fontSize = fontSize,
         fontWeight = FontWeight.Bold,
