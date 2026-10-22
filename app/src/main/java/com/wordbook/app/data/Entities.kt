@@ -1,0 +1,54 @@
+package com.wordbook.app.data
+
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+/** A word list, created from a photo or empty. Holds its own study options. */
+@Entity(tableName = "decks")
+data class Deck(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val createdAt: Long = System.currentTimeMillis(),
+    /** Card order: shuffle each session instead of alphabetical. */
+    val shuffle: Boolean = true,
+    /** Repeat missed cards at the end of the round until all are known. */
+    val repeatMissed: Boolean = true,
+    /** Show the meaning (back side) first. */
+    val backFirst: Boolean = false,
+)
+
+@Entity(
+    tableName = "words",
+    foreignKeys = [
+        ForeignKey(
+            entity = Deck::class,
+            parentColumns = ["id"],
+            childColumns = ["deckId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("deckId")],
+)
+data class Word(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val deckId: Long,
+    val text: String,
+    val meaning: String,
+    /** Marked as "known" in the most recent flashcard session. */
+    val known: Boolean = false,
+    /** Swiped up ("확실히 알아요"): skipped in regular study sessions. */
+    val mastered: Boolean = false,
+    val correctCount: Int = 0,
+    val wrongCount: Int = 0,
+)
+
+/** Deck row with counts for the home screen. */
+data class DeckSummary(
+    val id: Long,
+    val name: String,
+    val createdAt: Long,
+    val wordCount: Int,
+    val knownCount: Int,
+)

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- two stacked cards -->
+    <path android:fillColor="#9FA8DA" android:pathData="M38,34h36a4,4 0,0 1,4 4v30a4,4 0,0 1,-4 4h-36a4,4 0,0 1,-4 -4v-30a4,4 0,0 1,4 -4z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M32,40h36a4,4 0,0 1,4 4v30a4,4 0,0 1,-4 4h-36a4,4 0,0 1,-4 -4v-30a4,4 0,0 1,4 -4z" />
+    <path android:fillColor="#3F51B5" android:pathData="M40,66l8,-20h4l8,20h-4.5l-1.8,-5h-7.4l-1.8,5zM47.6,57.5h4.8l-2.4,-6.8z" />
+</vector>
