@@ -67,4 +67,36 @@ class StudySettings(context: Context) {
     var knownToLeave: Int
         get() = prefs.getInt("knownToLeave", 3)
         set(v) = prefs.edit().putInt("knownToLeave", v).apply()
+
+    /** Card order: shuffle each session instead of alphabetical. */
+    var shuffle: Boolean
+        get() = prefs.getBoolean("shuffle", true)
+        set(v) = prefs.edit().putBoolean("shuffle", v).apply()
+
+    /** Missed cards stay in the hand until known; off = every card is shown once. */
+    var repeatMissed: Boolean
+        get() = prefs.getBoolean("repeatMissed", true)
+        set(v) = prefs.edit().putBoolean("repeatMissed", v).apply()
+
+    /** Show the meaning first and recall the English word. */
+    var backFirst: Boolean
+        get() = prefs.getBoolean("backFirst", false)
+        set(v) = prefs.edit().putBoolean("backFirst", v).apply()
+
+    /** SHA-256 of the settings password, or "" when there is none. */
+    var pinHash: String
+        get() = prefs.getString("pinHash", "") ?: ""
+        set(v) = prefs.edit().putString("pinHash", v).apply()
+
+    val hasPin: Boolean get() = pinHash.isNotEmpty()
+
+    fun setPin(pin: String?) {
+        pinHash = pin?.let(::hash) ?: ""
+    }
+
+    fun checkPin(pin: String): Boolean = hash(pin) == pinHash
+
+    private fun hash(pin: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest("wordbook:$pin".toByteArray())
+            .joinToString("") { "%02x".format(it) }
 }

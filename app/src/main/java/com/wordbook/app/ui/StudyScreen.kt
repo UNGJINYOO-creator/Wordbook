@@ -128,9 +128,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     var loading by mutableStateOf(true)
         private set
-    var backFirst by mutableStateOf(false)
-    private var shuffle = true
-    private var repeatMissed = true
+    // Card order options live in the one settings screen (they used to be per deck).
+    val backFirst = settings.backFirst
+    private val shuffle = settings.shuffle
+    private val repeatMissed = settings.repeatMissed
     private val handSize = settings.handSize.coerceAtLeast(1)
     private val knownToLeave = settings.knownToLeave.coerceAtLeast(1)
     val autoSpeak: Boolean get() = settings.autoSpeak
@@ -220,10 +221,6 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 review -> dao.getDueWords(System.currentTimeMillis())
                 allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
                 else -> {
-                    val deck = dao.getDeck(deckId)
-                    shuffle = deck?.shuffle ?: true
-                    repeatMissed = deck?.repeatMissed ?: true
-                    backFirst = deck?.backFirst ?: false
                     val words = dao.getWords(deckId).filter { !it.excluded }
                     if (words.size >= 4) pool = words
                     // Mastered cards are skipped, unless that leaves nothing to study.

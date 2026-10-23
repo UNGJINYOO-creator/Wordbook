@@ -2,6 +2,16 @@ package com.wordbook.app.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,6 +70,23 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
     // Settings apply immediately; a short toast confirms that the change was saved.
     val saved = { Toast.makeText(context, "저장됐어요", Toast.LENGTH_SHORT).show() }
+    var shuffle by remember { mutableStateOf(settings.shuffle) }
+    var repeatMissed by remember { mutableStateOf(settings.repeatMissed) }
+    var backFirst by remember { mutableStateOf(settings.backFirst) }
+    var hasPin by remember { mutableStateOf(settings.hasPin) }
+    var settingPin by remember { mutableStateOf(false) }
+    // Locks again whenever the tab is left, since this state is forgotten then.
+    var unlocked by remember { mutableStateOf(!settings.hasPin) }
+    if (!unlocked) {
+        PinLock(check = settings::checkPin, onUnlocked = { unlocked = true })
+        return
+    }
+    if (settingPin) {
+        NewPinDialog(
+            onDismiss = { settingPin = false },
+            onDone = { pin -> settings.setPin(pin); hasPin = true; settingPin = false; saved() },
+        )
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
@@ -115,6 +142,18 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("카드 순서")
+            ToggleRow("카드 섞기", "학습할 때마다 순서를 무작위로 (끄면 알파벳 순)", shuffle) {
+                shuffle = it; settings.shuffle = it; saved()
+            }
+            ToggleRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
+                repeatMissed = it; settings.repeatMissed = it; saved()
+            }
+            ToggleRow("뒷면 먼저", "뜻을 먼저 보고 영어 단어 떠올리기", backFirst) {
+                backFirst = it; settings.backFirst = it; saved()
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -186,6 +225,21 @@ fun SettingsScreen() {
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
+            Section("비밀번호")
+            Text(
+                if (hasPin) "설정을 열 때 비밀번호 4자리를 물어봐요" else "아이가 설정을 바꾸지 못하게 비밀번호를 걸 수 있어요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Row(Modifier.padding(horizontal = 8.dp)) {
+                TextButton(onClick = { settingPin = true }) { Text(if (hasPin) "비밀번호 바꾸기" else "비밀번호 설정") }
+                if (hasPin) {
+                    TextButton(onClick = { settings.setPin(null); hasPin = false; saved() }) { Text("비밀번호 끄기") }
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
             Section("텔레그램 알림")
             Text(
                 "하루 목표 시간을 채우면 오늘의 학습 결과를 텔레그램으로 보내요",
@@ -229,8 +283,7 @@ fun SettingsScreen() {
             }
 
             Text(
-                "카드 섞기, 틀린 카드 반복, 뒷면 먼저는 단어장 화면의 ⋮ 메뉴 > 단어장 옵션에서 정해요.\n" +
-                    "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
+                "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
                     "틀리면 간격이 절반으로 줄고 오늘 다시 나와요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
@@ -247,5 +300,94 @@ private fun Section(title: String) {
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun ToggleRow(title: String, desc: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        }
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun PinField(value: String, onChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { v -> onChange(v.filter { it.isDigit() }.take(4)) },
+        label = { Text(label) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        modifier = modifier,
+    )
+}
+
+/** Shown instead of the settings while a password is set and not yet entered. */
+@Composable
+private fun PinLock(check: (String) -> Boolean, onUnlocked: () -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    Column(
+        Modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("🔒", style = MaterialTheme.typography.displayMedium)
+        Spacer(Modifier.height(16.dp))
+        Text("설정은 비밀번호가 필요해요", style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(24.dp))
+        PinField(
+            value = pin,
+            onChange = {
+                pin = it
+                error = false
+                if (it.length == 4) {
+                    if (check(it)) onUnlocked() else { error = true; pin = "" }
+                }
+            },
+            label = "비밀번호 4자리",
+            modifier = Modifier.focusRequester(focus),
+        )
+        if (error) {
+            Text("비밀번호가 달라요", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+/** Asks for a new 4-digit password twice. */
+@Composable
+private fun NewPinDialog(onDismiss: () -> Unit, onDone: (String) -> Unit) {
+    var first by remember { mutableStateOf("") }
+    var second by remember { mutableStateOf("") }
+    val mismatch = second.length == 4 && first != second
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("비밀번호 설정") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PinField(first, { first = it }, "새 비밀번호 4자리")
+                PinField(second, { second = it }, "한 번 더 입력")
+                if (mismatch) Text("두 비밀번호가 달라요", color = MaterialTheme.colorScheme.error)
+                Text(
+                    "비밀번호를 잊으면 앱을 지웠다 다시 깔아야 하고, 그러면 단어도 지워져요. 꼭 기억해 두세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDone(first) }, enabled = first.length == 4 && first == second) { Text("저장") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
 }

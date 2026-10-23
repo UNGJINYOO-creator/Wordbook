@@ -196,11 +196,6 @@ fun DeckScreen(
                                 onClick = { menuOpen = false; showRename = true },
                             )
                             DropdownMenuItem(
-                                text = { Text("단어장 옵션 (섞기·반복·뒷면 먼저)") },
-                                leadingIcon = { Icon(Icons.Default.Tune, null) },
-                                onClick = { menuOpen = false; showOptions = true },
-                            )
-                            DropdownMenuItem(
                                 text = { Text("내보내기") },
                                 leadingIcon = { Icon(Icons.Default.Share, null) },
                                 enabled = words.isNotEmpty(),
@@ -368,9 +363,6 @@ fun DeckScreen(
             onConfirm = { showDelete = false; vm.deleteDeck(onBack) },
         )
     }
-    if (showOptions) {
-        deck?.let { d -> DeckOptionsDialog(d, onChange = { vm.updateDeck { _ -> it } }, onDismiss = { showOptions = false }) }
-    }
 }
 
 @Composable
@@ -475,35 +467,5 @@ private fun StudySheet(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun DeckOptionsDialog(deck: Deck, onChange: (Deck) -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("단어장 옵션") },
-        text = {
-            Column {
-                OptionRow("카드 섞기", "학습할 때마다 순서를 무작위로", deck.shuffle) { onChange(deck.copy(shuffle = it)) }
-                OptionRow("틀린 카드 반복", "모르는 카드를 다 알 때까지 다시", deck.repeatMissed) { onChange(deck.copy(repeatMissed = it)) }
-                OptionRow("뒷면 먼저", "뜻을 보고 영어 단어 맞히기", deck.backFirst) { onChange(deck.copy(backFirst = it)) }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("닫기") } },
-    )
-}
-
-@Composable
-private fun OptionRow(title: String, desc: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable { onChecked(!checked) }.padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-        }
-        Switch(checked = checked, onCheckedChange = onChecked)
     }
 }
