@@ -52,4 +52,19 @@ class StudySettings(context: Context) {
     var telegramChatId: String
         get() = prefs.getString("tgChat", "") ?: ""
         set(v) = prefs.edit().putString("tgChat", v.trim()).apply()
+
+    /** The first-launch guide has been shown. */
+    var onboarded: Boolean
+        get() = prefs.getBoolean("onboarded", false)
+        set(v) = prefs.edit().putBoolean("onboarded", v).apply()
+
+    /** Cards dealt into the "hand" at once; the rest wait until a card leaves the hand. */
+    var handSize: Int
+        get() = prefs.getInt("handSize", 20)
+        set(v) = prefs.edit().putInt("handSize", v).apply()
+
+    /** A card leaves the hand after this many 헷갈려요 (or one 외웠어요). */
+    var knownToLeave: Int
+        get() = prefs.getInt("knownToLeave", 3)
+        set(v) = prefs.edit().putInt("knownToLeave", v).apply()
 }

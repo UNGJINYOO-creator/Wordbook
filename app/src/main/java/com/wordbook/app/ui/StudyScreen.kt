@@ -2,6 +2,15 @@ package com.wordbook.app.ui
 
 import android.app.Application
 import android.speech.tts.TextToSpeech
+import androidx.activity.compose.BackHandler
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -99,19 +108,31 @@ private val MasteredBlue = Color(0xFF1565C0)
 
 enum class Answer { KNOWN, MASTERED, UNKNOWN }
 
+/**
+ * A study session works like Flashcards Deluxe's "hand": up to [StudySettings.handSize] cards go
+ * round and round; a card leaves after [StudySettings.knownToLeave] × 헷갈려요 or one 외웠어요,
+ * and the next waiting card takes its place. The review schedule is updated once per card,
+ * on its first answer in the session.
+ */
 class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).wordDao()
     private val settings = StudySettings(app)
-    /** -1 with [review] = today's reviews across all decks. */
+    /** -1 with [review] = today's reviews across all decks; -1 with [allDecks] = every deck together. */
     private val deckId: Long = checkNotNull(handle.get<Long>("deckId"))
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
     val review: Boolean = handle.get<Boolean>("review") ?: false
+    private val allDecks: Boolean = handle.get<Boolean>("all") ?: false
+    /** Study mode picked for this session on the deck screen; otherwise the settings mode. */
+    private val modeChoice: StudyMode =
+        handle.get<String>("mode")?.let { runCatching { StudyMode.valueOf(it) }.getOrNull() } ?: settings.mode
 
     var loading by mutableStateOf(true)
         private set
     var backFirst by mutableStateOf(false)
     private var shuffle = true
     private var repeatMissed = true
+    private val handSize = settings.handSize.coerceAtLeast(1)
+    private val knownToLeave = settings.knownToLeave.coerceAtLeast(1)
     val autoSpeak: Boolean get() = settings.autoSpeak
 
     // Study timer: counts only while the screen is being touched; pauses after idleSeconds.
@@ -129,13 +150,28 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         private set
     val telegramReady: Boolean get() = settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()
 
-    private var queue = listOf<Word>()
-    var index by mutableStateOf(0)
+    private val hand = mutableListOf<Word>()
+    private val waiting = ArrayDeque<Word>()
+    private val knownTimes = mutableMapOf<Long, Int>()
+    /** Cards whose review schedule was already updated in this session. */
+    private val scheduled = mutableSetOf<Long>()
+    /** Cards that were already in review (box > 0) when the session started. */
+    private var reviewedBefore = setOf<Long>()
+    private val undoStack = ArrayDeque<Snapshot>()
+
+    var current by mutableStateOf<Word?>(null)
         private set
-    var round by mutableStateOf(1)
+    /** Counts questions shown, so each one gets fresh UI state. */
+    var turn by mutableStateOf(0)
+        private set
+    var doneCount by mutableStateOf(0)
+        private set
+    var sessionSize by mutableStateOf(0)
         private set
     var flipped by mutableStateOf(false)
     var finished by mutableStateOf(false)
+        private set
+    var canUndo by mutableStateOf(false)
         private set
 
     // Current question (for quiz modes).
@@ -156,31 +192,44 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private var sessionWords = listOf<Word>()
     /** Words missed at least once in this session (for the summary report). */
     val everMissed = mutableStateListOf<Word>()
-    private val missedThisRound = mutableListOf<Word>()
     var firstTryKnown by mutableStateOf(0)
         private set
     var masteredCount by mutableStateOf(0)
         private set
 
-    val current: Word? get() = queue.getOrNull(index)
-    val roundSize: Int get() = queue.size
-    val sessionSize: Int get() = sessionWords.size
+    val progress: Float get() = if (sessionSize == 0) 0f else doneCount / sessionSize.toFloat()
+
+    private class Snapshot(
+        val hand: List<Word>,
+        val waiting: List<Word>,
+        val knownTimes: Map<Long, Int>,
+        val scheduled: Set<Long>,
+        val everMissed: List<Word>,
+        val doneCount: Int,
+        val firstTryKnown: Int,
+        val masteredCount: Int,
+        /** The word as it was in the database before this answer changed it. */
+        val wordBefore: Word,
+    )
 
     init {
         viewModelScope.launch {
-            if (review) {
-                pool = dao.getAllWords()
-                sessionWords = dao.getDueWords(System.currentTimeMillis())
-            } else {
-                val deck = dao.getDeck(deckId)
-                shuffle = deck?.shuffle ?: true
-                repeatMissed = deck?.repeatMissed ?: true
-                backFirst = deck?.backFirst ?: false
-                val all = dao.getWords(deckId)
-                pool = all.takeIf { it.size >= 4 } ?: dao.getAllWords()
-                // Mastered cards are skipped, unless that leaves nothing to study.
-                sessionWords = if (onlyUnknown) all.filter { !it.known }
-                else all.filter { !it.mastered }.ifEmpty { all }
+            val all = dao.getAllWords()
+            pool = all
+            sessionWords = when {
+                review -> dao.getDueWords(System.currentTimeMillis())
+                allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
+                else -> {
+                    val deck = dao.getDeck(deckId)
+                    shuffle = deck?.shuffle ?: true
+                    repeatMissed = deck?.repeatMissed ?: true
+                    backFirst = deck?.backFirst ?: false
+                    val words = dao.getWords(deckId).filter { !it.excluded }
+                    if (words.size >= 4) pool = words
+                    // Mastered cards are skipped, unless that leaves nothing to study.
+                    if (onlyUnknown) words.filter { !it.known }
+                    else words.filter { !it.mastered }.ifEmpty { words }
+                }
             }
             val limit = settings.sessionSize
             sessionWords = order(sessionWords).let { if (limit > 0) it.take(limit) else it }
@@ -224,20 +273,38 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private fun order(words: List<Word>) = if (shuffle) words.shuffled() else words.sortedBy { it.text.lowercase() }
 
     private fun start(words: List<Word>) {
-        queue = order(words)
-        index = 0
-        finished = queue.isEmpty()
-        missedThisRound.clear()
+        hand.clear()
+        waiting.clear()
+        waiting.addAll(order(words))
+        knownTimes.clear()
+        scheduled.clear()
+        undoStack.clear()
+        canUndo = false
+        reviewedBefore = words.filter { it.box > 0 }.map { it.id }.toSet()
+        sessionSize = words.size
+        doneCount = 0
+        finished = words.isEmpty()
+        refill()
         prepare()
     }
 
-    /** Sets up the question for the current word. */
+    private fun refill() {
+        while (hand.size < handSize && waiting.isNotEmpty()) hand += waiting.removeFirst()
+    }
+
+    /** Sets up the question for the card at the front of the hand. */
     private fun prepare() {
         flipped = false
         answered = null
         pickedId = null
-        val word = current ?: return
-        var m = when (settings.mode) {
+        turn++
+        val word = hand.firstOrNull()
+        current = word
+        if (word == null) {
+            finished = true
+            return
+        }
+        var m = when (modeChoice) {
             // Gets harder as the word climbs the review boxes.
             StudyMode.STAGED -> when (word.box) {
                 0 -> StudyMode.CARD
@@ -246,7 +313,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 else -> StudyMode.DICTATION
             }
             StudyMode.MIXED -> listOf(StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION).random()
-            else -> settings.mode
+            else -> modeChoice
         }
         val others = pool.filter { it.id != word.id && !it.text.equals(word.text, true) }.distinctBy { it.text.lowercase() }
         if (m == StudyMode.CHOICE && others.size < 3) m = StudyMode.CARD
@@ -279,13 +346,16 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     }
 
     fun restart(onlyMissed: Boolean) {
-        val words = if (onlyMissed) everMissed.toList() else sessionWords
-        sessionWords = words
-        everMissed.clear()
-        firstTryKnown = 0
-        masteredCount = 0
-        round = 1
-        start(words)
+        viewModelScope.launch {
+            // Reload so the new session sees the updated review boxes.
+            val ids = (if (onlyMissed) everMissed.toList() else sessionWords).map { it.id }
+            val words = ids.mapNotNull { dao.getWord(it) }.filter { !it.excluded }
+            sessionWords = words
+            everMissed.clear()
+            firstTryKnown = 0
+            masteredCount = 0
+            start(words)
+        }
     }
 
     fun pick(choice: Word) {
@@ -306,33 +376,94 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     fun mark(answer: Answer) {
         touch()
-        val word = current ?: return
+        val word = hand.firstOrNull() ?: return
+        undoStack.addLast(
+            Snapshot(
+                hand.toList(), waiting.toList(), knownTimes.toMap(), scheduled.toSet(), everMissed.toList(),
+                doneCount, firstTryKnown, masteredCount, word,
+            ),
+        )
+        if (undoStack.size > 30) undoStack.removeFirst()
+        canUndo = true
         stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
+
+        val firstAnswer = word.id !in scheduled
+        val updated = when {
+            firstAnswer -> Srs.apply(
+                word,
+                when (answer) {
+                    Answer.KNOWN -> Srs.Result.RIGHT
+                    Answer.MASTERED -> Srs.Result.EASY
+                    Answer.UNKNOWN -> Srs.Result.WRONG
+                },
+            )
+            answer == Answer.MASTERED -> word.copy(mastered = true, known = true)
+            else -> word
+        }
+        scheduled += word.id
+        if (updated != word) viewModelScope.launch { dao.updateWord(updated) }
+
+        if (firstAnswer && answer != Answer.UNKNOWN) firstTryKnown++
+        if (answer == Answer.MASTERED) masteredCount++
+        if (answer == Answer.UNKNOWN && everMissed.none { it.id == word.id }) everMissed += word
+        val times = (knownTimes[word.id] ?: 0) + if (answer == Answer.KNOWN) 1 else 0
+        knownTimes[word.id] = times
+
+        val leaves = !repeatMissed ||
+            answer == Answer.MASTERED ||
+            times >= knownToLeave ||
+            // A review word recalled right away doesn't need the extra rounds.
+            (firstAnswer && answer == Answer.KNOWN && word.id in reviewedBefore)
+        hand.removeAt(0)
+        if (leaves) doneCount++ else hand += updated
+        refill()
+        prepare()
+    }
+
+    /** Swipe right: go back to the previous card and take back its answer. */
+    fun undo() {
+        touch()
+        val s = undoStack.removeLastOrNull() ?: return
+        hand.clear(); hand.addAll(s.hand)
+        waiting.clear(); waiting.addAll(s.waiting)
+        knownTimes.clear(); knownTimes.putAll(s.knownTimes)
+        scheduled.clear(); scheduled.addAll(s.scheduled)
+        everMissed.clear(); everMissed.addAll(s.everMissed)
+        doneCount = s.doneCount
+        firstTryKnown = s.firstTryKnown
+        masteredCount = s.masteredCount
+        viewModelScope.launch { dao.updateWord(s.wordBefore) }
+        canUndo = undoStack.isNotEmpty()
+        finished = false
+        prepare()
+    }
+
+    /** Applies a change to the current card (edit, flag) in the session and the database. */
+    private fun changeCurrent(transform: (Word) -> Word) {
+        val word = hand.firstOrNull() ?: return
+        val changed = transform(word)
+        hand[0] = changed
+        current = changed
         viewModelScope.launch {
-            val fresh = dao.getWord(word.id) ?: return@launch
-            val result = when (answer) {
-                Answer.KNOWN -> Srs.Result.RIGHT
-                Answer.MASTERED -> Srs.Result.EASY
-                Answer.UNKNOWN -> Srs.Result.WRONG
-            }
-            dao.updateWord(Srs.apply(fresh, result))
+            dao.getWord(word.id)?.let { dao.updateWord(transform(it)) }
         }
-        if (answer != Answer.UNKNOWN) {
-            if (round == 1) firstTryKnown++
-            if (answer == Answer.MASTERED) masteredCount++
-        } else {
-            missedThisRound += word
-            if (everMissed.none { it.id == word.id }) everMissed += word
-        }
-        if (index + 1 < queue.size) {
-            index++
-            prepare()
-        } else if (repeatMissed && missedThisRound.isNotEmpty()) {
-            round++
-            start(missedThisRound.toList())
-        } else {
-            finished = true
-        }
+    }
+
+    fun editCurrent(text: String, meaning: String, pos: String) =
+        changeCurrent { it.copy(text = text, meaning = meaning.ifBlank { it.meaning }, pos = pos) }
+
+    fun toggleFlag() = changeCurrent { it.copy(flagged = !it.flagged) }
+
+    /** Takes the current card out of this and future sessions. */
+    fun excludeCurrent() {
+        val word = hand.firstOrNull() ?: return
+        viewModelScope.launch { dao.getWord(word.id)?.let { dao.updateWord(it.copy(excluded = true)) } }
+        hand.removeAt(0)
+        sessionSize--
+        undoStack.clear()
+        canUndo = false
+        refill()
+        prepare()
     }
 
     companion object {
@@ -361,21 +492,53 @@ fun StudyScreen(
     vm: StudyViewModel = viewModel(factory = StudyViewModel.Factory),
 ) {
     val tts = rememberTts()
+    var confirmExit by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    val inSession = !vm.loading && !vm.finished
+    // Leaving in the middle of a session asks first, from the back button and the system back gesture.
+    BackHandler(enabled = inSession) { confirmExit = true }
+
     Scaffold(
         topBar = {
             AppTopBar(
                 title = {
                     Text(
                         if (vm.finished) "학습 결과"
-                        else if (vm.review && vm.round == 1) "오늘 복습 · ${vm.index + 1}/${vm.roundSize}"
-                        else if (vm.round > 1) "다시 보기 ${vm.round - 1}회차 · ${vm.index + 1}/${vm.roundSize}"
-                        else "${vm.index + 1} / ${vm.roundSize}"
+                        else (if (vm.review) "복습 " else "") +
+                            "${vm.doneCount}/${vm.sessionSize} · ${(vm.progress * 100).roundToInt()}%",
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
+                    IconButton(onClick = { if (inSession) confirmExit = true else onBack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로")
+                    }
                 },
-                actions = { StudyTimer(vm) },
+                actions = {
+                    StudyTimer(vm)
+                    if (inSession && vm.current != null) {
+                        Box {
+                            IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "카드 메뉴") }
+                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                DropdownMenuItem(
+                                    text = { Text("카드 수정") },
+                                    leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                    onClick = { menuOpen = false; editing = true },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(if (vm.current?.flagged == true) "수정 필요 표시 지우기" else "오타·수정 필요 표시") },
+                                    leadingIcon = { Icon(Icons.Default.Flag, null) },
+                                    onClick = { menuOpen = false; vm.toggleFlag() },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("이 카드 학습에서 빼기") },
+                                    leadingIcon = { Icon(Icons.Default.Block, null) },
+                                    onClick = { menuOpen = false; vm.excludeCurrent() },
+                                )
+                            }
+                        }
+                    }
+                },
             )
         },
     ) { padding ->
@@ -398,34 +561,31 @@ fun StudyScreen(
                     val typing = vm.mode == StudyMode.SPELLING || vm.mode == StudyMode.DICTATION
                     Column(
                         Modifier.fillMaxSize().imePadding()
-                            .padding(horizontal = 24.dp, vertical = if (typing) 8.dp else 24.dp),
+                            .padding(horizontal = 24.dp, vertical = if (typing) 4.dp else 12.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        val progress = vm.index / vm.roundSize.toFloat()
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            ThickProgress(progress, Modifier.weight(1f))
+                        ThickProgress(vm.progress, Modifier.fillMaxWidth())
+                        val notes = listOfNotNull(
+                            if (word.flagged) "⚑ 수정 필요로 표시한 카드" else null,
+                            if (vm.goalReached) "🎉 오늘 목표 시간 달성!" else null,
+                            vm.telegramStatus,
+                        )
+                        if (notes.isNotEmpty()) {
                             Text(
-                                "${(progress * 100).roundToInt()}%",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(start = 12.dp),
-                            )
-                        }
-                        if (vm.goalReached || vm.telegramStatus != null) {
-                            Text(
-                                listOfNotNull(if (vm.goalReached) "🎉 오늘 목표 시간 달성!" else null, vm.telegramStatus).joinToString(" · "),
+                                notes.joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 8.dp),
+                                modifier = Modifier.padding(top = 6.dp),
                             )
                         }
-                        Spacer(Modifier.height(if (typing) 8.dp else 24.dp))
+                        Spacer(Modifier.height(if (typing) 8.dp else 16.dp))
                         val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
                         // Speak automatically for dictation, and for every card when the setting is on.
-                        LaunchedEffect(word.id, vm.round, tts != null) {
+                        LaunchedEffect(vm.turn, tts != null) {
                             if (tts != null && (vm.mode == StudyMode.DICTATION || vm.autoSpeak)) speak()
                         }
                         // key() resets swipe offset, flip animation and typed text for each new question.
-                        key(word.id, vm.round) {
+                        key(vm.turn) {
                             when (vm.mode) {
                                 StudyMode.CHOICE -> ChoiceQuiz(
                                     word = word,
@@ -454,15 +614,17 @@ fun StudyScreen(
                                         word = word,
                                         backFirst = vm.backFirst,
                                         flipped = vm.flipped,
+                                        canUndo = vm.canUndo,
                                         onFlip = { vm.flipped = !vm.flipped },
                                         onSpeak = { speak() },
                                         onResult = vm::mark,
+                                        onUndo = vm::undo,
                                         modifier = Modifier.weight(1f),
                                     )
                                     Spacer(Modifier.height(16.dp))
                                     // One guide line instead of buttons: the gestures themselves are the controls.
                                     Text(
-                                        "카드를 탭하면 해석이 보여요",
+                                        "카드를 탭하면 해석이 보여요" + if (vm.canUndo) " · → 이전 카드" else "",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline,
                                     )
@@ -480,6 +642,28 @@ fun StudyScreen(
             }
         }
     }
+
+    if (confirmExit) {
+        AlertDialog(
+            onDismissRequest = { confirmExit = false },
+            title = { Text("학습을 끝낼까요?") },
+            text = { Text("지금까지 푼 카드는 저장돼요.") },
+            confirmButton = { TextButton(onClick = { confirmExit = false; onBack() }) { Text("끝내기") } },
+            dismissButton = { TextButton(onClick = { confirmExit = false }) { Text("계속하기") } },
+        )
+    }
+    if (editing) {
+        vm.current?.let { w ->
+            CardEditDialog(
+                title = "카드 수정",
+                initialText = w.text,
+                initialMeaning = w.meaning,
+                initialPos = w.pos,
+                onDismiss = { editing = false },
+                onConfirm = { t, m, p -> vm.editCurrent(t, m, p); editing = false },
+            )
+        }
+    }
 }
 
 @Composable
@@ -487,9 +671,11 @@ private fun SwipeCard(
     word: Word,
     backFirst: Boolean,
     flipped: Boolean,
+    canUndo: Boolean,
     onFlip: () -> Unit,
     onSpeak: () -> Unit,
     onResult: (Answer) -> Unit,
+    onUndo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -512,7 +698,7 @@ private fun SwipeCard(
             .fillMaxWidth()
             .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
             .graphicsLayer { rotationZ = offsetX.value / 40f }
-            .pointerInput(word.id) {
+            .pointerInput(word.id, canUndo) {
                 detectDragGestures(
                     onDragStart = { velocity.resetTracking() },
                     onDrag = { change, drag ->
@@ -532,6 +718,10 @@ private fun SwipeCard(
                             when {
                                 horizontal && (x < -threshold || v.x < -flingVelocity) -> {
                                     offsetX.animateTo(-size.width * 1.5f, tween(200)); onResult(Answer.KNOWN)
+                                }
+                                // Swipe right brings back the previous card.
+                                horizontal && canUndo && (x > threshold || v.x > flingVelocity) -> {
+                                    offsetX.animateTo(size.width * 1.5f, tween(150)); onUndo()
                                 }
                                 !horizontal && (y < -threshold || v.y < -flingVelocity) -> {
                                     offsetY.animateTo(-size.height * 1.5f, tween(200)); onResult(Answer.MASTERED)
@@ -635,7 +825,7 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            "${vm.sessionSize}개 중 처음에 맞힌 카드 ${vm.firstTryKnown}개 (외웠어요 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",
+            "${vm.sessionSize}개 중 처음에 바로 맞힌 카드 ${vm.firstTryKnown}개 (외웠어요 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",
             style = MaterialTheme.typography.bodyLarge,
         )
         Spacer(Modifier.height(16.dp))

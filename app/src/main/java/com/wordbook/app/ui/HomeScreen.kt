@@ -16,38 +16,40 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
@@ -55,8 +57,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wordbook.app.data.AppDatabase
+import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.Deck
 import com.wordbook.app.data.DeckSummary
+import com.wordbook.app.data.StudySettings
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -67,6 +71,8 @@ import java.util.Locale
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).wordDao()
+    private val stats = DailyStats(app)
+    private val settings = StudySettings(app)
 
     val decks = dao.observeDecks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -74,6 +80,20 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // Counted when the home screen opens; good enough since reviews come due in whole days.
     val dueCount = dao.observeDueCount(System.currentTimeMillis())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
+    var todayMs by mutableLongStateOf(0L)
+        private set
+    var goalMs by mutableLongStateOf(0L)
+        private set
+    var streak by mutableIntStateOf(0)
+        private set
+
+    /** Re-reads today's numbers; called whenever the home screen is shown. */
+    fun refresh() {
+        todayMs = stats.studyMs
+        goalMs = settings.dailyGoalMinutes * 60_000L
+        streak = stats.streak
+    }
 
     fun createEmptyDeck(name: String, onCreated: (Long) -> Unit) = viewModelScope.launch {
         onCreated(dao.insertDeck(Deck(name = name)))
@@ -88,13 +108,14 @@ internal fun newPhotoUri(context: Context): Uri {
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
+internal fun minutesText(ms: Long): String = "${ms / 60_000}분"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onPhoto: (Uri) -> Unit,
     onOpenDeck: (Long) -> Unit,
     onReview: () -> Unit,
-    onSettings: () -> Unit,
     vm: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -102,8 +123,10 @@ fun HomeScreen(
     val dueCount by vm.dueCount.collectAsStateWithLifecycle()
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
     var editing by rememberSaveable { mutableStateOf(false) }
+    var showAdd by rememberSaveable { mutableStateOf(false) }
     var showNewDeck by rememberSaveable { mutableStateOf(false) }
     var deckToDelete by remember { mutableStateOf<DeckSummary?>(null) }
+    LaunchedEffect(Unit) { vm.refresh() }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = pendingUri
@@ -122,80 +145,71 @@ fun HomeScreen(
                     if (decks.isNotEmpty()) {
                         TextButton(onClick = { editing = !editing }) { Text(if (editing) "완료" else "편집") }
                     }
-                    IconButton(onClick = { showNewDeck = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "빈 단어장 만들기")
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "학습 설정")
-                    }
                 },
             )
         },
-        floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SmallFloatingActionButton(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.primary,
-                    onClick = {
-                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) { Icon(Icons.Default.PhotoLibrary, contentDescription = "앨범에서 선택") }
-                ExtendedFloatingActionButton(
-                    shape = ButtonShape,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    onClick = {
-                        val uri = newPhotoUri(context)
-                        pendingUri = uri.toString()
-                        takePicture.launch(uri)
-                    },
-                    icon = { Icon(Icons.Default.CameraAlt, contentDescription = null) },
-                    text = { Text("사진 찍기") },
-                )
-            }
-        },
     ) { padding ->
-        if (decks.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding).padding(32.dp), contentAlignment = Alignment.Center) {
-                Text(
-                    "영어가 있는 책이나 문서를 찍으면\n단어를 찾아 단어장을 만들어 드려요.",
-                    textAlign = TextAlign.Center,
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item(key = "today") {
+                TodayCard(dueCount, vm.todayMs, vm.goalMs, vm.streak, onReview)
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 160.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (dueCount > 0) {
-                    item(key = "review") {
-                        Card(
-                            onClick = onReview,
-                            shape = MaterialTheme.shapes.large,
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary,
-                            ),
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("오늘 복습 ${dueCount}개", style = MaterialTheme.typography.titleMedium)
-                                    Text("잊어버리기 전에 다시 볼 단어예요", style = MaterialTheme.typography.bodySmall)
-                                }
-                                Text("시작 ›", style = MaterialTheme.typography.titleMedium)
-                            }
-                        }
-                    }
+            item(key = "add") {
+                PrimaryButton("📷  사진으로 단어 추가", { showAdd = true })
+            }
+            if (decks.isEmpty()) {
+                item(key = "empty") {
+                    Text(
+                        "영어가 있는 책이나 화면을 찍으면\n단어를 찾아 단어장을 만들어 드려요.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(vertical = 24.dp, horizontal = 8.dp),
+                    )
                 }
-                items(decks, key = { it.id }) { deck ->
-                    DeckCard(deck, editing, onDelete = { deckToDelete = deck }) { onOpenDeck(deck.id) }
+            } else {
+                item(key = "title") {
+                    Text(
+                        "단어장 ${decks.size}개",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+                    )
                 }
+            }
+            items(decks, key = { it.id }) { deck ->
+                DeckCard(deck, editing, onDelete = { deckToDelete = deck }) { onOpenDeck(deck.id) }
             }
         }
     }
 
+    if (showAdd) {
+        ModalBottomSheet(onDismissRequest = { showAdd = false }, containerColor = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+                Text(
+                    "단어 추가",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                SheetItem(Icons.Default.CameraAlt, "사진 찍기", "책이나 프린트를 바로 찍어요") {
+                    showAdd = false
+                    val uri = newPhotoUri(context)
+                    pendingUri = uri.toString()
+                    takePicture.launch(uri)
+                }
+                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "찍어 둔 사진이나 스크린샷") {
+                    showAdd = false
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                SheetItem(Icons.Default.CreateNewFolder, "빈 단어장 만들기", "단어를 직접 입력할게요") {
+                    showAdd = false
+                    showNewDeck = true
+                }
+            }
+        }
+    }
     if (showNewDeck) {
         TextInputDialog(
             title = "새 단어장",
@@ -215,6 +229,57 @@ fun HomeScreen(
             onDismiss = { deckToDelete = null },
             onConfirm = { vm.deleteDeck(deck.id); deckToDelete = null },
         )
+    }
+}
+
+/** One row of a bottom sheet menu: icon, title and a short explanation. */
+@Composable
+fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Unit) {
+    ListItem(
+        headlineContent = { Text(title, style = MaterialTheme.typography.titleMedium) },
+        supportingContent = { Text(desc, color = MaterialTheme.colorScheme.outline) },
+        leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.clickable(onClick = onClick),
+    )
+}
+
+@Composable
+private fun TodayCard(dueCount: Int, todayMs: Long, goalMs: Long, streak: Int, onReview: () -> Unit) {
+    Card(
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(Modifier.padding(20.dp)) {
+            Text("오늘", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth()) {
+                Stat("복습할 단어", "${dueCount}개", Modifier.weight(1f))
+                Stat(
+                    "학습 시간",
+                    minutesText(todayMs) + if (goalMs > 0) " / ${minutesText(goalMs)}" else "",
+                    Modifier.weight(1f),
+                )
+                Stat("연속 학습", "${streak}일", Modifier.weight(1f))
+            }
+            if (goalMs > 0) {
+                Spacer(Modifier.height(12.dp))
+                ThickProgress((todayMs / goalMs.toFloat()).coerceAtMost(1f), Modifier.fillMaxWidth())
+            }
+            if (dueCount > 0) {
+                Spacer(Modifier.height(16.dp))
+                PrimaryButton("복습 ${dueCount}개 시작", onReview)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text(value, style = MaterialTheme.typography.titleLarge)
     }
 }
 

@@ -3,6 +3,26 @@ package com.wordbook.app.ui
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.ui.draw.alpha
+import com.wordbook.app.data.StudyMode
+import com.wordbook.app.data.StudySettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -97,6 +117,15 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     fun deleteWord(word: Word) = viewModelScope.launch { dao.deleteWord(word) }
 
+    fun setFlagged(word: Word, flagged: Boolean) = viewModelScope.launch { dao.updateWord(word.copy(flagged = flagged)) }
+
+    fun setExcluded(word: Word, excluded: Boolean) = viewModelScope.launch { dao.updateWord(word.copy(excluded = excluded)) }
+
+    fun deleteDeck(onDone: () -> Unit) = viewModelScope.launch { dao.deleteDeck(deckId); onDone() }
+
+    /** The study mode chosen in settings, offered first on the 학습 시작 sheet. */
+    val defaultMode: StudyMode get() = StudySettings(getApplication()).mode
+
     fun updateDeck(transform: (Deck) -> Deck) = viewModelScope.launch {
         deck.value?.let { dao.updateDeck(transform(it)) }
     }
@@ -111,23 +140,31 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     }
 }
 
+private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모르는 것"), FLAGGED("수정 필요"), EXCLUDED("뺀 카드") }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeckScreen(
     onBack: () -> Unit,
     onPhoto: (deckId: Long, Uri) -> Unit,
-    onStudy: (deckId: Long, onlyUnknown: Boolean) -> Unit,
+    onStudy: (deckId: Long, onlyUnknown: Boolean, mode: String) -> Unit,
     vm: DeckViewModel = viewModel(factory = DeckViewModel.Factory),
 ) {
     val context = LocalContext.current
     val deck by vm.deck.collectAsStateWithLifecycle()
     val words by vm.words.collectAsStateWithLifecycle()
-    val unknownCount = words.count { !it.known }
-    val studyCount = words.count { !it.mastered }.takeIf { it > 0 } ?: words.size
+    val active = words.filter { !it.excluded }
+    val unknownCount = active.count { !it.known }
+    val studyCount = active.count { !it.mastered }.takeIf { it > 0 } ?: active.size
 
     var showAdd by rememberSaveable { mutableStateOf(false) }
+    var showManual by rememberSaveable { mutableStateOf(false) }
+    var showStudy by rememberSaveable { mutableStateOf(false) }
     var showOptions by rememberSaveable { mutableStateOf(false) }
     var showRename by rememberSaveable { mutableStateOf(false) }
+    var showDelete by rememberSaveable { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var filter by rememberSaveable { mutableStateOf(WordFilter.ALL) }
     var editing by remember { mutableStateOf<Word?>(null) }
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -145,104 +182,159 @@ fun DeckScreen(
         topBar = {
             AppTopBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                title = { Text(deck?.name ?: "", modifier = Modifier.clickable { showRename = true }) },
+                title = { Text(deck?.name ?: "", maxLines = 1) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
                 actions = {
-                    IconButton(onClick = {
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_SUBJECT, deck?.name)
-                            putExtra(Intent.EXTRA_TEXT, vm.exportText())
+                    Box {
+                        IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "단어장 메뉴") }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text("이름 바꾸기") },
+                                leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                onClick = { menuOpen = false; showRename = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("단어장 옵션 (섞기·반복·뒷면 먼저)") },
+                                leadingIcon = { Icon(Icons.Default.Tune, null) },
+                                onClick = { menuOpen = false; showOptions = true },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("내보내기") },
+                                leadingIcon = { Icon(Icons.Default.Share, null) },
+                                enabled = words.isNotEmpty(),
+                                onClick = {
+                                    menuOpen = false
+                                    val send = Intent(Intent.ACTION_SEND).apply {
+                                        type = "text/plain"
+                                        putExtra(Intent.EXTRA_SUBJECT, deck?.name)
+                                        putExtra(Intent.EXTRA_TEXT, vm.exportText())
+                                    }
+                                    context.startActivity(Intent.createChooser(send, "단어장 내보내기"))
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("단어장 삭제", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { menuOpen = false; showDelete = true },
+                            )
                         }
-                        context.startActivity(Intent.createChooser(send, "단어장 내보내기"))
-                    }, enabled = words.isNotEmpty()) { Icon(Icons.Default.Share, "내보내기") }
-                    IconButton(onClick = { showOptions = true }) { Icon(Icons.Default.Settings, "단어장 옵션") }
+                    }
                 },
             )
         },
         floatingActionButton = {
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                SmallFloatingActionButton(onClick = {
-                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }) { Icon(Icons.Default.PhotoLibrary, "앨범 사진에서 단어 추가") }
-                SmallFloatingActionButton(onClick = {
-                    val uri = newPhotoUri(context)
-                    pendingUri = uri.toString()
-                    takePicture.launch(uri)
-                }) { Icon(Icons.Default.CameraAlt, "사진 찍어 단어 추가") }
-                FloatingActionButton(onClick = { showAdd = true }, shape = ButtonShape, containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) { Icon(Icons.Default.Add, "카드 추가") }
-            }
+            ExtendedFloatingActionButton(
+                onClick = { showAdd = true },
+                shape = ButtonShape,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                icon = { Icon(Icons.Default.Add, null) },
+                text = { Text("단어 추가") },
+            )
         },
     ) { padding ->
+        val shown = when (filter) {
+            WordFilter.ALL -> words
+            WordFilter.UNKNOWN -> active.filter { !it.known }
+            WordFilter.FLAGGED -> words.filter { it.flagged }
+            WordFilter.EXCLUDED -> words.filter { it.excluded }
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 200.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
         ) {
             item {
-                Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    PrimaryButton("학습 $studyCount", { onStudy(vm.deckId, false) }, Modifier.weight(1f), enabled = words.isNotEmpty())
-                    SecondaryButton("모르는 것만 $unknownCount", { onStudy(vm.deckId, true) }, Modifier.weight(1f), enabled = unknownCount > 0)
+                Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    Text(
+                        "단어 ${words.size}개 · 외웠어요 ${active.count { it.mastered }}개 · 모르는 것 ${unknownCount}개",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    PrimaryButton("학습 시작", { showStudy = true }, enabled = active.isNotEmpty())
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.horizontalScroll(rememberScrollState())) {
+                        WordFilter.entries.forEach { f ->
+                            val count = when (f) {
+                                WordFilter.ALL -> words.size
+                                WordFilter.UNKNOWN -> unknownCount
+                                WordFilter.FLAGGED -> words.count { it.flagged }
+                                WordFilter.EXCLUDED -> words.count { it.excluded }
+                            }
+                            if (f == WordFilter.ALL || count > 0 || filter == f) {
+                                FilterChip(
+                                    selected = filter == f,
+                                    onClick = { filter = f },
+                                    label = { Text("${f.label} $count") },
+                                    modifier = Modifier.padding(end = 8.dp),
+                                )
+                            }
+                        }
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
             }
             if (words.isEmpty()) {
                 item {
                     Text(
-                        "카드가 없어요. + 로 직접 추가하거나 사진으로 단어를 넣어 보세요.",
+                        "카드가 없어요. 아래 '단어 추가'로 사진을 찍거나 직접 입력해 보세요.",
                         modifier = Modifier.padding(24.dp),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
             }
-            items(words, key = { it.id }) { word ->
-                ListItem(
-                    headlineContent = {
-                        Text(word.text, style = MaterialTheme.typography.titleMedium)
-                    },
-                    supportingContent = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            PosBadge(word.pos, Modifier.padding(end = 6.dp))
-                            Text(word.meaning.ifBlank { "(뜻 없음)" })
-                        }
-                    },
-                    leadingContent = {
-                        // Tap to toggle "외웠어요"; mastered cards are skipped in regular study.
-                        IconButton(onClick = { vm.toggleMastered(word) }) {
-                            Icon(
-                                if (word.mastered) Icons.Default.DoneAll else Icons.Default.CheckCircle,
-                                contentDescription = when {
-                                    word.mastered -> "외웠어요"
-                                    word.known -> "헷갈려요"
-                                    else -> "아직"
-                                },
-                                tint = when {
-                                    word.mastered -> MaterialTheme.colorScheme.tertiary
-                                    word.known -> MaterialTheme.colorScheme.primary
-                                    else -> MaterialTheme.colorScheme.outlineVariant
-                                },
-                            )
-                        }
-                    },
-                    trailingContent = { Icon(Icons.Default.Edit, "수정", tint = MaterialTheme.colorScheme.outline) },
-                    modifier = Modifier.clickable { editing = word },
+            items(shown, key = { it.id }) { word ->
+                WordRow(
+                    word = word,
+                    onClick = { editing = word },
+                    onToggleMastered = { vm.toggleMastered(word) },
+                    onFlag = { vm.setFlagged(word, !word.flagged) },
+                    onExclude = { vm.setExcluded(word, !word.excluded) },
+                    onDelete = { vm.deleteWord(word) },
                 )
             }
         }
     }
 
     if (showAdd) {
+        ModalBottomSheet(onDismissRequest = { showAdd = false }, containerColor = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
+                Text("단어 추가", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+                SheetItem(Icons.Default.CameraAlt, "사진 찍기", "찍은 사진에서 단어를 찾아 이 단어장에 넣어요") {
+                    showAdd = false
+                    val uri = newPhotoUri(context)
+                    pendingUri = uri.toString()
+                    takePicture.launch(uri)
+                }
+                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "사진이나 스크린샷에서 단어 찾기") {
+                    showAdd = false
+                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                SheetItem(Icons.Default.Keyboard, "직접 입력", "단어와 뜻을 손으로 적어요 (뜻을 비우면 자동 번역)") {
+                    showAdd = false
+                    showManual = true
+                }
+            }
+        }
+    }
+    if (showStudy) {
+        StudySheet(
+            total = studyCount,
+            unknown = unknownCount,
+            defaultMode = vm.defaultMode,
+            onDismiss = { showStudy = false },
+            onStart = { onlyUnknown, mode -> showStudy = false; onStudy(vm.deckId, onlyUnknown, mode.name) },
+        )
+    }
+    if (showManual) {
         CardEditDialog(
             title = "카드 추가",
             initialText = "",
             initialMeaning = "",
             initialPos = "",
-            onDismiss = { showAdd = false },
-            onConfirm = { t, m, p -> vm.addWord(t, m, p); showAdd = false },
+            onDismiss = { showManual = false },
+            onConfirm = { t, m, p -> vm.addWord(t, m, p); showManual = false },
         )
     }
     editing?.let { w ->
@@ -252,7 +344,7 @@ fun DeckScreen(
             initialMeaning = w.meaning,
             initialPos = w.pos,
             onDismiss = { editing = null },
-            onConfirm = { t, m, p -> vm.updateWord(w, t, m, p); editing = null },
+            onConfirm = { t, m, p -> vm.updateWord(w.copy(flagged = false), t, m, p); editing = null },
             onDelete = { vm.deleteWord(w); editing = null },
         )
     }
@@ -269,8 +361,120 @@ fun DeckScreen(
             },
         )
     }
+    if (showDelete) {
+        ConfirmDialog(
+            text = "'${deck?.name}' 단어장과 단어 ${words.size}개를 삭제할까요?",
+            onDismiss = { showDelete = false },
+            onConfirm = { showDelete = false; vm.deleteDeck(onBack) },
+        )
+    }
     if (showOptions) {
         deck?.let { d -> DeckOptionsDialog(d, onChange = { vm.updateDeck { _ -> it } }, onDismiss = { showOptions = false }) }
+    }
+}
+
+@Composable
+private fun WordRow(
+    word: Word,
+    onClick: () -> Unit,
+    onToggleMastered: () -> Unit,
+    onFlag: () -> Unit,
+    onExclude: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    val dim = if (word.excluded) 0.45f else 1f
+    ListItem(
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(word.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.alpha(dim))
+                if (word.flagged) Text("  ⚑ 수정 필요", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                if (word.excluded) Text("  학습에서 뺌", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            }
+        },
+        supportingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(dim)) {
+                PosBadge(word.pos, Modifier.padding(end = 6.dp))
+                Text(word.meaning.ifBlank { "(뜻 없음)" })
+            }
+        },
+        leadingContent = {
+            // Tap to toggle "외웠어요"; mastered cards are skipped in regular study.
+            IconButton(onClick = onToggleMastered) {
+                Icon(
+                    if (word.mastered) Icons.Default.DoneAll else Icons.Default.CheckCircle,
+                    contentDescription = when {
+                        word.mastered -> "외웠어요"
+                        word.known -> "헷갈려요"
+                        else -> "아직"
+                    },
+                    tint = when {
+                        word.mastered -> MaterialTheme.colorScheme.tertiary
+                        word.known -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.outlineVariant
+                    },
+                )
+            }
+        },
+        trailingContent = {
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "카드 메뉴", tint = MaterialTheme.colorScheme.outline) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    DropdownMenuItem(text = { Text("수정") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; onClick() })
+                    DropdownMenuItem(
+                        text = { Text(if (word.flagged) "수정 필요 표시 지우기" else "오타·수정 필요 표시") },
+                        leadingIcon = { Icon(Icons.Default.Flag, null) },
+                        onClick = { menu = false; onFlag() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (word.excluded) "학습에 다시 넣기" else "학습에서 빼기") },
+                        leadingIcon = { Icon(Icons.Default.Block, null) },
+                        onClick = { menu = false; onExclude() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("삭제", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = { menu = false; onDelete() },
+                    )
+                }
+            }
+        },
+        modifier = Modifier.clickable(onClick = onClick),
+    )
+}
+
+/** Bottom sheet for 학습 시작: which cards, then how to study them. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StudySheet(
+    total: Int,
+    unknown: Int,
+    defaultMode: StudyMode,
+    onDismiss: () -> Unit,
+    onStart: (onlyUnknown: Boolean, mode: StudyMode) -> Unit,
+) {
+    var onlyUnknown by remember { mutableStateOf(false) }
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp).verticalScroll(rememberScrollState())) {
+            Text("어떻게 학습할까요?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            Row(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
+                FilterChip(selected = !onlyUnknown, onClick = { onlyUnknown = false }, label = { Text("전체 ${total}개") }, modifier = Modifier.padding(end = 8.dp))
+                FilterChip(selected = onlyUnknown, onClick = { onlyUnknown = true }, label = { Text("모르는 것만 ${unknown}개") }, enabled = unknown > 0)
+            }
+            Spacer(Modifier.height(4.dp))
+            // The settings mode first, then the rest.
+            (listOf(defaultMode) + StudyMode.entries.filter { it != defaultMode }).forEach { m ->
+                ListItem(
+                    headlineContent = {
+                        Text(m.label + if (m == defaultMode) "  · 기본" else "", style = MaterialTheme.typography.titleMedium)
+                    },
+                    supportingContent = { Text(m.description, color = MaterialTheme.colorScheme.outline) },
+                    trailingContent = { Text("시작 ›", color = MaterialTheme.colorScheme.primary) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.clickable { onStart(onlyUnknown, m) },
+                )
+            }
+        }
     }
 }
 

@@ -43,7 +43,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen() {
     val context = LocalContext.current
     val settings = remember { StudySettings(context) }
     var mode by remember { mutableStateOf(settings.mode) }
@@ -52,6 +52,8 @@ fun SettingsScreen(onBack: () -> Unit) {
     var size by remember { mutableStateOf(settings.sessionSize) }
     var goal by remember { mutableStateOf(settings.dailyGoalMinutes) }
     var idle by remember { mutableStateOf(settings.idleSeconds) }
+    var hand by remember { mutableStateOf(settings.handSize) }
+    var leave by remember { mutableStateOf(settings.knownToLeave) }
     var token by remember { mutableStateOf(settings.telegramToken) }
     var chatId by remember { mutableStateOf(settings.telegramChatId) }
     var tgStatus by remember { mutableStateOf<String?>(null) }
@@ -64,8 +66,7 @@ fun SettingsScreen(onBack: () -> Unit) {
         topBar = {
             AppTopBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                title = { Text("학습 설정") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") } },
+                title = { Text("설정", style = MaterialTheme.typography.headlineMedium) },
             )
         },
     ) { padding ->
@@ -111,6 +112,37 @@ fun SettingsScreen(onBack: () -> Unit) {
                         selected = size == n,
                         onClick = { size = n; settings.sessionSize = n; saved() },
                         label = { Text(label) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("카드 반복")
+            Text(
+                "카드 몇 장을 돌려 가며 보다가, 충분히 맞힌 카드는 빠지고 다음 카드가 들어와요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text("한 번에 돌리는 카드", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(5, 10, 20, 30).forEach { n ->
+                    FilterChip(
+                        selected = hand == n,
+                        onClick = { hand = n; settings.handSize = n; saved() },
+                        label = { Text("${n}장") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            Text("헷갈려요 몇 번이면 빠질까요? (외웠어요는 1번)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(1, 2, 3).forEach { n ->
+                    FilterChip(
+                        selected = leave == n,
+                        onClick = { leave = n; settings.knownToLeave = n; saved() },
+                        label = { Text("${n}번") },
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
@@ -197,8 +229,9 @@ fun SettingsScreen(onBack: () -> Unit) {
             }
 
             Text(
-                "카드 섞기, 틀린 카드 반복, 뒷면 먼저는 단어장마다 톱니바퀴에서 정할 수 있어요.\n" +
-                    "맞힌 단어는 1일, 3일, 7일, 14일, 30일 뒤에 다시 복습으로 나와요.",
+                "카드 섞기, 틀린 카드 반복, 뒷면 먼저는 단어장 화면의 ⋮ 메뉴 > 단어장 옵션에서 정해요.\n" +
+                    "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
+                    "틀리면 간격이 절반으로 줄고 오늘 다시 나와요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(16.dp),

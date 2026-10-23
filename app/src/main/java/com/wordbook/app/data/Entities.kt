@@ -48,6 +48,12 @@ data class Word(
     /** When the word is due for review (epoch millis); only meaningful once box > 0. */
     val dueAt: Long = 0,
     val wrongCount: Int = 0,
+    /** Time until the next review after the last right answer (millis); grows ×1.4 / ×2.2. */
+    val intervalMs: Long = 0,
+    /** Left out of every study session (kept in the deck). */
+    val excluded: Boolean = false,
+    /** Marked during study as needing a fix (typo, wrong meaning). */
+    val flagged: Boolean = false,
 )
 
 /** Deck row with counts for the home screen. */

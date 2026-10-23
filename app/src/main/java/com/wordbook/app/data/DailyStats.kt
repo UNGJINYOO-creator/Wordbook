@@ -8,8 +8,12 @@ import java.util.Locale
 /** Today's study totals (time, answers, missed words), reset each day. Kept in SharedPreferences. */
 class DailyStats(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("daily", Context.MODE_PRIVATE)
+    /** Per-day totals that are kept forever, for the streak and the stats screen. */
+    private val history = context.applicationContext.getSharedPreferences("history", Context.MODE_PRIVATE)
 
-    private fun today() = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+    private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    private fun today() = dayFormat.format(Date())
+    private fun daysAgo(n: Int) = dayFormat.format(Date(System.currentTimeMillis() - n * 86_400_000L))
 
     /** Clears the totals when the date has changed. */
     private fun ensureToday() {
@@ -31,7 +35,26 @@ class DailyStats(context: Context) {
     fun addStudyMs(ms: Long) {
         ensureToday()
         prefs.edit().putLong("ms", prefs.getLong("ms", 0) + ms).apply()
+        val key = "ms_${today()}"
+        history.edit().putLong(key, history.getLong(key, 0) + ms).apply()
     }
+
+    /** Study time per day for the last [n] days, oldest first. */
+    fun lastDays(n: Int): List<Pair<String, Long>> =
+        (n - 1 downTo 0).map { daysAgo(it).let { d -> d to history.getLong("ms_$d", 0) } }
+
+    /** Answers and right answers over all days. */
+    val totalAnswered: Int get() = history.getInt("answered", 0)
+    val totalRight: Int get() = history.getInt("right", 0)
+
+    /** Consecutive days with some study, counting today if studied, else from yesterday. */
+    val streak: Int
+        get() {
+            val start = if (history.getLong("ms_${today()}", 0) > 0) 0 else 1
+            var n = 0
+            while (history.getLong("ms_${daysAgo(start + n)}", 0) > 0) n++
+            return n
+        }
 
     fun recordAnswer(word: String, correct: Boolean) {
         ensureToday()
@@ -42,6 +65,10 @@ class DailyStats(context: Context) {
             e.putString("missed", (missedWords + word).joinToString("\n"))
         }
         e.apply()
+        history.edit()
+            .putInt("answered", history.getInt("answered", 0) + 1)
+            .putInt("right", history.getInt("right", 0) + if (correct) 1 else 0)
+            .apply()
     }
 
     fun summary(goalMinutes: Int): String {

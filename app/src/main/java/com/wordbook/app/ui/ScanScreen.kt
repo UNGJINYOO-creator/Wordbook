@@ -2,7 +2,10 @@ package com.wordbook.app.ui
 
 import android.app.Application
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -72,6 +75,10 @@ class Candidate(val text: String, meaning: String, pos: String, selected: Boolea
     /** Alternative meaning offered on a button: the translation, or the photo's text if it was replaced. */
     var suggestion by mutableStateOf<String?>(null)
     var suggestionSource by mutableStateOf("")
+    /** Opened and confirmed by the user, so no longer highlighted. */
+    var reviewed by mutableStateOf(false)
+    /** Shown in yellow: the meaning was replaced, has an alternative, or is missing. */
+    val needsCheck: Boolean get() = !reviewed && (suggestion != null || source.startsWith("번역") || meaning.isBlank())
 }
 
 class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
@@ -180,6 +187,8 @@ fun ScanScreen(
 ) {
     val selectedCount = vm.candidates.count { it.selected }
     var savedDeckId by remember { mutableStateOf<Long?>(null) }
+    var editing by remember { mutableStateOf<Candidate?>(null) }
+    editing?.let { c -> CandidateDialog(c, onDismiss = { editing = null }) }
     savedDeckId?.let { id ->
         AlertDialog(
             onDismissRequest = { savedDeckId = null; onHome() },
@@ -241,46 +250,44 @@ fun ScanScreen(
             }
             HorizontalDivider()
             var showRaw by remember { mutableStateOf(false) }
+            if (vm.candidates.any { it.needsCheck }) {
+                Text(
+                    "노란 줄은 사진 속 뜻이 깨졌거나 번역과 달라서 확인이 필요한 단어예요. 탭해서 고쳐 주세요.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
             LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(vm.candidates, key = { _, c -> c.text }) { _, c ->
                     Row(
-                        Modifier.fillMaxWidth().clickable { c.selected = !c.selected }.padding(8.dp),
+                        Modifier.fillMaxWidth()
+                            .background(if (c.needsCheck) CheckYellow else Color.Transparent)
+                            .clickable { editing = c }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Checkbox(checked = c.selected, onCheckedChange = { c.selected = it })
                         Column(Modifier.weight(1f)) {
+                            Text(c.text, style = MaterialTheme.typography.titleMedium)
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(c.text, style = MaterialTheme.typography.titleMedium)
-                                PosChips(c.pos) { c.pos = it }
+                                PosBadge(c.pos, Modifier.padding(end = 6.dp))
+                                Text(
+                                    c.meaning.ifBlank { "(뜻 없음 · 탭해서 입력)" },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (c.meaning.isBlank()) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                                )
                             }
-                            if (c.source.isNotEmpty()) {
-                                Text("뜻: ${c.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                            }
-                            if (c.alreadySaved) {
-                                Text("이미 저장된 단어", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                            }
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        Column(Modifier.weight(1.3f)) {
-                            OutlinedTextField(
-                                value = c.meaning,
-                                onValueChange = { c.meaning = it; c.source = "" },
-                                placeholder = { Text("뜻") },
-                                maxLines = 3,
+                            val notes = listOfNotNull(
+                                if (c.needsCheck) "확인해 주세요" else null,
+                                c.source.takeIf { it.isNotEmpty() }?.let { "뜻: $it" },
+                                if (c.alreadySaved) "이미 저장된 단어" else null,
                             )
-                            c.suggestion?.let { s ->
-                                TextButton(onClick = {
-                                    val previous = c.meaning
-                                    val previousSource = if (c.suggestionSource == "번역") "사진" else "번역"
-                                    c.meaning = s
-                                    c.source = c.suggestionSource
-                                    c.suggestion = previous
-                                    c.suggestionSource = previousSource
-                                }) {
-                                    Text("${c.suggestionSource} 뜻으로: $s", style = MaterialTheme.typography.labelSmall)
-                                }
+                            if (notes.isNotEmpty()) {
+                                Text(notes.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                             }
                         }
+                        Icon(Icons.Default.Edit, "수정", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 8.dp))
                     }
                 }
                 item {
@@ -300,4 +307,57 @@ fun ScanScreen(
             }
         }
     }
+}
+
+private val CheckYellow = Color(0x33FFC107)
+
+/** Edits one found word: meaning, part of speech, the alternative meaning, and whether to save it. */
+@Composable
+private fun CandidateDialog(c: Candidate, onDismiss: () -> Unit) {
+    var meaning by remember { mutableStateOf(c.meaning) }
+    var pos by remember { mutableStateOf(c.pos) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(c.text)
+                PosChips(pos) { pos = it }
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (c.source.isNotEmpty()) {
+                    Text("지금 뜻: ${c.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+                OutlinedTextField(meaning, { meaning = it }, label = { Text("뜻") }, maxLines = 3)
+                c.suggestion?.let { s ->
+                    Text("${c.suggestionSource} 뜻", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    SecondaryButton(s, { meaning = s })
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (meaning.trim() != c.meaning) {
+                    if (c.suggestion == meaning) {
+                        // Swapped to the alternative: keep the old one as the alternative.
+                        c.suggestion = c.meaning
+                        val s = c.suggestionSource
+                        c.suggestionSource = if (s == "번역") "사진" else "번역"
+                        c.source = s
+                    } else {
+                        c.source = "직접 입력"
+                    }
+                    c.meaning = meaning.trim()
+                }
+                c.pos = pos
+                c.selected = true
+                c.reviewed = true
+                onDismiss()
+            }) { Text("확인") }
+        },
+        dismissButton = {
+            TextButton(onClick = { c.selected = false; c.reviewed = true; onDismiss() }) { Text("저장 안 함") }
+        },
+    )
 }
