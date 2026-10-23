@@ -145,18 +145,19 @@ private fun AppContent() {
                                 onPhoto = { deckId, uri ->
                                     nav.navigate("scan?uri=${Uri.encode(uri.toString())}&deckId=$deckId")
                                 },
-                                onStudy = { deckId, onlyUnknown, mode ->
-                                    nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&mode=$mode")
+                                onStudy = { deckId, onlyUnknown, modes, staged ->
+                                    nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&mode=$modes&staged=$staged")
                                 },
                             )
                         }
                         composable(
-                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&all={all}",
+                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}",
                             arguments = listOf(
                                 navArgument("deckId") { type = NavType.LongType },
                                 navArgument("onlyUnknown") { type = NavType.BoolType; defaultValue = false },
                                 navArgument("review") { type = NavType.BoolType; defaultValue = false },
                                 navArgument("mode") { type = NavType.StringType; defaultValue = "" },
+                                navArgument("staged") { type = NavType.StringType; defaultValue = "" },
                                 navArgument("all") { type = NavType.BoolType; defaultValue = false },
                             ),
                         ) {

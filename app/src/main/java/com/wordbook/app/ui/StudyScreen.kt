@@ -90,6 +90,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.BlankLevel
 import com.wordbook.app.data.DailyStats
+import com.wordbook.app.data.DictationPass
 import com.wordbook.app.net.Telegram
 import kotlinx.coroutines.delay
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -122,9 +123,15 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
     val review: Boolean = handle.get<Boolean>("review") ?: false
     private val allDecks: Boolean = handle.get<Boolean>("all") ?: false
-    /** Study mode picked for this session on the deck screen; otherwise the settings mode. */
-    private val modeChoice: StudyMode =
-        handle.get<String>("mode")?.let { runCatching { StudyMode.valueOf(it) }.getOrNull() } ?: settings.mode
+    /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
+    private val modes: List<StudyMode> = decodeModes(handle.get<String>("mode")) ?: settings.modes
+    private val staged: Boolean = handle.get<String>("staged")?.toBooleanStrictOrNull() ?: settings.staged
+    private val audio = app.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+    /** 듣고 쓰기 was passed with "이번 학습 내내". */
+    private var dictationOff = false
+    /** Why the question type was changed, shown above the question. */
+    var modeNote by mutableStateOf<String?>(null)
+        private set
 
     var loading by mutableStateOf(true)
         private set
@@ -301,16 +308,16 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             finished = true
             return
         }
-        var m = when (modeChoice) {
-            // Gets harder as the word climbs the review boxes.
-            StudyMode.STAGED -> when (word.box) {
-                0 -> StudyMode.CARD
-                1 -> StudyMode.CHOICE
-                2 -> StudyMode.SPELLING
-                else -> StudyMode.DICTATION
+        // Staged: gets harder as the word climbs the review boxes, through the checked modes only.
+        var m = if (staged) modes[word.box.coerceIn(0, modes.lastIndex)] else modes.random()
+        modeNote = null
+        if (m == StudyMode.DICTATION) {
+            if (audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) {
+                m = StudyMode.SPELLING
+                modeNote = "소리가 꺼져 있어서 빈칸 문제로 바꿨어요"
+            } else if (dictationOff) {
+                m = StudyMode.SPELLING
             }
-            StudyMode.MIXED -> listOf(StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION).random()
-            else -> modeChoice
         }
         val others = pool.filter { it.id != word.id && !it.text.equals(word.text, true) }.distinctBy { it.text.lowercase() }
         if (m == StudyMode.CHOICE && others.size < 3) m = StudyMode.CARD
@@ -340,6 +347,22 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val startAt = (0..candidates.size - count).random()
         val blanks = candidates.subList(startAt, startAt + count).toSet()
         return text.mapIndexed { i, c -> if (i in blanks) '_' else c }.joinToString("")
+    }
+
+    /** "지금 못 들어요": the same word as a fill-in-the-blanks question instead, not counted as wrong. */
+    fun passDictation() {
+        touch()
+        val word = current ?: return
+        if (settings.dictationPass == DictationPass.SESSION) {
+            dictationOff = true
+            modeNote = "이번 학습 동안 듣고 쓰기는 빈칸 문제로 나와요"
+        } else {
+            modeNote = "이번 단어만 빈칸 문제로 바꿨어요"
+        }
+        mode = StudyMode.SPELLING
+        pattern = makePattern(word)
+        answered = null
+        turn++
     }
 
     fun restart(onlyMissed: Boolean) {
@@ -563,6 +586,7 @@ fun StudyScreen(
                     ) {
                         ThickProgress(vm.progress, Modifier.fillMaxWidth())
                         val notes = listOfNotNull(
+                            vm.modeNote,
                             if (word.flagged) "⚑ 수정 필요로 표시한 카드" else null,
                             if (vm.goalReached) "🎉 오늘 목표 시간 달성!" else null,
                             vm.telegramStatus,
@@ -594,7 +618,8 @@ fun StudyScreen(
                                     onNext = vm::next,
                                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
                                 )
-                                StudyMode.SPELLING, StudyMode.DICTATION -> TypingQuiz(
+                                StudyMode.SPELLING, StudyMode.DICTATION -> Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                    TypingQuiz(
                                     word = word,
                                     pattern = if (vm.mode == StudyMode.SPELLING) vm.pattern
                                     else word.text.map { if (it.isLetter()) '_' else it }.joinToString(""),
@@ -606,6 +631,10 @@ fun StudyScreen(
                                     onSpeak = { speak() },
                                     modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
                                 )
+                                if (vm.mode == StudyMode.DICTATION && vm.answered == null) {
+                                    TextButton(onClick = vm::passDictation) { Text("지금 들을 수 없어요 · 패스") }
+                                }
+                                }
                                 else -> Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                     SwipeCard(
                                         word = word,

@@ -124,7 +124,7 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     fun deleteDeck(onDone: () -> Unit) = viewModelScope.launch { dao.deleteDeck(deckId); onDone() }
 
     /** The study mode chosen in settings, offered first on the 학습 시작 sheet. */
-    val defaultMode: StudyMode get() = StudySettings(getApplication()).mode
+    val settings = StudySettings(getApplication())
 
     fun updateDeck(transform: (Deck) -> Deck) = viewModelScope.launch {
         deck.value?.let { dao.updateDeck(transform(it)) }
@@ -147,7 +147,7 @@ private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모�
 fun DeckScreen(
     onBack: () -> Unit,
     onPhoto: (deckId: Long, Uri) -> Unit,
-    onStudy: (deckId: Long, onlyUnknown: Boolean, mode: String) -> Unit,
+    onStudy: (deckId: Long, onlyUnknown: Boolean, modes: String, staged: Boolean) -> Unit,
     vm: DeckViewModel = viewModel(factory = DeckViewModel.Factory),
 ) {
     val context = LocalContext.current
@@ -317,9 +317,13 @@ fun DeckScreen(
         StudySheet(
             total = studyCount,
             unknown = unknownCount,
-            defaultMode = vm.defaultMode,
+            initialModes = vm.settings.modes,
+            initialStaged = vm.settings.staged,
             onDismiss = { showStudy = false },
-            onStart = { onlyUnknown, mode -> showStudy = false; onStudy(vm.deckId, onlyUnknown, mode.name) },
+            onStart = { onlyUnknown, modes, staged ->
+                showStudy = false
+                onStudy(vm.deckId, onlyUnknown, encodeModes(modes), staged)
+            },
         )
     }
     if (showManual) {
@@ -435,17 +439,20 @@ private fun WordRow(
     )
 }
 
-/** Bottom sheet for 학습 시작: which cards, then how to study them. */
+/** Bottom sheet for 학습 시작: which cards, then which ways to study them. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StudySheet(
     total: Int,
     unknown: Int,
-    defaultMode: StudyMode,
+    initialModes: List<StudyMode>,
+    initialStaged: Boolean,
     onDismiss: () -> Unit,
-    onStart: (onlyUnknown: Boolean, mode: StudyMode) -> Unit,
+    onStart: (onlyUnknown: Boolean, modes: List<StudyMode>, staged: Boolean) -> Unit,
 ) {
     var onlyUnknown by remember { mutableStateOf(false) }
+    var modes by remember { mutableStateOf(initialModes) }
+    var staged by remember { mutableStateOf(initialStaged) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp).verticalScroll(rememberScrollState())) {
             Text("어떻게 학습할까요?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
@@ -453,19 +460,14 @@ private fun StudySheet(
                 FilterChip(selected = !onlyUnknown, onClick = { onlyUnknown = false }, label = { Text("전체 ${total}개") }, modifier = Modifier.padding(end = 8.dp))
                 FilterChip(selected = onlyUnknown, onClick = { onlyUnknown = true }, label = { Text("모르는 것만 ${unknown}개") }, enabled = unknown > 0)
             }
-            Spacer(Modifier.height(4.dp))
-            // The settings mode first, then the rest.
-            (listOf(defaultMode) + StudyMode.entries.filter { it != defaultMode }).forEach { m ->
-                ListItem(
-                    headlineContent = {
-                        Text(m.label + if (m == defaultMode) "  · 기본" else "", style = MaterialTheme.typography.titleMedium)
-                    },
-                    supportingContent = { Text(m.description, color = MaterialTheme.colorScheme.outline) },
-                    trailingContent = { Text("시작 ›", color = MaterialTheme.colorScheme.primary) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                    modifier = Modifier.clickable { onStart(onlyUnknown, m) },
-                )
-            }
+            Text(
+                "처음엔 설정에 저장된 방식이 체크돼 있어요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
+            )
+            ModePicker(modes, staged) { m, st -> modes = m; staged = st }
+            PrimaryButton("학습 시작", { onStart(onlyUnknown, modes, staged) }, Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
         }
     }
 }

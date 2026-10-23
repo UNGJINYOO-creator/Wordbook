@@ -12,6 +12,12 @@ enum class StudyMode(val label: String, val description: String) {
     MIXED("섞기", "여러 방식을 무작위로"),
 }
 
+/** The four ways to study a card, from easiest to hardest. */
+val QuizModes = listOf(StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION)
+
+/** What the 패스 button in 듣고 쓰기 does. */
+enum class DictationPass(val label: String) { WORD("이번 단어만"), SESSION("이번 학습 내내") }
+
 enum class BlankLevel(val label: String) { AUTO("자동"), EASY("쉬움"), NORMAL("보통"), HARD("전부 쓰기") }
 
 /** App-wide study settings, kept in SharedPreferences. */
@@ -99,4 +105,25 @@ class StudySettings(context: Context) {
     private fun hash(pin: String): String =
         java.security.MessageDigest.getInstance("SHA-256").digest("wordbook:$pin".toByteArray())
             .joinToString("") { "%02x".format(it) }
+
+    /** Ways of studying that are switched on (several can be checked). */
+    var modes: List<StudyMode>
+        get() {
+            val saved = prefs.getString("modes", null)
+            if (saved != null) {
+                return QuizModes.filter { it.name in saved.split(',') }.ifEmpty { listOf(StudyMode.CARD) }
+            }
+            // Before checkboxes there was one mode; 단계별 and 섞기 meant all four.
+            return if (mode in QuizModes) listOf(mode) else QuizModes
+        }
+        set(v) = prefs.edit().putString("modes", v.joinToString(",") { it.name }).apply()
+
+    /** true = the mode gets harder as the word is learned; false = picked at random. */
+    var staged: Boolean
+        get() = prefs.getBoolean("staged", mode != StudyMode.MIXED)
+        set(v) = prefs.edit().putBoolean("staged", v).apply()
+
+    var dictationPass: DictationPass
+        get() = runCatching { DictationPass.valueOf(prefs.getString("dictPass", null)!!) }.getOrDefault(DictationPass.SESSION)
+        set(v) = prefs.edit().putString("dictPass", v.name).apply()
 }

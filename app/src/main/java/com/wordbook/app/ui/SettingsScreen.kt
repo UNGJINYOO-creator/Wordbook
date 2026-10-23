@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.BlankLevel
+import com.wordbook.app.data.DictationPass
 import com.wordbook.app.data.StudyMode
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.net.Telegram
@@ -56,7 +57,9 @@ import kotlinx.coroutines.launch
 fun SettingsScreen() {
     val context = LocalContext.current
     val settings = remember { StudySettings(context) }
-    var mode by remember { mutableStateOf(settings.mode) }
+    var modes by remember { mutableStateOf(settings.modes) }
+    var staged by remember { mutableStateOf(settings.staged) }
+    var pass by remember { mutableStateOf(settings.dictationPass) }
     var blank by remember { mutableStateOf(settings.blankLevel) }
     var autoSpeak by remember { mutableStateOf(settings.autoSpeak) }
     var size by remember { mutableStateOf(settings.sessionSize) }
@@ -99,17 +102,37 @@ fun SettingsScreen() {
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Section("학습 방식")
-            StudyMode.entries.forEach { m ->
-                Row(
-                    Modifier.fillMaxWidth().clickable { mode = m; settings.mode = m; saved() }.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(selected = mode == m, onClick = { mode = m; settings.mode = m; saved() })
-                    Column {
-                        Text(m.label, style = MaterialTheme.typography.bodyLarge)
-                        Text(m.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            Text(
+                "여러 개를 고르면 단계별로 어려워지거나 골고루 섞여서 나와요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            ModePicker(modes, staged) { m, st ->
+                modes = m; staged = st; settings.modes = m; settings.staged = st; saved()
+            }
+            if (StudyMode.DICTATION in modes) {
+                Text(
+                    "듣고 쓰기에서 '패스'를 누르면",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp),
+                )
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    DictationPass.entries.forEach { p ->
+                        FilterChip(
+                            selected = pass == p,
+                            onClick = { pass = p; settings.dictationPass = p; saved() },
+                            label = { Text(p.label + " 빈칸으로") },
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
                     }
                 }
+                Text(
+                    "소리가 꺼져 있으면 듣고 쓰기는 자동으로 빈칸 문제로 바뀌어요",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
