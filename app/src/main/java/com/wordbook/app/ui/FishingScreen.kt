@@ -84,6 +84,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     private val game = Game(app)
     val fishing = Fishing(app)
     private val audio = app.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+    private val sfx = com.wordbook.app.data.Sfx(app)
     private val tone = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60) }.getOrNull()
 
     private var pool = listOf<Word>()
@@ -263,7 +264,9 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
                     (if (combo % 3 == 0) Fishing.COMBO_BONUS else 0.0)
                 seconds += bonus
                 popUp((if (combo % 3 == 0) "릴 감기! " else "") + "+${bonus.toInt()}초")
-                if (settings.soundEffects) tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 120)
+                if (settings.soundEffects) {
+                    if (combo >= 3) sfx.combo(settings.comboSound, combo) else tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 120)
+                }
             }
         } else {
             combo = 0
@@ -352,6 +355,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             stats.addStudyMs(durationMs)
         }
         tone?.release()
+        sfx.release()
     }
 }
 

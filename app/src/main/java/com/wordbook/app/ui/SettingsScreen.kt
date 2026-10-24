@@ -98,6 +98,9 @@ fun SettingsScreen() {
     var hasPin by remember { mutableStateOf(settings.hasPin) }
     var soundEffects by remember { mutableStateOf(settings.soundEffects) }
     var testSize by remember { mutableStateOf(settings.testSize) }
+    var comboSound by remember { mutableStateOf(settings.comboSound) }
+    val sfx = remember { com.wordbook.app.data.Sfx(context) }
+    androidx.compose.runtime.DisposableEffect(sfx) { onDispose { sfx.release() } }
     var telegramBackup by remember { mutableStateOf(settings.telegramBackup) }
     var backupStatus by remember { mutableStateOf<String?>(null) }
     var advanced by rememberSaveable { mutableStateOf(false) }
@@ -259,6 +262,19 @@ fun SettingsScreen() {
             }
             ToggleRow("효과음", "콤보·레벨 업 때 소리를 내요", soundEffects) {
                 soundEffects = it; settings.soundEffects = it
+            }
+            if (soundEffects) {
+                Text("콤보 소리 (누르면 들어 볼 수 있어요)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 4.dp))
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    com.wordbook.app.data.Sfx.names.forEachIndexed { i, name ->
+                        FilterChip(
+                            selected = comboSound == i,
+                            onClick = { comboSound = i; settings.comboSound = i; sfx.combo(i, 3) },
+                            label = { Text(name) },
+                            modifier = Modifier.padding(end = 8.dp),
+                        )
+                    }
+                }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("카드 글자 크기")

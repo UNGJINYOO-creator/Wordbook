@@ -368,8 +368,11 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         private set
     private val tone = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60) }.getOrNull()
 
+    private val sfx = com.wordbook.app.data.Sfx(app)
+
     override fun onCleared() {
         tone?.release()
+        sfx.release()
     }
 
     private fun celebrate(text: String, sound: Boolean = true) {
@@ -391,7 +394,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val levelUp = game.addStars(stars)
         when {
             levelUp != null -> celebrate("레벨 업! Lv.$levelUp ${Levels.title(levelUp)} 🎉")
-            combo >= 3 -> celebrate("${combo}콤보! 🔥" + if (combo % 5 == 0) " +2⭐" else "")
+            combo >= 3 -> {
+                celebrate("${combo}콤보! 🔥" + if (combo % 5 == 0) " +2⭐" else "", sound = false)
+                if (settings.soundEffects) sfx.combo(settings.comboSound, combo)
+            }
         }
         // Without a daily goal, the first right answer of the day earns the stamp.
         if (goalMs <= 0) stamp()

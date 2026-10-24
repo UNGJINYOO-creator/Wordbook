@@ -90,6 +90,11 @@ class StudySettings(context: Context) {
         set(v) = prefs.edit().putBoolean("telegramBackup", v).apply()
 
     /** Combo and celebration sounds. */
+    /** Which combo sound: 0 띠링, 1 딩동댕동, 2 뾰로롱. */
+    var comboSound: Int
+        get() = prefs.getInt("comboSound", 2)
+        set(v) = prefs.edit().putInt("comboSound", v).apply()
+
     var soundEffects: Boolean
         get() = prefs.getBoolean("soundEffects", true)
         set(v) = prefs.edit().putBoolean("soundEffects", v).apply()
