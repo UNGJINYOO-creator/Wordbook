@@ -107,20 +107,20 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     private suspend fun run() {
         // Several photos are read one by one; a word found on more than one keeps its first meaning.
-        val found = mutableListOf<com.wordbook.app.ml.ExtractedWord>()
+        val extracted = mutableListOf<com.wordbook.app.ml.ExtractedWord>()
         val lines = mutableListOf<com.wordbook.app.ml.OcrLine>()
         var failed = 0
         uris.forEachIndexed { i, uri ->
             if (uris.size > 1) status = "사진 ${i + 1}/${uris.size}에서 영어 단어를 찾는 중…"
             try {
-                found += WordExtractor.extract(getApplication(), uri)
+                extracted += WordExtractor.extract(getApplication(), uri)
                 lines += WordExtractor.lastLines
             } catch (e: Exception) {
                 failed++
             }
         }
         rawLines = lines
-        val words = found.distinctBy { it.text.lowercase() }
+        val words = extracted.distinctBy { it.text.lowercase() }
         if (failed == uris.size) {
             busy = false
             status = "사진을 읽지 못했어요."
