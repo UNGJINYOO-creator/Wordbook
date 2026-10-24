@@ -388,7 +388,7 @@ fun SettingsScreen() {
 
             Section("텔레그램 알림")
             Text(
-                "하루 목표 시간을 채우면 오늘의 학습 결과를 텔레그램으로 보내요",
+                "하루 목표 시간(없으면 하루 외울 단어)을 채우면 오늘의 학습 결과를 텔레그램으로 보내요",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp),
