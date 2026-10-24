@@ -113,7 +113,7 @@ internal fun minutesText(ms: Long): String = "${ms / 60_000}분"
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onPhoto: (Uri) -> Unit,
+    onPhoto: (List<Uri>) -> Unit,
     onOpenDeck: (Long) -> Unit,
     onReview: () -> Unit,
     vm: HomeViewModel = viewModel(),
@@ -130,11 +130,11 @@ fun HomeScreen(
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = pendingUri
-        if (ok && uri != null) onPhoto(Uri.parse(uri))
+        if (ok && uri != null) onPhoto(listOf(Uri.parse(uri)))
         pendingUri = null
     }
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) onPhoto(uri)
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        if (uris.isNotEmpty()) onPhoto(uris)
     }
 
     Scaffold(
@@ -199,7 +199,7 @@ fun HomeScreen(
                     pendingUri = uri.toString()
                     takePicture.launch(uri)
                 }
-                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "찍어 둔 사진이나 스크린샷") {
+                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "사진이나 스크린샷, 여러 장 한 번에 골라도 돼요") {
                     showAdd = false
                     pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }

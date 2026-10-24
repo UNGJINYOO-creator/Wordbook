@@ -4,6 +4,7 @@ import android.content.Context
 
 /** How to study: one mode, or "단계별" which picks the mode from how well each word is known. */
 enum class StudyMode(val label: String, val description: String) {
+    LIST("단어장 보기", "단어와 뜻을 목록으로 먼저 훑어봐요"),
     STAGED("단계별 (추천)", "카드 → 4지선다 → 빈칸 → 듣고 쓰기 순서로 자동으로 어려워져요"),
     CARD("뜻 카드", "카드를 보고 뜻을 떠올리기"),
     CHOICE("4지선다", "뜻을 보고 단어 4개 중에서 고르기"),
@@ -12,8 +13,15 @@ enum class StudyMode(val label: String, val description: String) {
     MIXED("섞기", "여러 방식을 무작위로"),
 }
 
-/** The four ways to study a card, from easiest to hardest. */
-val QuizModes = listOf(StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION)
+/** The ways to study, from easiest to hardest. */
+/** Ready-made step orders for the 묶음 buttons. */
+val ModePresets = listOf(
+    "처음 외울 때" to listOf(StudyMode.LIST, StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION),
+    "복습" to listOf(StudyMode.CHOICE, StudyMode.DICTATION),
+    "빠르게" to listOf(StudyMode.CARD),
+)
+
+val QuizModes = listOf(StudyMode.LIST, StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION)
 
 /** What the 패스 button in 듣고 쓰기 does. */
 enum class DictationPass(val label: String) { WORD("이번 단어만"), SESSION("이번 학습 내내") }
@@ -106,19 +114,21 @@ class StudySettings(context: Context) {
         java.security.MessageDigest.getInstance("SHA-256").digest("wordbook:$pin".toByteArray())
             .joinToString("") { "%02x".format(it) }
 
-    /** Ways of studying that are switched on (several can be checked). */
+    /** Steps that are switched on, in the order they run. */
     var modes: List<StudyMode>
         get() {
             val saved = prefs.getString("modes", null)
             if (saved != null) {
-                return QuizModes.filter { it.name in saved.split(',') }.ifEmpty { listOf(StudyMode.CARD) }
+                // Kept in the order the steps should run.
+                return saved.split(',').mapNotNull { n -> QuizModes.firstOrNull { it.name == n } }
+                    .distinct().ifEmpty { listOf(StudyMode.CARD) }
             }
             // Before checkboxes there was one mode; 단계별 and 섞기 meant all four.
-            return if (mode in QuizModes) listOf(mode) else QuizModes
+            return if (mode in QuizModes) listOf(mode) else QuizModes - StudyMode.LIST
         }
         set(v) = prefs.edit().putString("modes", v.joinToString(",") { it.name }).apply()
 
-    /** true = the mode gets harder as the word is learned; false = picked at random. */
+    /** true = steps run one after another in order; false = 단어장 보기 first, then the rest mixed. */
     var staged: Boolean
         get() = prefs.getBoolean("staged", mode != StudyMode.MIXED)
         set(v) = prefs.edit().putBoolean("staged", v).apply()

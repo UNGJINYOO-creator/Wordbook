@@ -127,6 +127,25 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val modes: List<StudyMode> = decodeModes(handle.get<String>("mode")) ?: settings.modes
     private val staged: Boolean = handle.get<String>("staged")?.toBooleanStrictOrNull() ?: settings.staged
     private val audio = app.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
+    /**
+     * The session runs step by step: 순서대로 = one step per mode in the chosen order, each going
+     * through every word; 골고루 섞기 = 단어장 보기 first (if on), then one step mixing the rest.
+     */
+    private val steps: List<List<StudyMode>> =
+        if (staged) modes.map { listOf(it) }
+        else listOfNotNull(
+            if (StudyMode.LIST in modes) listOf(StudyMode.LIST) else null,
+            modes.filter { it != StudyMode.LIST }.takeIf { it.isNotEmpty() },
+        )
+    var stepIndex by mutableStateOf(0)
+        private set
+    val stepCount: Int get() = steps.size
+    val stepLabel: String get() = steps.getOrNull(stepIndex)?.let { if (it.size == 1) it[0].label else "섞기" } ?: ""
+    /** The first step that asks questions; cards need several right answers only there. */
+    private val firstQuizStep = steps.indexOfFirst { it != listOf(StudyMode.LIST) }
+    /** Words of the current session, kept up to date as answers change them. */
+    var runWords by mutableStateOf(listOf<Word>())
+        private set
     /** 듣고 쓰기 was passed with "이번 학습 내내". */
     private var dictationOff = false
     /** Why the question type was changed, shown above the question. */
@@ -277,19 +296,50 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private fun order(words: List<Word>) = if (shuffle) words.shuffled() else words.sortedBy { it.text.lowercase() }
 
     private fun start(words: List<Word>) {
+        runWords = words
+        scheduled.clear()
+        reviewedBefore = words.filter { it.box > 0 }.map { it.id }.toSet()
+        stepIndex = 0
+        finished = words.isEmpty() || steps.isEmpty()
+        if (!finished) beginStep()
+    }
+
+    /** Deals every word again for the current step. */
+    private fun beginStep() {
         hand.clear()
         waiting.clear()
-        waiting.addAll(order(words))
+        waiting.addAll(order(runWords))
         knownTimes.clear()
-        scheduled.clear()
         undoStack.clear()
         canUndo = false
-        reviewedBefore = words.filter { it.box > 0 }.map { it.id }.toSet()
-        sessionSize = words.size
+        sessionSize = runWords.size
         doneCount = 0
-        finished = words.isEmpty()
-        refill()
-        prepare()
+        if (steps[stepIndex] == listOf(StudyMode.LIST)) {
+            // 단어장 보기: the whole list on one screen, no questions.
+            mode = StudyMode.LIST
+            current = null
+            modeNote = null
+            turn++
+        } else {
+            refill()
+            prepare()
+        }
+    }
+
+    /** Moves on to the next step, or ends the session after the last one. */
+    fun nextStep() {
+        touch()
+        if (stepIndex < steps.lastIndex) {
+            stepIndex++
+            beginStep()
+        } else {
+            current = null
+            finished = true
+        }
+    }
+
+    private fun keepLatest(word: Word) {
+        runWords = runWords.map { if (it.id == word.id) word else it }
     }
 
     private fun refill() {
@@ -305,11 +355,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val word = hand.firstOrNull()
         current = word
         if (word == null) {
-            finished = true
+            nextStep()
             return
         }
-        // Staged: gets harder as the word climbs the review boxes, through the checked modes only.
-        var m = if (staged) modes[word.box.coerceIn(0, modes.lastIndex)] else modes.random()
+        var m = steps[stepIndex].random()
         modeNote = null
         if (m == StudyMode.DICTATION) {
             if (audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) {
@@ -421,7 +470,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             else -> word
         }
         scheduled += word.id
-        if (updated != word) viewModelScope.launch { dao.updateWord(updated) }
+        if (updated != word) {
+            viewModelScope.launch { dao.updateWord(updated) }
+            keepLatest(updated)
+        }
 
         if (firstAnswer && answer != Answer.UNKNOWN) firstTryKnown++
         if (answer == Answer.MASTERED) masteredCount++
@@ -431,7 +483,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
         val leaves = !repeatMissed ||
             answer == Answer.MASTERED ||
-            times >= knownToLeave ||
+            times >= (if (stepIndex == firstQuizStep) knownToLeave else 1) ||
             // A review word recalled right away doesn't need the extra rounds.
             (firstAnswer && answer == Answer.KNOWN && word.id in reviewedBefore)
         hand.removeAt(0)
@@ -453,6 +505,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         firstTryKnown = s.firstTryKnown
         masteredCount = s.masteredCount
         viewModelScope.launch { dao.updateWord(s.wordBefore) }
+        keepLatest(s.wordBefore)
         canUndo = undoStack.isNotEmpty()
         finished = false
         prepare()
@@ -464,6 +517,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val changed = transform(word)
         hand[0] = changed
         current = changed
+        keepLatest(changed)
         viewModelScope.launch {
             dao.getWord(word.id)?.let { dao.updateWord(transform(it)) }
         }
@@ -479,6 +533,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val word = hand.firstOrNull() ?: return
         viewModelScope.launch { dao.getWord(word.id)?.let { dao.updateWord(it.copy(excluded = true)) } }
         hand.removeAt(0)
+        runWords = runWords.filter { it.id != word.id }
         sessionSize--
         undoStack.clear()
         canUndo = false
@@ -526,7 +581,9 @@ fun StudyScreen(
                     Text(
                         if (vm.finished) "학습 결과"
                         else (if (vm.review) "복습 " else "") +
-                            "${vm.doneCount}/${vm.sessionSize} · ${(vm.progress * 100).roundToInt()}%",
+                            (if (vm.stepCount > 1) "${vm.stepIndex + 1}/${vm.stepCount} ${vm.stepLabel} · " else "") +
+                            if (vm.mode == StudyMode.LIST) "${vm.runWords.size}개" else "${vm.doneCount}/${vm.sessionSize}",
+                        maxLines = 1,
                     )
                 },
                 navigationIcon = {
@@ -576,6 +633,12 @@ fun StudyScreen(
             when {
                 vm.loading -> {}
                 vm.finished -> Summary(vm, onBack)
+                vm.mode == StudyMode.LIST -> WordListStep(
+                    words = vm.runWords,
+                    last = vm.stepIndex == vm.stepCount - 1,
+                    onSpeak = { w -> tts?.speak(w.text, TextToSpeech.QUEUE_FLUSH, null, "l${w.id}") },
+                    onDone = vm::nextStep,
+                )
                 else -> vm.current?.let { word ->
                     // imePadding keeps the content above the keyboard in typing quizzes.
                     val typing = vm.mode == StudyMode.SPELLING || vm.mode == StudyMode.DICTATION
@@ -884,5 +947,35 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
             }
             SecondaryButton("끝내기", onBack)
         }
+    }
+}
+
+/** 단어장 보기 step: every word with its meaning, to read through before the questions. */
+@Composable
+private fun WordListStep(words: List<Word>, last: Boolean, onSpeak: (Word) -> Unit, onDone: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        Text(
+            "먼저 단어와 뜻을 훑어보세요. 🔊를 누르면 발음이 나와요.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+        )
+        LazyColumn(Modifier.weight(1f)) {
+            items(words, key = { it.id }) { w ->
+                ListItem(
+                    headlineContent = { Text(w.text, style = MaterialTheme.typography.titleLarge) },
+                    supportingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PosBadge(w.pos, Modifier.padding(end = 6.dp))
+                            Text(w.meaning, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    },
+                    trailingContent = {
+                        IconButton(onClick = { onSpeak(w) }) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "발음 듣기") }
+                    },
+                )
+            }
+        }
+        PrimaryButton(if (last) "다 봤어요" else "다 봤어요 · 다음 단계", onDone, Modifier.padding(16.dp))
     }
 }

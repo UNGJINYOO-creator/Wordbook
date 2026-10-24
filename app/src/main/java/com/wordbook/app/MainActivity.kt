@@ -42,6 +42,9 @@ import com.wordbook.app.ui.SettingsScreen
 import com.wordbook.app.ui.StudyScreen
 import com.wordbook.app.ui.theme.WordBookTheme
 
+/** Several photo addresses in one navigation argument, one per line. */
+private fun encodeUris(uris: List<Uri>) = Uri.encode(uris.joinToString("\n"))
+
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
 private val Tabs = listOf(
@@ -107,7 +110,7 @@ private fun AppContent() {
                     ) {
                         composable("home") {
                             HomeScreen(
-                                onPhoto = { uri -> nav.navigate("scan?uri=${Uri.encode(uri.toString())}&deckId=-1") },
+                                onPhoto = { uris -> nav.navigate("scan?uri=${encodeUris(uris)}&deckId=-1") },
                                 onOpenDeck = { id -> nav.navigate("deck/$id") },
                                 onReview = { nav.navigate("study/-1?review=true") },
                             )
@@ -142,8 +145,8 @@ private fun AppContent() {
                         ) {
                             DeckScreen(
                                 onBack = { nav.popBackStack() },
-                                onPhoto = { deckId, uri ->
-                                    nav.navigate("scan?uri=${Uri.encode(uri.toString())}&deckId=$deckId")
+                                onPhoto = { deckId, uris ->
+                                    nav.navigate("scan?uri=${encodeUris(uris)}&deckId=$deckId")
                                 },
                                 onStudy = { deckId, onlyUnknown, modes, staged ->
                                     nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&mode=$modes&staged=$staged")

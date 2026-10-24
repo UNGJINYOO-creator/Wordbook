@@ -146,7 +146,7 @@ private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모�
 @Composable
 fun DeckScreen(
     onBack: () -> Unit,
-    onPhoto: (deckId: Long, Uri) -> Unit,
+    onPhoto: (deckId: Long, List<Uri>) -> Unit,
     onStudy: (deckId: Long, onlyUnknown: Boolean, modes: String, staged: Boolean) -> Unit,
     vm: DeckViewModel = viewModel(factory = DeckViewModel.Factory),
 ) {
@@ -170,11 +170,11 @@ fun DeckScreen(
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = pendingUri
-        if (ok && uri != null) onPhoto(vm.deckId, Uri.parse(uri))
+        if (ok && uri != null) onPhoto(vm.deckId, listOf(Uri.parse(uri)))
         pendingUri = null
     }
-    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) onPhoto(vm.deckId, uri)
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
+        if (uris.isNotEmpty()) onPhoto(vm.deckId, uris)
     }
 
     Scaffold(
@@ -302,7 +302,7 @@ fun DeckScreen(
                     pendingUri = uri.toString()
                     takePicture.launch(uri)
                 }
-                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "사진이나 스크린샷에서 단어 찾기") {
+                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "사진이나 스크린샷, 여러 장 한 번에 골라도 돼요") {
                     showAdd = false
                     pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
@@ -461,7 +461,7 @@ private fun StudySheet(
                 FilterChip(selected = onlyUnknown, onClick = { onlyUnknown = true }, label = { Text("모르는 것만 ${unknown}개") }, enabled = unknown > 0)
             }
             Text(
-                "처음엔 설정에 저장된 방식이 체크돼 있어요",
+                "처음엔 설정에 저장된 순서가 들어 있어요. 이번 학습만 바꿔도 돼요",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),

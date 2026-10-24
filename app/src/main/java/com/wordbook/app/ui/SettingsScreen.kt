@@ -101,9 +101,9 @@ fun SettingsScreen() {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            Section("학습 방식")
+            Section("학습 순서")
             Text(
-                "여러 개를 고르면 단계별로 어려워지거나 골고루 섞여서 나와요",
+                "켜 둔 단계가 위에서부터 순서대로 진행돼요. ▲▼로 순서를 바꿀 수 있어요",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp),

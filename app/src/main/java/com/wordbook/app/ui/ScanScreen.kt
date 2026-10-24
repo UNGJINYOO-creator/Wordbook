@@ -84,7 +84,11 @@ class Candidate(val text: String, meaning: String, pos: String, selected: Boolea
 class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val db = AppDatabase.get(app)
     private val dao = db.wordDao()
-    private val uri = Uri.parse(checkNotNull(handle.get<String>("uri")))
+    /** One or more photos, one address per line. */
+    private val uris = checkNotNull(handle.get<String>("uri")).split('\n').filter { it.isNotBlank() }.map(Uri::parse)
+    /** Recognised text of every photo, for "인식 원문 보기". */
+    var rawLines by mutableStateOf(listOf<com.wordbook.app.ml.OcrLine>())
+        private set
     /** -1 creates a new deck; otherwise words are added to this deck. */
     val targetDeckId: Long = handle.get<Long>("deckId") ?: -1L
 
@@ -102,11 +106,24 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     }
 
     private suspend fun run() {
-        val words = try {
-            WordExtractor.extract(getApplication(), uri)
-        } catch (e: Exception) {
+        // Several photos are read one by one; a word found on more than one keeps its first meaning.
+        val found = mutableListOf<com.wordbook.app.ml.ExtractedWord>()
+        val lines = mutableListOf<com.wordbook.app.ml.OcrLine>()
+        var failed = 0
+        uris.forEachIndexed { i, uri ->
+            if (uris.size > 1) status = "사진 ${i + 1}/${uris.size}에서 영어 단어를 찾는 중…"
+            try {
+                found += WordExtractor.extract(getApplication(), uri)
+                lines += WordExtractor.lastLines
+            } catch (e: Exception) {
+                failed++
+            }
+        }
+        rawLines = lines
+        val words = found.distinctBy { it.text.lowercase() }
+        if (failed == uris.size) {
             busy = false
-            status = "사진을 읽지 못했어요: ${e.message}"
+            status = "사진을 읽지 못했어요."
             return
         }
         if (words.isEmpty()) {
@@ -296,7 +313,7 @@ fun ScanScreen(
                     }
                 }
                 if (showRaw) {
-                    items(WordExtractor.lastLines) { l ->
+                    items(vm.rawLines) { l ->
                         Text(
                             "[${l.height}] ${l.text}",
                             style = MaterialTheme.typography.bodySmall,
