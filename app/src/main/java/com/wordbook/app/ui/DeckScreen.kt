@@ -152,6 +152,7 @@ fun DeckScreen(
     onBack: () -> Unit,
     onPhoto: (deckId: Long, List<Uri>) -> Unit,
     onStudy: (deckId: Long, onlyUnknown: Boolean, modes: String, staged: Boolean) -> Unit,
+    onTest: (deckId: Long) -> Unit,
     vm: DeckViewModel = viewModel(factory = DeckViewModel.Factory),
 ) {
     val context = LocalContext.current
@@ -253,6 +254,8 @@ fun DeckScreen(
                     )
                     Spacer(Modifier.height(12.dp))
                     PrimaryButton("학습 시작", { showStudy = true }, enabled = active.isNotEmpty())
+                    Spacer(Modifier.height(8.dp))
+                    SecondaryButton("📝 시험 보기 (${minOf(active.size, StudyViewModel.TEST_SIZE)}문제)", { onTest(vm.deckId) }, enabled = active.size >= 4)
                     Spacer(Modifier.height(12.dp))
                     Row(Modifier.horizontalScroll(rememberScrollState())) {
                         WordFilter.entries.forEach { f ->

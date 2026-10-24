@@ -10,7 +10,7 @@ class LevelsTest {
         assertEquals(1, Levels.levelOf(29))
         assertEquals(2, Levels.levelOf(30))
         assertEquals(3, Levels.levelOf(90))
-        assertEquals("단어 탐험가", Levels.title(3))
-        assertEquals("단어 왕", Levels.title(20))
+        assertEquals("베테랑 단어꾼", Levels.title(3))
+        assertEquals("심해의 은둔 고수", Levels.title(20))
     }
 }

@@ -167,10 +167,11 @@ private fun AppContent() {
                                 onStudy = { deckId, onlyUnknown, modes, staged ->
                                     nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&mode=$modes&staged=$staged")
                                 },
+                                onTest = { deckId -> nav.navigate("study/$deckId?test=true") },
                             )
                         }
                         composable(
-                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}&today={today}&wrong={wrong}",
+                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}&today={today}&wrong={wrong}&test={test}",
                             arguments = listOf(
                                 navArgument("deckId") { type = NavType.LongType },
                                 navArgument("onlyUnknown") { type = NavType.BoolType; defaultValue = false },
@@ -180,6 +181,7 @@ private fun AppContent() {
                                 navArgument("all") { type = NavType.BoolType; defaultValue = false },
                                 navArgument("today") { type = NavType.BoolType; defaultValue = false },
                                 navArgument("wrong") { type = NavType.BoolType; defaultValue = false },
+                                navArgument("test") { type = NavType.BoolType; defaultValue = false },
                             ),
                         ) {
                             StudyScreen(onBack = { nav.popBackStack() })

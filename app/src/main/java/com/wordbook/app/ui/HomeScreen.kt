@@ -223,7 +223,16 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
     val level = Levels.levelOf(earned)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Lv.$level ${Levels.title(level)}") },
+        title = {
+            Column {
+                Text("Lv.$level ${Levels.title(level)}")
+                Text(
+                    "[${Levels.grade(level)}] ${Levels.description(level)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("📊 지금까지 ${hoursText(totalMs)} 공부했고, 단어 ${totalLearned}개를 외웠어요.", style = MaterialTheme.typography.bodyMedium)
@@ -251,12 +260,14 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(if (reached) "✅" else "🔒", fontSize = 14.sp)
-                        Text(
-                            " Lv.$n ${Levels.title(n)}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (n == level) FontWeight.Bold else FontWeight.Normal,
-                            modifier = Modifier.weight(1f),
-                        )
+                        Column(Modifier.weight(1f).padding(start = 6.dp)) {
+                            Text(
+                                "Lv.$n [${Levels.grade(n)}] ${Levels.title(n)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (n == level) FontWeight.Bold else FontWeight.Normal,
+                            )
+                            Text(Levels.description(n), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                        }
                         Text(
                             (Levels.unlocks[n]?.joinToString("") ?: "") + "  ⭐${Levels.starsFor(n)}",
                             style = MaterialTheme.typography.bodySmall,
@@ -265,7 +276,7 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
                     }
                 }
                 Text(
-                    "Lv.${Levels.titles.size} 다음부터는 단어 왕의 레벨 숫자가 계속 올라가요. 오늘도 화이팅! 💪",
+                    "Lv.${Levels.titles.size} 다음부터는 심해의 은둔 고수로 레벨 숫자가 계속 올라가요. 오늘도 화이팅! 🎣",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

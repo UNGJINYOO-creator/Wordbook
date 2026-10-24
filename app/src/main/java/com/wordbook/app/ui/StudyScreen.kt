@@ -141,9 +141,17 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** 🔥 오답노트: the words missed twice in quizzes. */
     private val wrongOnly: Boolean = handle.get<Boolean>("wrong") ?: false
     private val wrongNote = WrongNote(app)
+    /** 시험 모드: [TEST_SIZE] random words, each asked once with no second chance; the score goes to Telegram. */
+    val test: Boolean = handle.get<Boolean>("test") ?: false
     /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
-    private val modes: List<StudyMode> = decodeModes(handle.get<String>("mode")) ?: settings.modes
-    private val staged: Boolean = handle.get<String>("staged")?.toBooleanStrictOrNull() ?: settings.staged
+    private val modes: List<StudyMode> =
+        if (handle.get<Boolean>("test") == true) {
+            settings.modes.filter { it == StudyMode.CHOICE || it == StudyMode.SPELLING || it == StudyMode.DICTATION }
+                .ifEmpty { listOf(StudyMode.CHOICE, StudyMode.SPELLING) }
+        } else decodeModes(handle.get<String>("mode")) ?: settings.modes
+    private val staged: Boolean =
+        if (handle.get<Boolean>("test") == true) false
+        else handle.get<String>("staged")?.toBooleanStrictOrNull() ?: settings.staged
     private val audio = app.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
     /**
      * The session runs step by step: 순서대로 = one step per mode in the chosen order, each going
@@ -274,6 +282,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             sessionWords = when {
                 review -> dao.getDueWords(System.currentTimeMillis())
                 wrongOnly -> wrongNote.ids.let { ids -> all.filter { it.id in ids && !it.excluded } }
+                test -> (if (deckId > 0) dao.getWords(deckId) else all).filter { !it.excluded }.shuffled().take(TEST_SIZE)
                 today -> {
                     // 약점 맞춤: among the next new words, the weak part of speech comes first.
                     val limit = newPerDay(settings)
@@ -305,7 +314,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     candidates
                 }
             }
-            val limit = settings.sessionSize
+            val limit = if (test) 0 else settings.sessionSize
             sessionWords = order(sessionWords).let { if (limit > 0) it.take(limit) else it }
             dao.touchDecks(sessionWords.map { it.deckId }.distinct(), System.currentTimeMillis())
             start(sessionWords)
@@ -436,6 +445,26 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         } else {
             current = null
             finished = true
+            if (test) sendTestResult()
+        }
+    }
+
+    /** 시험 점수 out of 100. */
+    val testScore: Int get() = if (sessionSize == 0) 0 else firstTryKnown * 100 / sessionSize
+
+    private fun sendTestResult() {
+        if (!telegramReady) return
+        val missed = everMissed.map { "${it.text}(${it.meaning.substringBefore(" /")})" }
+        viewModelScope.launch {
+            val deckName = if (deckId > 0) dao.getDeck(deckId)?.name ?: "" else "전체 단어"
+            Telegram.send(
+                settings.telegramToken, settings.telegramChatId,
+                buildString {
+                    append("📝 시험 결과 · $deckName\n\n")
+                    append("점수 ${testScore}점 (${sessionSize}문제 중 ${firstTryKnown}개 맞힘)\n")
+                    if (missed.isNotEmpty()) append("\n❗ 틀린 단어: ${missed.joinToString(", ")}")
+                },
+            )
         }
     }
 
@@ -563,7 +592,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             ),
         )
         if (undoStack.size > 30) undoStack.removeFirst()
-        canUndo = true
+        canUndo = !test
         // Card swipes are the child's own word, so only quiz answers count for stars and the right rate.
         // A 객관식 answer picked in under a second is a guess: no stars, no goal, no right rate.
         val guessed = mode == StudyMode.CHOICE && answerMs in 1 until GUESS_MS
@@ -625,7 +654,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val times = (knownTimes[word.id] ?: 0) + if (answer == Answer.KNOWN) 1 else 0
         knownTimes[word.id] = times
 
-        val leaves = !repeatMissed ||
+        val leaves = test || !repeatMissed ||
             answer == Answer.MASTERED ||
             times >= (if (stepIndex == firstQuizStep) knownToLeave else 1) ||
             // A review word recalled right away doesn't need the extra rounds.
@@ -639,6 +668,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** Swipe right: go back to the previous card and take back its answer. */
     fun undo() {
         touch()
+        if (test) return
         val s = undoStack.removeLastOrNull() ?: return
         hand.clear(); hand.addAll(s.hand)
         waiting.clear(); waiting.addAll(s.waiting)
@@ -689,6 +719,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         const val NEW_PER_DAY = 20
         /** 객관식 answers faster than this count as guesses. */
         const val GUESS_MS = 1000L
+        const val TEST_SIZE = 20
 
         /** New words in 오늘 학습: the daily word goal, or [NEW_PER_DAY] without one. */
         fun newPerDay(settings: StudySettings) = settings.dailyWords.takeIf { it > 0 } ?: NEW_PER_DAY
@@ -733,7 +764,7 @@ fun StudyScreen(
                 title = {
                     Text(
                         if (vm.finished) "학습 결과"
-                        else (if (vm.review) "복습 " else "") +
+                        else (if (vm.test) "📝 시험 " else if (vm.review) "복습 " else "") +
                             (if (vm.stepCount > 1) "${vm.stepIndex + 1}/${vm.stepCount} ${vm.stepLabel} · " else "") +
                             if (vm.mode == StudyMode.LIST) "${vm.runWords.size}개" else "${vm.doneCount}/${vm.sessionSize}",
                         maxLines = 1,
@@ -1060,7 +1091,20 @@ private fun StudyTimer(vm: StudyViewModel) {
 @Composable
 private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp)) {
-        Text("수고했어요!", style = MaterialTheme.typography.headlineMedium)
+        if (vm.test) {
+            Text("시험 끝! ${vm.testScore}점", style = MaterialTheme.typography.headlineMedium)
+            Text(
+                when {
+                    vm.testScore >= 90 -> "완벽에 가까워요! 🏆"
+                    vm.testScore >= 70 -> "잘했어요! 틀린 단어만 다시 보면 돼요 👍"
+                    else -> "틀린 단어는 오답노트에서 다시 연습해요 💪"
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else {
+            Text("수고했어요!", style = MaterialTheme.typography.headlineMedium)
+        }
         Spacer(Modifier.height(4.dp))
         Text(
             "오늘 학습 시간 ${formatTime(vm.todayMs)}" +

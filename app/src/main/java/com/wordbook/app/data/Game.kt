@@ -15,7 +15,17 @@ data class Coupon(val name: String, val claimedAt: Long, val used: Boolean)
 
 /** Levels and their titles; the stars needed grow with each level. */
 object Levels {
-    val titles = listOf("단어 새싹", "단어 꼬마", "단어 탐험가", "단어 기사", "단어 마법사", "단어 박사", "단어 대장", "단어 왕")
+    val titles = listOf("초보 단어꾼", "손맛 아는 단어꾼", "베테랑 단어꾼", "영웅 단어꾼", "전설의 강태공", "신화 속 단어신", "심해의 은둔 고수")
+    val grades = listOf("일반", "고급", "희귀", "영웅", "전설", "신화", "비밀")
+    val descriptions = listOf(
+        "이제 막 단어를 낚기 시작한 풋내기",
+        "기초 단어는 막힘없이 척척 낚아채는 단어꾼",
+        "어려운 단어도 묵직하게 잘 낚는 숙련자",
+        "웬만한 고난도 단어도 다 알아보는 고수",
+        "어떤 단어가 나와도 한 손으로 낚아채는 마스터",
+        "단어의 경지에 올라선 만렙 단어꾼",
+        "깊은 바다에 숨은 단어까지 낚는, 아무도 정체를 모르는 고수",
+    )
 
     /** Stars needed to reach [level] (1-based): 0, 30, 90, 180, 300, … */
     fun starsFor(level: Int): Int = 15 * (level - 1) * level
@@ -26,17 +36,19 @@ object Levels {
         return level
     }
 
-    fun title(level: Int): String = titles[(level - 1).coerceAtMost(titles.lastIndex)]
+    private fun index(level: Int) = (level - 1).coerceIn(0, titles.lastIndex)
+    fun title(level: Int): String = titles[index(level)]
+    fun grade(level: Int): String = grades[index(level)]
+    fun description(level: Int): String = descriptions[index(level)]
 
     /** Deck cover emojis that each level unlocks (level 1 has the basic set). */
     val unlocks: Map<Int, List<String>> = mapOf(
         2 to listOf("🦊", "🐱"),
         3 to listOf("🧭", "🗺️"),
         4 to listOf("🛡️", "⚔️"),
-        5 to listOf("🪄", "🔮"),
-        6 to listOf("🎓", "🔬"),
-        7 to listOf("🦁", "🔥"),
-        8 to listOf("👑", "💎"),
+        5 to listOf("🎣", "🐟"),
+        6 to listOf("🔮", "🪄"),
+        7 to listOf("🐋", "💎"),
     )
 
     /** The level that unlocks [emoji], or 1 for a basic one. */
