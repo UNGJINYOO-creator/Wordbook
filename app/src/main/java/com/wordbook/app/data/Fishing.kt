@@ -5,11 +5,11 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** A fish of the 대왕 물고기 낚시 game. Bigger fish come with higher levels. */
+/** A fish of the 단어 낚시 도전 game. Bigger fish come with higher levels. */
 data class Fish(val level: Int, val emoji: String, val name: String, val minKg: Double, val maxKg: Double)
 
 /**
- * 대왕 물고기 낚시: the day's final boss. Opens once today's goal is met, three tries a day,
+ * 단어 낚시 도전: the day's final boss. Opens once today's goal is met, tries a day as set (0 = no limit),
  * and a catch goes into the fish book (도감).
  */
 class Fishing(context: Context) {
@@ -24,7 +24,14 @@ class Fishing(context: Context) {
         }
     }
 
-    val triesLeft: Int get() { ensureToday(); return (settings.fishTries - prefs.getInt("tries", 0)).coerceAtLeast(0) }
+    val unlimited: Boolean get() = settings.fishTries <= 0
+    val triesLeft: Int
+        get() {
+            ensureToday()
+            return if (unlimited) Int.MAX_VALUE else (settings.fishTries - prefs.getInt("tries", 0)).coerceAtLeast(0)
+        }
+    /** " (남은 도전 N번)", or nothing when there is no limit. */
+    val triesNote: String get() = if (unlimited) "" else " (남은 도전 ${triesLeft}번)"
     val caughtToday: Boolean get() { ensureToday(); return prefs.getBoolean("caught", false) }
     val caughtFishToday: String get() { ensureToday(); return prefs.getString("todayFish", "") ?: "" }
 

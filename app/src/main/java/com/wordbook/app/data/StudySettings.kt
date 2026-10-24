@@ -104,7 +104,7 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("testSize", 20)
         set(v) = prefs.edit().putInt("testSize", v).apply()
 
-    /** 대왕 물고기 낚시 tuning, set by the parent: seconds at start and to catch, +/- per answer. */
+    /** 단어 낚시 도전 tuning (fishTries 0 = no limit), set by the parent: seconds at start and to catch, +/- per answer. */
     var fishStart: Int
         get() = prefs.getInt("fishStart", 100)
         set(v) = prefs.edit().putInt("fishStart", v).apply()
@@ -125,7 +125,7 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("fishDrainEnd", 12)
         set(v) = prefs.edit().putInt("fishDrainEnd", v).apply()
     var fishTries: Int
-        get() = prefs.getInt("fishTries", 3)
+        get() = prefs.getInt("fishTries", 0)
         set(v) = prefs.edit().putInt("fishTries", v).apply()
 
     /** Minimum study time per day in minutes, 0 = no goal. */

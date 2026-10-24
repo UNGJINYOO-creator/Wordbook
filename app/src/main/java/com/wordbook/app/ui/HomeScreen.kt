@@ -152,7 +152,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     var wrongCount by mutableIntStateOf(0)
         private set
     private val fishing = com.wordbook.app.data.Fishing(app)
-    /** What the 대왕 물고기 card says today. */
+    /** What the 단어 낚시 도전 card says today. */
     var fishLine by mutableStateOf("")
         private set
     var fishOpen by mutableStateOf(false)
@@ -177,12 +177,12 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         wrongCount = wrongNote.ids.size
         val timeLeft = settings.dailyGoalMinutes > 0 && stats.studyMs < settings.dailyGoalMinutes * 60_000L
         val wordsLeft = settings.dailyGoalMinutes <= 0 && settings.dailyWords > 0 && stats.learnedCount < settings.dailyWords
-        fishOpen = !fishing.caughtToday && !timeLeft && !wordsLeft && fishing.triesLeft > 0
+        fishOpen = !timeLeft && !wordsLeft && fishing.triesLeft > 0
         fishLine = when {
-            fishing.caughtToday -> "오늘 ${fishing.caughtFishToday} 낚았어요! 오늘 공부 끝 🎣"
             timeLeft || wordsLeft -> "🔒 오늘 목표를 채우면 열려요"
+            fishing.caughtToday -> "오늘 ${fishing.caughtFishToday} 낚았어요! 오늘 공부 끝 🎣"
             fishing.triesLeft <= 0 -> "오늘 도전 끝! 내일 다시 도전해요"
-            else -> "열렸어요! 도전 ${fishing.triesLeft}번 남았어요"
+            else -> "열렸어요! 도전해 보세요" + fishing.triesNote
         }
         goalWords = settings.dailyWords
         stars = game.stars
@@ -373,7 +373,7 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("🐋", fontSize = 28.sp)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text("오늘의 끝판왕 · 대왕 물고기 낚시", style = MaterialTheme.typography.titleMedium, color = ink)
+                            Text("🎣 단어 낚시 도전!", style = MaterialTheme.typography.titleMedium, color = ink)
                             Text(vm.fishLine, style = MaterialTheme.typography.bodySmall, color = ink)
                         }
                         Text("›", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)

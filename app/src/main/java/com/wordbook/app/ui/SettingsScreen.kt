@@ -371,7 +371,7 @@ fun SettingsScreen() {
                     )
                 }
             }
-            GroupHeader("🐋 대왕 물고기 낚시")
+            GroupHeader("🎣 단어 낚시 도전!")
             Text(
                 "오늘 목표를 채우면 열리는 타임어택 게임이에요. 아이 수준에 맞게 몇 번 해 보고 조절하세요. " +
                     "맞힐 때 늘어나는 시간이 줄어드는 시간보다 넉넉해야 낚을 수 있어요.",
@@ -386,17 +386,17 @@ fun SettingsScreen() {
             FishNumber("틀리면 줄어드는 시간", "초", settings.fishWrong, 0, 60) { settings.fishWrong = it }
             FishNumber("처음: 10초마다 줄어드는 시간", "초", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it }
             FishNumber("물고기가 가까울 때: 10초마다 줄어드는 시간", "초", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it }
-            FishNumber("하루 도전 횟수", "번", settings.fishTries, 1, 20) { settings.fishTries = it }
+            FishNumber("하루 도전 횟수 (0 = 제한 없음)", "번", settings.fishTries, 0, 20) { settings.fishTries = it }
             }
             TextButton(
                 onClick = {
                     settings.fishStart = 100; settings.fishGoal = 200; settings.fishRight = 5; settings.fishWrong = 3
-                    settings.fishDrainStart = 5; settings.fishDrainEnd = 12; settings.fishTries = 3
+                    settings.fishDrainStart = 5; settings.fishDrainEnd = 12; settings.fishTries = 0
                     fishReset++
                     saved()
                 },
                 modifier = Modifier.padding(horizontal = 8.dp),
-            ) { Text("기본값으로 되돌리기 (100초 → 200초, +5초 / -3초)") }
+            ) { Text("기본값으로 되돌리기 (100초 → 200초, +5초 / -3초, 횟수 제한 없음)") }
             GroupHeader("👨‍👩‍👧 부모님")
             Section("비밀번호")
             Text(

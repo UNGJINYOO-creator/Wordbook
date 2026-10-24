@@ -72,7 +72,7 @@ import kotlin.math.roundToInt
 enum class FishPhase { INTRO, PLAYING, WON, LOST }
 
 /**
- * 대왕 물고기 낚시: a time attack on today's words. The line starts with some seconds and runs down;
+ * 단어 낚시 도전: a time attack on today's words. The line starts with some seconds and runs down;
  * right answers reel in seconds, wrong ones lose some. Reaching the goal lands the fish and ends the day.
  */
 class FishingViewModel(app: Application) : AndroidViewModel(app) {
@@ -167,7 +167,6 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         val goalMinutes = settings.dailyGoalMinutes
         val goalWords = settings.dailyWords
         lockReason = when {
-            fishing.caughtToday -> "오늘은 이미 ${fishing.caughtFishToday}를 낚았어요. 내일 또 만나요!"
             pool.size < 4 -> "단어가 4개 이상 있어야 낚시를 할 수 있어요"
             goalMinutes > 0 && stats.studyMs < goalMinutes * 60_000L ->
                 "오늘 학습 시간 ${goalMinutes}분을 채우면 열려요 (지금 ${stats.studyMs / 60_000}분)"
@@ -331,9 +330,9 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     private fun report(caught: Boolean) {
         if (settings.telegramToken.isBlank() || settings.telegramChatId.isBlank()) return
         val text = buildString {
-            append("🎣 대왕 물고기 낚시\n\n")
+            append("🎣 단어 낚시 도전!\n\n")
             if (caught) append("${fish.emoji} ${fish.name} ${Fishing.formatKg(kg)}을(를) 낚았어요!" + (if (newRecord) " 🏆 최고 기록" else "") + "\n")
-            else append("😢 ${fish.name}이(가) 도망갔어요 (남은 도전 ${triesLeft}번)\n")
+            else append("😢 ${fish.name}이(가) 도망갔어요${fishing.triesNote}\n")
             append("정답 $right/$total · ${durationMs / 60_000}분 ${durationMs / 1000 % 60}초\n")
             if (missed.isNotEmpty()) {
                 append("\n❗ 틀린 단어: ")
@@ -367,7 +366,7 @@ fun FishingScreen(onBack: () -> Unit, vm: FishingViewModel = viewModel()) {
     Scaffold(
         topBar = {
             AppTopBar(
-                title = { Text("🐋 대왕 물고기 낚시") },
+                title = { Text("🎣 단어 낚시 도전!") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로") }
                 },
@@ -411,7 +410,7 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             Text("❌ 틀리면 -${f.wrong.toInt()}초, 너무 빨리 찍으면 0초")
             Text("🐋 ${f.goal.toInt()}초가 되면 물고기를 낚아요! 0초가 되면 도망가요")
             Text("📈 물고기에 가까워질수록 세게 당겨서 시간이 빨리 줄어요")
-            Text("🎯 하루 ${vm.triesLeft}번 남음 · 낚으면 ⭐${Fishing.CATCH_STARS}개 + 오늘 공부 끝!")
+            Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개 + 오늘 공부 끝!" + vm.fishing.triesNote)
         }
         Spacer(Modifier.height(16.dp))
         val reason = vm.lockReason
@@ -424,7 +423,7 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
             )
         } else {
-            PrimaryButton("🎣 낚시 시작 (남은 도전 ${vm.triesLeft}번)", vm::start)
+            PrimaryButton("🎣 낚시 시작" + vm.fishing.triesNote, vm::start)
         }
         Spacer(Modifier.height(8.dp))
         SecondaryButton("📖 물고기 도감", onBook)
@@ -560,7 +559,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
             Text("🎣 오늘 공부 끝! 정말 잘했어요. 내일 또 만나요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         } else {
             Text("물고기가 도망갔어요 😢", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("남은 도전 ${vm.triesLeft}번", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            if (!vm.fishing.unlimited) Text("남은 도전 ${vm.triesLeft}번", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(12.dp))
         Text(
@@ -574,8 +573,8 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
             missed.forEach { Text("${it.text}  ${it.meaning.substringBefore(" /")}", style = MaterialTheme.typography.bodyMedium) }
         }
         Spacer(Modifier.height(24.dp))
-        if (!won && vm.triesLeft > 0) {
-            PrimaryButton("🎣 다시 도전", vm::start)
+        if (vm.triesLeft > 0) {
+            PrimaryButton(if (won) "🎣 한 번 더" else "🎣 다시 도전", vm::start)
             Spacer(Modifier.height(8.dp))
         }
         SecondaryButton("📖 물고기 도감", onBook)
