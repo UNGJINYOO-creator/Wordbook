@@ -863,27 +863,36 @@ fun StudyScreen(
                         }
                         Spacer(Modifier.height(if (typing) 8.dp else 16.dp))
                         val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
-                        // 말하기: the phone's speech recognition checks the pronunciation.
+                        // 말하기: speech recognition inside the app (no Google popup) checks the pronunciation.
                         var sayFeedback by remember(vm.turn) { mutableStateOf<String?>(null) }
-                        val listen = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                            val heard = result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS).orEmpty()
-                            sayFeedback = when {
-                                heard.isEmpty() -> null
-                                heard.any { it.trim().equals(word.text.trim(), ignoreCase = true) } -> "🎤 발음 정확해요! 👍"
-                                else -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 다시 해 볼까요?"
+                        val speech = rememberSpeechCheck()
+                        val context = LocalContext.current
+                        val startListening = {
+                            sayFeedback = "🎤 듣고 있어요… \"${word.text}\" 말해 보세요"
+                            speech.start { heard, error ->
+                                sayFeedback = when {
+                                    error != null -> "🎤 $error"
+                                    heard.any { it.trim().equals(word.text.trim(), ignoreCase = true) } -> "🎤 발음 정확해요! 👍"
+                                    heard.isNotEmpty() -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 다시 해 볼까요?"
+                                    else -> null
+                                }
+                            }
+                        }
+                        val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+                            if (ok) {
+                                startListening()
+                            } else {
+                                sayFeedback = "🎤 마이크를 허용해야 말하기를 할 수 있어요"
                             }
                         }
                         val say = {
                             vm.touch()
-                            runCatching {
-                                listen.launch(
-                                    android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                                        .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                        .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                                        .putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-                                        .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "\"${word.text}\" 소리 내어 읽어 보세요"),
-                                )
-                            }.onFailure { sayFeedback = "이 휴대폰은 음성 인식을 쓸 수 없어요" }
+                            when {
+                                speech.listening -> { speech.stop(); sayFeedback = null }
+                                context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) ==
+                                    android.content.pm.PackageManager.PERMISSION_GRANTED -> startListening()
+                                else -> micPermission.launch(android.Manifest.permission.RECORD_AUDIO)
+                            }
                             Unit
                         }
                         // Speak automatically for dictation, and for every card when the setting is on.
