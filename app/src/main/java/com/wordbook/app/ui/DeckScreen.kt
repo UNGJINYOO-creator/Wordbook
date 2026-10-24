@@ -233,7 +233,7 @@ fun DeckScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                onClick = { showAdd = true },
+                onClick = { guard { showAdd = true } },
                 shape = ButtonShape,
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -379,7 +379,7 @@ fun DeckScreen(
     }
     pending?.let { action ->
         PinConfirmDialog(
-            text = "단어를 고치려면 비밀번호를 입력하세요.",
+            text = "단어를 추가·삭제·수정하려면 비밀번호를 입력하세요.",
             check = vm.settings::checkPin,
             onDismiss = { pending = null },
             onConfirm = { unlocked = true; pending = null; action() },

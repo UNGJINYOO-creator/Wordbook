@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.Alignment
@@ -123,7 +124,7 @@ fun PosMeaning(pos: String, meaning: String, fontSize: TextUnit, badgeSize: Text
             Placeholder((label.length * badgeSize.value + 12).sp, (badgeSize.value * 1.6f).sp, PlaceholderVerticalAlign.TextCenter),
         ) { PosBadge(p, fontSize = badgeSize) }
     }
-    Text(text, inlineContent = inline, fontSize = fontSize, textAlign = TextAlign.Center, modifier = modifier)
+    Text(text, inlineContent = inline, fontSize = fontSize, lineHeight = 1.45.em, textAlign = TextAlign.Center, modifier = modifier)
 }
 
 /** "English sentence (한글 해석)": the English in italics, the translation smaller below. */
@@ -132,9 +133,9 @@ fun ExampleText(example: String, fontSize: TextUnit, modifier: Modifier = Modifi
     val en = example.substringBefore(" (").trim()
     val ko = example.substringAfter(" (", "").removeSuffix(")").trim()
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(en, fontSize = fontSize, fontStyle = FontStyle.Italic, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(en, fontSize = fontSize, lineHeight = 1.45.em, fontStyle = FontStyle.Italic, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (ko.isNotEmpty()) {
-            Text(ko, fontSize = fontSize * 0.85f, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.outline)
+            Text(ko, fontSize = fontSize * 0.85f, lineHeight = 1.45.em, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.outline)
         }
     }
 }

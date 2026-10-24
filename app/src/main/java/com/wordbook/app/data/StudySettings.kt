@@ -92,7 +92,7 @@ class StudySettings(context: Context) {
     /** Combo and celebration sounds. */
     /** Which combo sound: 0 띠링, 1 딩동댕동, 2 뾰로롱. */
     var comboSound: Int
-        get() = prefs.getInt("comboSound", 2)
+        get() = prefs.getInt("comboSound", 1)
         set(v) = prefs.edit().putInt("comboSound", v).apply()
 
     var soundEffects: Boolean

@@ -319,6 +319,12 @@ fun HomeScreen(
     val sort by vm.sort.collectAsStateWithLifecycle()
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
     var showAdd by rememberSaveable { mutableStateOf(false) }
+    // With a password set, adding words or changing a deck asks for it once per visit.
+    var unlocked by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val guard: (() -> Unit) -> Unit = { action ->
+        if (!vm.settings.hasPin || unlocked) action() else pending = action
+    }
     var showNewDeck by rememberSaveable { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
     var deckToDelete by remember { mutableStateOf<DeckSummary?>(null) }
@@ -342,7 +348,7 @@ fun HomeScreen(
         topBar = {
             AppTopBar(
                 title = { Text("내 단어장", style = MaterialTheme.typography.headlineMedium) },
-                actions = { TextButton(onClick = { showAdd = true }) { Text("＋ 단어 추가") } },
+                actions = { TextButton(onClick = { guard { showAdd = true } }) { Text("＋ 단어 추가") } },
             )
         },
     ) { padding ->
@@ -400,7 +406,7 @@ fun HomeScreen(
             if (decks.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
                     Card(
-                        onClick = { showAdd = true },
+                        onClick = { guard { showAdd = true } },
                         shape = MaterialTheme.shapes.large,
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                         modifier = Modifier.fillMaxWidth(),
@@ -441,9 +447,9 @@ fun HomeScreen(
                         deck = deck,
                         onOpen = { onOpenDeck(deck.id) },
                         onStudy = { onStudyDeck(deck.id) },
-                        onRename = { deckToRename = deck },
-                        onStyle = { deckToStyle = deck },
-                        onLink = { deckToLink = deck },
+                        onRename = { guard { deckToRename = deck } },
+                        onStyle = { guard { deckToStyle = deck } },
+                        onLink = { guard { deckToLink = deck } },
                         collectionName = collections.firstOrNull { it.id == deck.collectionId }?.name,
                         onDelete = { deckToDelete = deck },
                     )
@@ -549,6 +555,15 @@ fun HomeScreen(
                 vm.updateDeck(deck.id) { it.copy(color = color, emoji = emoji) }
                 deckToStyle = null
             },
+        )
+    }
+    pending?.let { action ->
+        PinConfirmDialog(
+            text = "단어를 추가하거나 단어장을 바꾸려면 비밀번호를 입력하세요.",
+            check = vm.settings::checkPin,
+            onDismiss = { pending = null },
+            onConfirm = { unlocked = true; pending = null; action() },
+            confirmText = "확인",
         )
     }
     deckToDelete?.let { deck ->

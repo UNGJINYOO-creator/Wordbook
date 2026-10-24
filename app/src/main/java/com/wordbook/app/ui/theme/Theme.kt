@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.wordbook.app.R
 
@@ -80,8 +81,16 @@ val Pretendard = FontFamily(
     pretendard(FontWeight.Bold),
 )
 
+// Line height in em, so text drawn bigger than its style (card words, meanings) gets taller lines too
+// instead of a second line running into the first.
 private fun style(size: Int, weight: FontWeight, line: Int) =
-    TextStyle(fontFamily = Pretendard, fontSize = size.sp, fontWeight = weight, lineHeight = line.sp, letterSpacing = 0.sp)
+    TextStyle(
+        fontFamily = Pretendard,
+        fontSize = size.sp,
+        fontWeight = weight,
+        lineHeight = maxOf(line / size.toFloat(), 1.35f).em,
+        letterSpacing = 0.sp,
+    )
 
 private val AppTypography = Typography(
     displayLarge = style(40, FontWeight.Bold, 48),

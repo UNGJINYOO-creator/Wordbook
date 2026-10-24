@@ -5,7 +5,7 @@ import android.media.AudioAttributes
 import android.media.SoundPool
 import com.wordbook.app.R
 
-/** Combo sounds: 띠링, 딩동댕동, 뾰로롱. Bigger combos play the same sound a step higher. */
+/** Combo sounds: 띠링, 딩동댕동 (default), 뾰로롱. Bigger combos play the same sound a step higher. */
 class Sfx(context: Context) {
     private val pool = SoundPool.Builder()
         .setMaxStreams(3)
