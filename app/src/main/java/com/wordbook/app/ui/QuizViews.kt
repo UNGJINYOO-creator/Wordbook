@@ -229,7 +229,8 @@ fun TypingQuiz(
                 if (answered != null) return@BasicTextField
                 typed = v.filter { it.isLetter() }.take(blanks)
                 onActivity()
-                // No auto-check on the last letter: the child confirms first, so a slip can still be fixed.
+                // A right answer is checked at once; a wrong one asks "맞나요?" first so a slip can be fixed.
+                if (typed.length == blanks && filled().equals(word.text, ignoreCase = true)) onSubmit(filled())
             },
             keyboardActions = KeyboardActions(onDone = { if (typed.length == blanks && answered == null) onSubmit(filled()) }),
             singleLine = true,

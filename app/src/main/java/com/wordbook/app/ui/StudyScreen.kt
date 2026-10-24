@@ -37,6 +37,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -865,12 +866,14 @@ fun StudyScreen(
                             if (vm.goalReached) "🎉 오늘 목표 시간 달성!" else null,
                         )
                         // A fixed slot under the progress bar: combo cheers show here instead of over the word.
-                        Box(Modifier.fillMaxWidth().height(34.dp).padding(top = 6.dp), contentAlignment = Alignment.Center) {
+                        // It grows when a note wraps to a second line, so the text is never cut.
+                        Box(Modifier.fillMaxWidth().heightIn(min = 34.dp).padding(top = 6.dp), contentAlignment = Alignment.Center) {
                             if (notes.isNotEmpty()) {
                                 Text(
                                     notes.joinToString(" · "),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary,
+                                    textAlign = TextAlign.Center,
                                 )
                             }
                             CheerBanner(vm.cheer, vm.cheerId)
