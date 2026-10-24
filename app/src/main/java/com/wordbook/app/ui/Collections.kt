@@ -56,12 +56,12 @@ fun CollectionDialog(
                 collections.forEach { c ->
                     Option(c.name, chosen == c.id) { chosen = c.id }
                 }
-                Option("새 종합단어장 만들기", chosen == NEW) { chosen = NEW }
+                Option("새 단어장 만들기", chosen == NEW) { chosen = NEW }
                 if (chosen == NEW) {
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("종합단어장 이름") },
+                        label = { Text("새 단어장 이름") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth().padding(start = 8.dp),
                     )
