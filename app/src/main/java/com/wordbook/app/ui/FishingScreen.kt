@@ -100,6 +100,14 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     private val tone = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60) }.getOrNull()
 
     private var pool = listOf<Word>()
+    /** Words the questions are about: [pool] in 오늘의 바다, only the newly learned words in 새 바다. */
+    private var questions = listOf<Word>()
+    private var newSeaWords = listOf<Word>()
+    val newSeaCount: Int get() = newSeaWords.size
+    /** true while playing (or just finished) in the 🌊 새 바다. */
+    var newSea by mutableStateOf(false)
+        private set
+    val catchStars: Int get() = Fishing.CATCH_STARS + if (newSea) Fishing.NEW_SEA_BONUS else 0
     private val recent = ArrayDeque<Long>()
 
     var phase by mutableStateOf(FishPhase.INTRO)
@@ -167,6 +175,9 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             val studied = all.filter { it.box > 0 && it.id !in todayIds }.shuffled()
             pool = (today + studied).distinctBy { it.text.lowercase() }
             if (pool.size < 8) pool = (pool + all.shuffled()).distinctBy { it.text.lowercase() }.take(maxOf(pool.size, 30))
+            val fresh = fishing.newSeaIds(stats.learnedToday)
+            newSeaWords = all.filter { it.id in fresh }.distinctBy { it.text.lowercase() }
+                .takeIf { it.size >= Fishing.NEW_SEA_MIN } ?: emptyList()
             refreshLock()
         }
         viewModelScope.launch {
@@ -195,9 +206,11 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun start() {
+    fun start(inNewSea: Boolean = newSea) {
         refreshLock()
         if (lockReason != null) return
+        newSea = inNewSea && newSeaWords.isNotEmpty()
+        questions = if (newSea) newSeaWords else pool
         fishing.useTry()
         triesLeft = fishing.triesLeft
         fish = Fishing.fishFor(game.level)
@@ -217,9 +230,9 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         answered = null
         pickedId = null
         questionAt = System.currentTimeMillis()
-        val w = pool.filter { it.id !in recent }.randomOrNull() ?: pool.random()
+        val w = questions.filter { it.id !in recent }.randomOrNull() ?: questions.random()
         recent.addLast(w.id)
-        if (recent.size > minOf(6, pool.size - 1)) recent.removeFirst()
+        if (recent.size > minOf(6, questions.size - 1)) recent.removeFirst()
         word = w
         val roll = Math.random()
         val muted = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0
@@ -349,7 +362,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         val speed = ((240_000.0 - durationMs) / 180_000.0).coerceIn(0.0, 1.0)
         kg = Fishing.weight(fish, accuracy * 0.7 + speed * 0.3)
         newRecord = fishing.recordCatch(fish, kg)
-        game.addStars(Fishing.CATCH_STARS)
+        game.addStars(catchStars)
+        fishing.markSeen(stats.learnedToday)
         if (!game.hasStamp()) game.stampToday()
         if (settings.soundEffects) tone?.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
         report(true)
@@ -447,7 +461,7 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             Text("❌ 틀리면 ${f.wrong.toInt()}m 멀어져요, 너무 빨리 찍으면 0m")
             Text("🐋 0m가 되면 낚아요! ${f.goal.toInt()}m까지 멀어지면 줄이 끊어져요")
             Text("📈 가까워질수록 물고기가 세게 버텨서 더 빨리 도망가요")
-            Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개!" + vm.fishing.triesNote)
+            Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개! (🌊 새 바다는 ⭐${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS}개)" + vm.fishing.triesNote)
         }
         Spacer(Modifier.height(16.dp))
         val reason = vm.lockReason
@@ -459,8 +473,18 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
             )
+        } else if (vm.newSeaCount > 0) {
+            // After 새 단어 더 배우기: fish the words just learned, or the usual mix.
+            Text("어느 바다에서 낚을까요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            PrimaryButton("🌊 새 바다 · 방금 배운 ${vm.newSeaCount}단어 (⭐${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS})", { vm.start(true) })
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton("🏝 오늘의 바다 · 오늘 + 예전 단어 (⭐${Fishing.CATCH_STARS})", { vm.start(false) })
+            if (vm.fishing.triesNote.isNotEmpty()) {
+                Text(vm.fishing.triesNote.trim(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+            }
         } else {
-            PrimaryButton("🎣 낚시 시작" + vm.fishing.triesNote, vm::start)
+            PrimaryButton("🎣 낚시 시작" + vm.fishing.triesNote, { vm.start(false) })
         }
         Spacer(Modifier.height(8.dp))
         SecondaryButton("📖 물고기 도감", onBook)
@@ -655,7 +679,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
         if (won) {
             Text("${vm.fish.name} ${Fishing.formatKg(vm.kg)}!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             if (vm.newRecord) Text("🏆 최고 기록이에요!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text("⭐${Fishing.CATCH_STARS}개를 받았어요", style = MaterialTheme.typography.bodyLarge)
+            Text("⭐${vm.catchStars}개를 받았어요" + if (vm.newSea) " (🌊 새 바다 보너스!)" else "", style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(8.dp))
             Text("🎣 물고기를 낚았어요! 정말 잘했어요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         } else {
@@ -684,7 +708,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
         )
         Spacer(Modifier.height(12.dp))
         if (vm.triesLeft > 0) {
-            SecondaryButton(if (won) "🎣 한 번 더" else "🎣 다시 도전", vm::start)
+            SecondaryButton(if (won) "🎣 한 번 더" else "🎣 다시 도전", { vm.start() })
             Spacer(Modifier.height(8.dp))
         }
         SecondaryButton("📖 물고기 도감", onBook)

@@ -20,7 +20,7 @@ class Fishing(context: Context) {
 
     private fun ensureToday() {
         if (prefs.getString("date", null) != today()) {
-            prefs.edit().putString("date", today()).putInt("tries", 0).putBoolean("caught", false).apply()
+            prefs.edit().putString("date", today()).putInt("tries", 0).putBoolean("caught", false).remove("seen").apply()
         }
     }
 
@@ -34,6 +34,19 @@ class Fishing(context: Context) {
     val triesNote: String get() = if (unlimited) "" else " (남은 도전 ${triesLeft}번)"
     val caughtToday: Boolean get() { ensureToday(); return prefs.getBoolean("caught", false) }
     val caughtFishToday: String get() { ensureToday(); return prefs.getString("todayFish", "") ?: "" }
+
+    /** Words learned today after the last catch: the 🌊 새 바다 asks only these. */
+    fun newSeaIds(learnedToday: Set<Long>): Set<Long> {
+        ensureToday()
+        if (!prefs.getBoolean("caught", false)) return emptySet()
+        val seen = prefs.getStringSet("seen", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
+        return learnedToday - seen
+    }
+
+    /** After a catch, today's words so far no longer count as new for the 새 바다. */
+    fun markSeen(learnedToday: Set<Long>) {
+        prefs.edit().putStringSet("seen", learnedToday.map { it.toString() }.toSet()).apply()
+    }
 
     fun useTry() {
         ensureToday()
@@ -74,6 +87,10 @@ class Fishing(context: Context) {
         /** Every 3 right in a row reels in this much more. */
         const val COMBO_BONUS = 3.0
         const val CATCH_STARS = 10
+        /** Extra stars for a catch in the 새 바다 (new words only). */
+        const val NEW_SEA_BONUS = 5
+        /** The 새 바다 opens once this many words were learned after the last catch. */
+        const val NEW_SEA_MIN = 4
 
         val species = listOf(
             Fish(1, "🐟", "붕어", 0.3, 1.2),
