@@ -14,6 +14,9 @@ object DefaultDecks {
             if (parts.size < 3 || parts[0].isBlank()) null else parts
         }
 
+    /** The built-in words in DAY order (lowercase), for the 거대 물고기 blocks. */
+    fun wordOrder(context: Context): List<String> = rows(context).map { it[0].trim().lowercase() }
+
     /**
      * Adds the 중학 영단어 종합단어장 from assets/default_middle.tsv (word, part of speech, meaning, example),
      * and fills in examples for words that have none yet.

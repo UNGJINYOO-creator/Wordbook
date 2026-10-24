@@ -179,6 +179,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var earned by mutableIntStateOf(0)
         private set
+    private val giantStore = com.wordbook.app.data.Giant(app)
+    var giant by mutableStateOf<com.wordbook.app.data.GiantState?>(null)
+        private set
 
     /** Re-reads today's numbers; called whenever the home screen is shown. */
     fun refresh() {
@@ -201,6 +204,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         goalWords = settings.dailyWords
         stars = game.stars
         earned = game.earned
+        viewModelScope.launch { giant = giantStore.state(dao.getAllWords(), stats.learnedToday) }
     }
 
     fun setSort(s: DeckSort) {
@@ -414,6 +418,45 @@ fun HomeScreen(
                             Text(vm.fishLine, style = MaterialTheme.typography.bodySmall, color = ink)
                         }
                         Text("›", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            vm.giant?.let { g ->
+                val f = g.fish
+                item(key = "giant", span = { GridItemSpan(maxLineSpan) }) {
+                    Card(
+                        onClick = onFishing,
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2A5B)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(f?.emoji ?: "🏆", fontSize = 28.sp)
+                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                if (f == null) {
+                                    Text("🏆 거대 물고기 18마리 완성!", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                                } else {
+                                    Text(
+                                        "🏆 거대 물고기 ${g.index + 1}/${com.wordbook.app.data.Giant.species.size} · ${f.name}",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = Color.White,
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    ThickProgress(g.hp / g.total.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth())
+                                    Text(
+                                        when {
+                                            g.ready -> "체력 0! 최종전이 열렸어요 🎣"
+                                            g.pending > 0 -> "체력 ${g.hp}/${g.total} · 오늘 낚시 성공하면 -${g.pending}"
+                                            else -> "체력 ${g.hp}/${g.total} · 단어를 외울수록 줄어요"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (g.ready || g.pending > 0) Color(0xFFFFE08A) else Color.White,
+                                        modifier = Modifier.padding(top = 4.dp),
+                                    )
+                                }
+                            }
+                            Text("›", style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
