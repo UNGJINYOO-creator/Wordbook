@@ -99,6 +99,30 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("testSize", 20)
         set(v) = prefs.edit().putInt("testSize", v).apply()
 
+    /** 대왕 물고기 낚시 tuning, set by the parent: seconds at start and to catch, +/- per answer. */
+    var fishStart: Int
+        get() = prefs.getInt("fishStart", 100)
+        set(v) = prefs.edit().putInt("fishStart", v).apply()
+    var fishGoal: Int
+        get() = prefs.getInt("fishGoal", 200)
+        set(v) = prefs.edit().putInt("fishGoal", v).apply()
+    var fishRight: Int
+        get() = prefs.getInt("fishRight", 5)
+        set(v) = prefs.edit().putInt("fishRight", v).apply()
+    var fishWrong: Int
+        get() = prefs.getInt("fishWrong", 3)
+        set(v) = prefs.edit().putInt("fishWrong", v).apply()
+    /** How many tenths of a second the line loses each second, at the start and close to the catch. */
+    var fishDrainStart: Int
+        get() = prefs.getInt("fishDrainStart", 5)
+        set(v) = prefs.edit().putInt("fishDrainStart", v).apply()
+    var fishDrainEnd: Int
+        get() = prefs.getInt("fishDrainEnd", 12)
+        set(v) = prefs.edit().putInt("fishDrainEnd", v).apply()
+    var fishTries: Int
+        get() = prefs.getInt("fishTries", 3)
+        set(v) = prefs.edit().putInt("fishTries", v).apply()
+
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int
         get() = prefs.getInt("dailyGoal", 0)

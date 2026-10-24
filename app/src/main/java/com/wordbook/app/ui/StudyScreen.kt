@@ -767,7 +767,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 }
 
 @Composable
-private fun rememberTts(): TextToSpeech? {
+fun rememberTts(): TextToSpeech? {
     val context = LocalContext.current
     var ready by remember { mutableStateOf(false) }
     val tts = remember {

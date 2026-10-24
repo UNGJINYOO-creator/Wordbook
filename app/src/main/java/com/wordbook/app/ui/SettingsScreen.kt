@@ -136,6 +136,7 @@ fun SettingsScreen() {
     var rewardCost by remember { mutableStateOf("50") }
     var settingPin by remember { mutableStateOf(false) }
     var wizard by remember { mutableStateOf(false) }
+    var fishReset by remember { mutableStateOf(0) }
     // Locks again whenever the tab is left, since this state is forgotten then.
     var unlocked by remember { mutableStateOf(!settings.hasPin) }
     if (!unlocked) {
@@ -354,6 +355,32 @@ fun SettingsScreen() {
                     )
                 }
             }
+            GroupHeader("🐋 대왕 물고기 낚시")
+            Text(
+                "오늘 목표를 채우면 열리는 타임어택 게임이에요. 아이 수준에 맞게 몇 번 해 보고 조절하세요. " +
+                    "맞힐 때 늘어나는 시간이 줄어드는 시간보다 넉넉해야 낚을 수 있어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            androidx.compose.runtime.key(fishReset) {
+            FishNumber("시작 시간", "초", settings.fishStart, 10, 600) { settings.fishStart = it }
+            FishNumber("이 시간이 되면 낚아요", "초", settings.fishGoal, 20, 1200) { settings.fishGoal = it }
+            FishNumber("맞히면 늘어나는 시간 (빈칸·듣고 쓰기는 +2초)", "초", settings.fishRight, 1, 60) { settings.fishRight = it }
+            FishNumber("틀리면 줄어드는 시간", "초", settings.fishWrong, 0, 60) { settings.fishWrong = it }
+            FishNumber("처음: 10초마다 줄어드는 시간", "초", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it }
+            FishNumber("물고기가 가까울 때: 10초마다 줄어드는 시간", "초", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it }
+            FishNumber("하루 도전 횟수", "번", settings.fishTries, 1, 20) { settings.fishTries = it }
+            }
+            TextButton(
+                onClick = {
+                    settings.fishStart = 100; settings.fishGoal = 200; settings.fishRight = 5; settings.fishWrong = 3
+                    settings.fishDrainStart = 5; settings.fishDrainEnd = 12; settings.fishTries = 3
+                    fishReset++
+                    saved()
+                },
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text("기본값으로 되돌리기 (100초 → 200초, +5초 / -3초)") }
             GroupHeader("👨‍👩‍👧 부모님")
             Section("비밀번호")
             Text(
@@ -619,6 +646,27 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(16.dp),
             )
         }
+    }
+}
+
+/** A labelled number field for the fishing game; the number is saved as it is typed. */
+@Composable
+private fun FishNumber(label: String, suffix: String, value: Int, min: Int, max: Int, onSet: (Int) -> Unit) {
+    var text by remember { mutableStateOf(value.toString()) }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        OutlinedTextField(
+            value = text,
+            onValueChange = { v ->
+                text = v.filter { it.isDigit() }.take(4)
+                text.toIntOrNull()?.let { onSet(it.coerceIn(min, max)) }
+            },
+            suffix = { Text(suffix) },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.width(110.dp),
+        )
     }
 }
 

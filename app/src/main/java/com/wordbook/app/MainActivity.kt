@@ -132,6 +132,7 @@ private fun AppContent() {
                                 onToday = { nav.navigate("study/-1?today=true") },
                                 onStudyDeck = { id -> nav.navigate("study/$id") },
                                 onWrongNote = { nav.navigate("study/-1?wrong=true") },
+                                onFishing = { nav.navigate("fishing") },
                             )
                         }
                         composable("review") {
@@ -157,6 +158,9 @@ private fun AppContent() {
                                 },
                                 onHome = { nav.popBackStack("home", inclusive = false) },
                             )
+                        }
+                        composable("fishing") {
+                            FishingScreen(onBack = { nav.popBackStack() })
                         }
                         composable(
                             "match/{deckId}",

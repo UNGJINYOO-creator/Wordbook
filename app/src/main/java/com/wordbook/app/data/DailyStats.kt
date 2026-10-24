@@ -32,6 +32,9 @@ class DailyStats(context: Context) {
     val learnedCount: Int
         get() { ensureToday(); return learnedIds().size }
 
+    /** Ids of the words counted toward today's goal. */
+    val learnedToday: Set<Long> get() { ensureToday(); return learnedIds().mapNotNull { it.toLongOrNull() }.toSet() }
+
     private fun learnedIds(): Set<String> = prefs.getString("learned", "")!!.split(',').filter { it.isNotBlank() }.toSet()
 
     /** Counts [wordId] toward today's word goal; returns true the first time today. */
