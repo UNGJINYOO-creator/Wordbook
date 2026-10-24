@@ -46,7 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.BlankLevel
-import com.wordbook.app.data.DailyStats
+import com.wordbook.app.data.Report
 import com.wordbook.app.data.DictationPass
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Reward
@@ -389,7 +389,7 @@ fun SettingsScreen() {
 
             Section("텔레그램 알림")
             Text(
-                "하루 목표 시간(없으면 하루 외울 단어)을 채우면 오늘의 학습 결과를 텔레그램으로 보내요",
+                "하루 최소 학습 시간을 채우면 오늘의 학습 리포트를 텔레그램으로 보내요. 엄마·아빠 모두 받으려면 각자 봇에게 /start를 보낸 뒤 '채팅 ID 자동으로 찾기'를 누르세요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp),
@@ -404,7 +404,7 @@ fun SettingsScreen() {
             OutlinedTextField(
                 value = chatId,
                 onValueChange = { chatId = it; settings.telegramChatId = it },
-                label = { Text("채팅 ID") },
+                label = { Text("채팅 ID (여러 명은 쉼표로)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
@@ -412,8 +412,14 @@ fun SettingsScreen() {
                 TextButton(onClick = {
                     scope.launch {
                         tgStatus = "찾는 중…"
-                        Telegram.findChatId(token)
-                            .onSuccess { chatId = it; settings.telegramChatId = it; tgStatus = "채팅 ID를 찾았어요" }
+                        Telegram.findChatIds(token)
+                            .onSuccess { found ->
+                                // Keep the ids already saved: Telegram only remembers the last day's messages.
+                                val ids = (Telegram.splitIds(chatId) + found).distinct()
+                                chatId = ids.joinToString(", ")
+                                settings.telegramChatId = chatId
+                                tgStatus = "${ids.size}명에게 보낼게요"
+                            }
                             .onFailure { tgStatus = it.message }
                     }
                 }, enabled = token.isNotBlank()) { Text("채팅 ID 자동으로 찾기") }
@@ -429,7 +435,7 @@ fun SettingsScreen() {
                 onClick = {
                     scope.launch {
                         tgStatus = "보내는 중…"
-                        val report = DailyStats(context).summary(settings.dailyGoalMinutes, settings.dailyWords)
+                        val report = Report.build(context)
                         val error = Telegram.send(token, chatId, report)
                         tgStatus = error ?: "오늘 학습 결과를 보냈어요"
                     }

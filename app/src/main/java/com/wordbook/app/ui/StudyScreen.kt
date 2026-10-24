@@ -105,6 +105,9 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import com.wordbook.app.data.Srs
 import com.wordbook.app.data.StudyMode
 import com.wordbook.app.data.StudySettings
+import com.wordbook.app.data.AnswerEntry
+import com.wordbook.app.data.AnswerLog
+import com.wordbook.app.data.Report
 import com.wordbook.app.data.Word
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -174,6 +177,11 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     // Study timer: counts only while the screen is being touched; pauses after idleSeconds.
     private val stats = DailyStats(app)
+    /** Quiz answers for the detailed Telegram report. */
+    private val answerLog = AnswerLog(app)
+    private var questionAt = System.currentTimeMillis()
+    /** What was picked or typed for the current question. */
+    private var lastResponse = ""
     private val idleMs = settings.idleSeconds * 1000L
     val goalMs = settings.dailyGoalMinutes * 60_000L
     private var lastTouch = System.currentTimeMillis()
@@ -186,8 +194,6 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** 하루 외울 단어: words answered right in a quiz today, toward [goalWords]. */
     val goalWords = settings.dailyWords
     var learnedToday by mutableStateOf(stats.learnedCount)
-        private set
-    var telegramStatus by mutableStateOf<String?>(null)
         private set
     val telegramReady: Boolean get() = settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()
 
@@ -366,9 +372,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     fun sendTelegram() {
         viewModelScope.launch {
-            telegramStatus = "텔레그램으로 보내는 중…"
-            val error = Telegram.send(settings.telegramToken, settings.telegramChatId, stats.summary(settings.dailyGoalMinutes, settings.dailyWords))
-            telegramStatus = if (error == null) "텔레그램으로 학습 결과를 보냈어요" else "텔레그램 전송 실패: $error"
+            // Sent quietly: the child doesn't see a notice about the report.
+            Telegram.send(settings.telegramToken, settings.telegramChatId, Report.build(getApplication()))
         }
     }
 
@@ -430,6 +435,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         flipped = false
         answered = null
         pickedId = null
+        questionAt = System.currentTimeMillis()
+        lastResponse = ""
         turn++
         val word = hand.firstOrNull()
         current = word
@@ -510,6 +517,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         touch()
         val word = current ?: return
         pickedId = choice.id
+        lastResponse = choice.text
         answered = choice.id == word.id
     }
 
@@ -517,6 +525,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         touch()
         val word = current ?: return
         answered = input.trim().equals(word.text.trim(), ignoreCase = true)
+        lastResponse = input.trim()
     }
 
     /** After a quiz answer has been shown. */
@@ -535,6 +544,19 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         canUndo = true
         // Card swipes are the child's own word, so only quiz answers count for stars and the right rate.
         if (mode != StudyMode.CARD) {
+            answerLog.add(
+                AnswerEntry(
+                    time = System.currentTimeMillis(),
+                    wordId = word.id,
+                    text = word.text,
+                    pos = word.pos,
+                    mode = mode,
+                    correct = answer != Answer.UNKNOWN,
+                    isNew = word.id !in reviewedBefore,
+                    response = if (answer == Answer.UNKNOWN) lastResponse else "",
+                    ms = System.currentTimeMillis() - questionAt,
+                ),
+            )
             stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
             reward(answer != Answer.UNKNOWN)
             if (answer != Answer.UNKNOWN && stats.addLearned(word.id)) {
@@ -543,7 +565,6 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     stats.wordGoalNotified = true
                     celebrate("오늘 목표 ${goalWords}단어 달성! 🎉")
                     stamp()
-                    if (goalMs <= 0 && telegramReady) sendTelegram()
                 }
             }
         }
@@ -729,7 +750,6 @@ fun StudyScreen(
                 }
             },
         ) {
-            CheerBanner(vm.cheer, vm.cheerId, Modifier.align(Alignment.TopCenter).zIndex(1f).padding(top = 40.dp))
             when {
                 vm.loading -> {}
                 vm.finished -> Summary(vm, onBack)
@@ -752,15 +772,17 @@ fun StudyScreen(
                             vm.modeNote,
                             if (word.flagged) "⚑ 수정 필요로 표시한 카드" else null,
                             if (vm.goalReached) "🎉 오늘 목표 시간 달성!" else null,
-                            vm.telegramStatus,
                         )
-                        if (notes.isNotEmpty()) {
-                            Text(
-                                notes.joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
+                        // A fixed slot under the progress bar: combo cheers show here instead of over the word.
+                        Box(Modifier.fillMaxWidth().height(34.dp).padding(top = 6.dp), contentAlignment = Alignment.Center) {
+                            if (notes.isNotEmpty()) {
+                                Text(
+                                    notes.joinToString(" · "),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            CheerBanner(vm.cheer, vm.cheerId)
                         }
                         Spacer(Modifier.height(if (typing) 8.dp else 16.dp))
                         val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
@@ -1058,10 +1080,6 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (vm.everMissed.isNotEmpty()) PrimaryButton("틀린 단어만 다시 학습", { vm.restart(onlyMissed = true) })
             SecondaryButton("처음부터 다시", { vm.restart(onlyMissed = false) })
-            if (vm.telegramReady) {
-                SecondaryButton("텔레그램으로 결과 보내기", vm::sendTelegram)
-                vm.telegramStatus?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-            }
             SecondaryButton("끝내기", onBack)
         }
     }
@@ -1097,7 +1115,7 @@ private fun WordListStep(words: List<Word>, last: Boolean, onSpeak: (Word) -> Un
     }
 }
 
-/** Pops up a short celebration (combo, level up, stamp) for a moment over the card. */
+/** Pops up a short celebration (combo, level up, stamp) for a moment above the card. */
 @Composable
 private fun CheerBanner(text: String?, id: Int, modifier: Modifier = Modifier) {
     var visible by remember { mutableStateOf(false) }
@@ -1111,11 +1129,11 @@ private fun CheerBanner(text: String?, id: Int, modifier: Modifier = Modifier) {
         Text(
             text ?: "",
             color = Color.White,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Bold,
             modifier = Modifier
-                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(14.dp))
+                .padding(horizontal = 14.dp, vertical = 4.dp),
         )
     }
 }

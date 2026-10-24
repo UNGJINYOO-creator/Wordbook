@@ -68,6 +68,9 @@ interface WordDao {
     @Query("SELECT * FROM words WHERE box > 0 AND dueAt <= :now AND excluded = 0")
     suspend fun getDueWords(now: Long): List<Word>
 
+    @Query("SELECT COUNT(*) FROM words WHERE box > 0 AND dueAt <= :time AND excluded = 0")
+    suspend fun countDue(time: Long): Int
+
     @Query("SELECT COUNT(*) FROM words WHERE box > 0 AND dueAt <= :now AND excluded = 0")
     fun observeDueCount(now: Long): Flow<Int>
 

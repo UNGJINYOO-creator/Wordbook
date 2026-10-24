@@ -45,6 +45,9 @@ class DailyStats(context: Context) {
         return true
     }
 
+    /** Words counted toward the word goal over the last [n] days, today included. */
+    fun wordsLastDays(n: Int): Int = (0 until n).sumOf { history.getInt("words_${daysAgo(it)}", 0) }
+
     var wordGoalNotified: Boolean
         get() { ensureToday(); return prefs.getBoolean("wordsNotified", false) }
         set(v) { ensureToday(); prefs.edit().putBoolean("wordsNotified", v).apply() }
@@ -90,22 +93,5 @@ class DailyStats(context: Context) {
             .putInt("answered", history.getInt("answered", 0) + 1)
             .putInt("right", history.getInt("right", 0) + if (correct) 1 else 0)
             .apply()
-    }
-
-    fun summary(goalMinutes: Int, goalWords: Int = 0): String {
-        val total = studyMs / 1000
-        val missed = missedWords
-        return buildString {
-            append("📚 단어장 오늘의 학습 완료!\n\n")
-            append("⏱ 학습 시간: ${total / 60}분 ${total % 60}초")
-            if (goalMinutes > 0) append(" (목표 ${goalMinutes}분)")
-            append("\n")
-            append("🧠 외운 단어: ${learnedCount}개")
-            if (goalWords > 0) append(" (목표 ${goalWords}개)")
-            append("\n")
-            append("✏️ 푼 카드: ${answered}개 · 맞힘 ${right} · 틀림 ${answered - right}\n")
-            if (answered > 0) append("🎯 정답률: ${right * 100 / answered}%\n")
-            if (missed.isNotEmpty()) append("\n❗ 틀린 단어: ${missed.take(30).joinToString(", ")}")
-        }
     }
 }

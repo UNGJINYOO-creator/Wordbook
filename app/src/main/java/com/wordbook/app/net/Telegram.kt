@@ -26,26 +26,32 @@ object Telegram {
         }
     }
 
-    /** Returns null on success, or an error message to show. */
-    suspend fun send(token: String, chatId: String, text: String): String? = withContext(Dispatchers.IO) {
-        if (token.isBlank() || chatId.isBlank()) return@withContext "봇 토큰과 채팅 ID를 먼저 입력하세요"
-        runCatching {
-            val r = call(token, "sendMessage", mapOf("chat_id" to chatId, "text" to text))
-            if (r.optBoolean("ok")) null else r.optString("description", "보내기 실패")
-        }.getOrElse { "연결 실패: ${it.message}" }
+    /** Sends to every chat id in [chatIds] (comma separated). Returns null on success, or an error message to show. */
+    suspend fun send(token: String, chatIds: String, text: String): String? = withContext(Dispatchers.IO) {
+        val ids = splitIds(chatIds)
+        if (token.isBlank() || ids.isEmpty()) return@withContext "봇 토큰과 채팅 ID를 먼저 입력하세요"
+        val errors = ids.mapNotNull { id ->
+            runCatching {
+                val r = call(token, "sendMessage", mapOf("chat_id" to id, "text" to text))
+                if (r.optBoolean("ok")) null else "$id: ${r.optString("description", "보내기 실패")}"
+            }.getOrElse { "연결 실패: ${it.message}" }
+        }
+        errors.distinct().joinToString("\n").ifEmpty { null }
     }
 
-    /** Chat id of the most recent message sent to the bot (the user presses Start first). */
-    suspend fun findChatId(token: String): Result<String> = withContext(Dispatchers.IO) {
+    fun splitIds(chatIds: String) = chatIds.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    /** Chat ids of everyone who messaged the bot recently (each person presses Start first). */
+    suspend fun findChatIds(token: String): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
             val r = call(token, "getUpdates", emptyMap())
             if (!r.optBoolean("ok")) error(r.optString("description", "토큰을 확인하세요"))
             val updates = r.getJSONArray("result")
-            for (i in updates.length() - 1 downTo 0) {
-                val msg = updates.getJSONObject(i).optJSONObject("message") ?: continue
-                return@runCatching msg.getJSONObject("chat").getLong("id").toString()
-            }
-            error("봇에게 온 메시지가 없어요. 텔레그램에서 봇에게 /start를 보낸 뒤 다시 눌러 주세요")
+            val ids = (0 until updates.length()).mapNotNull { i ->
+                updates.getJSONObject(i).optJSONObject("message")?.getJSONObject("chat")?.getLong("id")?.toString()
+            }.distinct()
+            if (ids.isEmpty()) error("봇에게 온 메시지가 없어요. 텔레그램에서 봇에게 /start를 보낸 뒤 다시 눌러 주세요")
+            ids
         }
     }
 }
