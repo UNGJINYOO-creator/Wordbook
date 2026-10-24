@@ -373,19 +373,26 @@ fun SettingsScreen() {
             }
             GroupHeader("🎣 오늘의 단어 낚시 도전!")
             Text(
-                "오늘 목표를 채우면 열리는 타임어택 게임이에요. 아이 수준에 맞게 몇 번 해 보고 조절하세요. " +
-                    "맞힐 때 늘어나는 시간이 줄어드는 시간보다 넉넉해야 낚을 수 있어요.",
+                "오늘 목표를 채우면 열리는 낚시 게임이에요. 맞히면 물고기를 끌어오고, 틀리거나 가만히 있으면 멀어져요. " +
+                    "아이 수준에 맞게 몇 번 해 보고 조절하세요. 맞혀서 끌어오는 거리가 도망가는 거리보다 넉넉해야 낚을 수 있어요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             androidx.compose.runtime.key(fishReset) {
-            FishNumber("시작 시간", "초", settings.fishStart, 10, 600) { settings.fishStart = it }
-            FishNumber("이 시간이 되면 낚아요", "초", settings.fishGoal, 20, 1200) { settings.fishGoal = it }
-            FishNumber("맞히면 늘어나는 시간 (빈칸·듣고 쓰기는 +2초)", "초", settings.fishRight, 1, 60) { settings.fishRight = it }
-            FishNumber("틀리면 줄어드는 시간", "초", settings.fishWrong, 0, 60) { settings.fishWrong = it }
-            FishNumber("처음: 10초마다 줄어드는 시간", "초", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it }
-            FishNumber("물고기가 가까울 때: 10초마다 줄어드는 시간", "초", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it }
+            // Stored as the old time values: distance = fishGoal - time, so the line snaps at fishGoal metres.
+            FishNumber("시작 거리", "m", settings.fishGoal - settings.fishStart, 5, 1190) {
+                settings.fishStart = (settings.fishGoal - it).coerceAtLeast(1)
+            }
+            FishNumber("이만큼 멀어지면 줄이 끊어져요", "m", settings.fishGoal, 20, 1200) {
+                val start = settings.fishGoal - settings.fishStart
+                settings.fishGoal = it
+                settings.fishStart = (it - start).coerceAtLeast(1)
+            }
+            FishNumber("맞히면 끌어오는 거리 (빈칸·듣고 쓰기는 +2m)", "m", settings.fishRight, 1, 60) { settings.fishRight = it }
+            FishNumber("틀리면 멀어지는 거리", "m", settings.fishWrong, 0, 60) { settings.fishWrong = it }
+            FishNumber("처음: 10초마다 도망가는 거리", "m", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it }
+            FishNumber("가까울 때: 10초마다 도망가는 거리", "m", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it }
             FishNumber("하루 도전 횟수 (0 = 제한 없음)", "번", settings.fishTries, 0, 20) { settings.fishTries = it }
             }
             TextButton(
@@ -396,7 +403,7 @@ fun SettingsScreen() {
                     saved()
                 },
                 modifier = Modifier.padding(horizontal = 8.dp),
-            ) { Text("기본값으로 되돌리기 (100초 → 200초, +5초 / -3초, 횟수 제한 없음)") }
+            ) { Text("기본값으로 되돌리기 (100m에서 시작, 200m면 끊어짐, 5m / 3m, 횟수 제한 없음)") }
             GroupHeader("👨‍👩‍👧 부모님")
             Section("비밀번호")
             Text(

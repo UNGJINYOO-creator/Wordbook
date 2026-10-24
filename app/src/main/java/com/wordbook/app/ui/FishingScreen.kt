@@ -143,7 +143,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var newRecord by mutableStateOf(false)
         private set
-    /** The "+5초" / "-3초" pop over the sea, and a counter so the same text pops again. */
+    /** The "5m 끌어왔어요" / "+3m" pop over the sea, and a counter so the same text pops again. */
     var pop by mutableStateOf<String?>(null)
         private set
     var popId by mutableIntStateOf(0)
@@ -267,13 +267,13 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         if (correct) {
             right++
             if (guessed) {
-                popUp("너무 빨라요! +0초")
+                popUp("너무 빨라요! 0m")
             } else {
                 combo++
                 val bonus = fishing.right + (if (mode == StudyMode.CHOICE) 0.0 else Fishing.TYPING_EXTRA) +
                     (if (combo % 3 == 0) Fishing.COMBO_BONUS else 0.0)
                 seconds += bonus
-                popUp((if (combo % 3 == 0) "릴 감기! " else "") + "+${bonus.toInt()}초")
+                popUp((if (combo % 3 == 0) "🔥 릴 감기! " else "🎣 ") + "${bonus.toInt()}m 끌어왔어요!")
                 if (settings.soundEffects) {
                     if (combo >= 3) sfx.combo(settings.comboSound, combo) else tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 120)
                 }
@@ -283,7 +283,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             seconds -= fishing.wrong
             missed += w
             pullId++
-            popUp("물고기가 당겨요! -${fishing.wrong.toInt()}초")
+            popUp("😱 물고기가 도망치고 있어요! +${fishing.wrong.toInt()}m")
         }
         answerLog.add(AnswerEntry(System.currentTimeMillis(), w.id, w.text, w.pos, mode, correct, false, if (correct) "" else response, ms))
         if (!guessed) {
@@ -343,7 +343,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         val text = buildString {
             append("🎣 오늘의 단어 낚시 도전!\n\n")
             if (caught) append("${fish.emoji} ${fish.name} ${Fishing.formatKg(kg)}을(를) 낚았어요!" + (if (newRecord) " 🏆 최고 기록" else "") + "\n")
-            else append("😢 ${fish.name}이(가) 도망갔어요${fishing.triesNote}\n")
+            else append("😢 줄이 끊어져서 ${fish.name}이(가) 도망갔어요${fishing.triesNote}\n")
             append("정답 $right/$total · ${durationMs / 60_000}분 ${durationMs / 1000 % 60}초\n")
             if (missed.isNotEmpty()) {
                 append("\n❗ 틀린 단어: ")
@@ -415,12 +415,12 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
         ) {
             val f = vm.fishing
             Text("이렇게 해요", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text("⏱ 낚싯줄 시간이 ${f.start.toInt()}초에서 시작해 계속 줄어요")
-            Text("✅ 맞히면 +${f.right.toInt()}초 (빈칸·듣고 쓰기는 +${(f.right + Fishing.TYPING_EXTRA).toInt()}초)")
-            Text("🔥 3개 연속 맞히면 '릴 감기!' +${Fishing.COMBO_BONUS.toInt()}초 더")
-            Text("❌ 틀리면 -${f.wrong.toInt()}초, 너무 빨리 찍으면 0초")
-            Text("🐋 ${f.goal.toInt()}초가 되면 물고기를 낚아요! 0초가 되면 도망가요")
-            Text("📈 물고기에 가까워질수록 세게 당겨서 시간이 빨리 줄어요")
+            Text("🐟 물고기가 ${(f.goal - f.start).toInt()}m 앞에서 시작해요. 가만히 있으면 조금씩 도망가요")
+            Text("✅ 맞히면 ${f.right.toInt()}m 끌어와요 (빈칸·듣고 쓰기는 ${(f.right + Fishing.TYPING_EXTRA).toInt()}m)")
+            Text("🔥 3개 연속 맞히면 '릴 감기!' ${Fishing.COMBO_BONUS.toInt()}m 더")
+            Text("❌ 틀리면 ${f.wrong.toInt()}m 멀어져요, 너무 빨리 찍으면 0m")
+            Text("🐋 0m가 되면 낚아요! ${f.goal.toInt()}m까지 멀어지면 줄이 끊어져요")
+            Text("📈 가까워질수록 물고기가 세게 버텨서 더 빨리 도망가요")
             Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개 + 오늘 공부 끝!" + vm.fishing.triesNote)
         }
         Spacer(Modifier.height(16.dp))
@@ -486,7 +486,7 @@ private fun ColumnScope.Playing(vm: FishingViewModel, tts: TextToSpeech?) {
 }
 
 /**
- * The blue band on top: time left to a tenth of a second, the angler on the left and the fish coming
+ * The blue band on top: distance to the fish to a tenth of a metre, the angler on the left and the fish coming
  * closer along the line as it fills, with a jerk on wrong answers.
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -502,7 +502,9 @@ private fun SeaBand(vm: FishingViewModel) {
         }
         jerk.animateTo(0f, tween(50))
     }
-    val left = vm.seconds.coerceAtLeast(0.0)
+    // Shown as the distance to the fish: 0m lands it, the goal distance snaps the line.
+    val distance = (vm.goal - vm.seconds).coerceIn(0.0, vm.goal)
+    val danger = distance > vm.goal * 0.85
     // With the keyboard up (빈칸, 듣고 쓰기) the band shrinks so the question still fits.
     val compact = WindowInsets.isImeVisible
     Box(
@@ -517,15 +519,10 @@ private fun SeaBand(vm: FishingViewModel) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "⏱ ${"%.1f".format(left)}초",
-                    color = if (left < 20) Color(0xFFFFD54F) else Color.White,
+                    "🐟 물고기까지 ${"%.1f".format(distance)}m",
+                    color = if (danger) Color(0xFFFFB4B4) else Color.White,
                     fontSize = if (compact) 18.sp else 22.sp,
                     fontWeight = FontWeight.ExtraBold,
-                )
-                Text(
-                    " / ${vm.goal.toInt()}초",
-                    color = Color.White.copy(alpha = 0.8f),
-                    style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.weight(1f),
                 )
                 if (vm.combo >= 2) Text("🔥 콤보 ${vm.combo}", color = Color.White, fontWeight = FontWeight.Bold)
@@ -564,12 +561,17 @@ private fun SeaBand(vm: FishingViewModel) {
             if (!compact) Spacer(Modifier.height(8.dp))
             if (!compact) Row {
                 Text(
-                    "🎣 끌어올리기 ${(closeness * 100).roundToInt()}%",
-                    color = Color.White,
+                    when {
+                        danger -> "⚠️ 줄이 끊어지려 해요!"
+                        distance < 20 -> "거의 다 왔어요! 조금만 더!"
+                        else -> "🎣 ${vm.fish.name} 낚는 중"
+                    },
+                    color = if (danger) Color(0xFFFFB4B4) else Color.White,
                     style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (danger || distance < 20) FontWeight.Bold else null,
                     modifier = Modifier.weight(1f),
                 )
-                Text("${vm.fish.name} 낚는 중", color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelMedium)
+                Text("${vm.goal.toInt()}m면 줄이 끊어져요", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
             }
         }
         PopText(vm.pop, vm.popId, Modifier.align(Alignment.TopCenter).padding(top = 34.dp))
@@ -612,7 +614,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
             Spacer(Modifier.height(8.dp))
             Text("🎣 오늘 공부 끝! 정말 잘했어요. 내일 또 만나요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         } else {
-            Text("물고기가 도망갔어요 😢", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("줄이 끊어져서 도망갔어요 😢", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (!vm.fishing.unlimited) Text("남은 도전 ${vm.triesLeft}번", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         }
         Spacer(Modifier.height(12.dp))
