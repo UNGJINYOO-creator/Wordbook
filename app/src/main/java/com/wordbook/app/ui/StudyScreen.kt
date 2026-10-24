@@ -89,6 +89,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.BlankLevel
+import com.wordbook.app.data.CollectionMix
 import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.DictationPass
 import com.wordbook.app.net.Telegram
