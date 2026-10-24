@@ -131,7 +131,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
     val review: Boolean = handle.get<Boolean>("review") ?: false
     private val allDecks: Boolean = handle.get<Boolean>("all") ?: false
-    /** 오늘 학습: today's reviews plus up to [NEW_PER_DAY] new words, across all decks. */
+    /** 오늘 학습: today's reviews plus the day's word goal of new words, across all decks. */
     private val today: Boolean = handle.get<Boolean>("today") ?: false
     /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
     private val modes: List<StudyMode> = decodeModes(handle.get<String>("mode")) ?: settings.modes
@@ -182,6 +182,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     var paused by mutableStateOf(false)
         private set
     var goalReached by mutableStateOf(goalMs > 0 && stats.studyMs >= goalMs)
+        private set
+    /** 하루 외울 단어: words answered right in a quiz today, toward [goalWords]. */
+    val goalWords = settings.dailyWords
+    var learnedToday by mutableStateOf(stats.learnedCount)
         private set
     var telegramStatus by mutableStateOf<String?>(null)
         private set
@@ -255,7 +259,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             pool = all
             sessionWords = when {
                 review -> dao.getDueWords(System.currentTimeMillis())
-                today -> dao.getDueWords(System.currentTimeMillis()) + dao.getNewWords(NEW_PER_DAY)
+                today -> dao.getDueWords(System.currentTimeMillis()) + dao.getNewWords(newPerDay(settings))
                 allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
                 else -> {
                     val words = dao.getWords(deckId).filter { !it.excluded }
@@ -363,7 +367,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     fun sendTelegram() {
         viewModelScope.launch {
             telegramStatus = "텔레그램으로 보내는 중…"
-            val error = Telegram.send(settings.telegramToken, settings.telegramChatId, stats.summary(settings.dailyGoalMinutes))
+            val error = Telegram.send(settings.telegramToken, settings.telegramChatId, stats.summary(settings.dailyGoalMinutes, settings.dailyWords))
             telegramStatus = if (error == null) "텔레그램으로 학습 결과를 보냈어요" else "텔레그램 전송 실패: $error"
         }
     }
@@ -533,6 +537,15 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (mode != StudyMode.CARD) {
             stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
             reward(answer != Answer.UNKNOWN)
+            if (answer != Answer.UNKNOWN && stats.addLearned(word.id)) {
+                learnedToday = stats.learnedCount
+                if (goalWords > 0 && learnedToday >= goalWords && !stats.wordGoalNotified) {
+                    stats.wordGoalNotified = true
+                    celebrate("오늘 목표 ${goalWords}단어 달성! 🎉")
+                    stamp()
+                    if (goalMs <= 0 && telegramReady) sendTelegram()
+                }
+            }
         }
 
         val firstAnswer = word.id !in scheduled
@@ -622,6 +635,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     companion object {
         const val NEW_PER_DAY = 20
+
+        /** New words in 오늘 학습: the daily word goal, or [NEW_PER_DAY] without one. */
+        fun newPerDay(settings: StudySettings) = settings.dailyWords.takeIf { it > 0 } ?: NEW_PER_DAY
         /** Cards per 종합단어장 session when 한 번에 학습할 카드 수 is 전부. */
         const val COLLECTION_SESSION = 20
 
@@ -978,7 +994,8 @@ private fun formatTime(ms: Long): String {
 private fun StudyTimer(vm: StudyViewModel) {
     val goal = if (vm.goalMs > 0) " / ${formatTime(vm.goalMs)}" else ""
     Text(
-        (if (vm.paused) "⏸ " else "⏱ ") + formatTime(vm.todayMs) + goal,
+        (if (vm.paused) "⏸ " else "⏱ ") + formatTime(vm.todayMs) + goal +
+            if (vm.goalWords > 0) "  🧠 ${vm.learnedToday}/${vm.goalWords}" else "",
         style = MaterialTheme.typography.titleSmall,
         color = if (vm.paused) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(end = 16.dp),
@@ -996,6 +1013,14 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+        if (vm.goalWords > 0) {
+            Text(
+                "오늘 외운 단어 ${vm.learnedToday}/${vm.goalWords}" +
+                    if (vm.learnedToday >= vm.goalWords) " · 목표 달성 🎉" else " · ${vm.goalWords - vm.learnedToday}개 남았어요",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             "${vm.sessionSize}개 중 처음에 바로 맞힌 카드 ${vm.firstTryKnown}개 (외웠어요 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",

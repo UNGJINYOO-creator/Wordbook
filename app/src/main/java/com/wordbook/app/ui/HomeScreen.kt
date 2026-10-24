@@ -138,6 +138,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var streak by mutableIntStateOf(0)
         private set
+    var learned by mutableIntStateOf(0)
+        private set
+    var goalWords by mutableIntStateOf(0)
+        private set
     private val game = Game(app)
     var stars by mutableIntStateOf(0)
         private set
@@ -149,6 +153,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         todayMs = stats.studyMs
         goalMs = settings.dailyGoalMinutes * 60_000L
         streak = stats.streak
+        learned = stats.learnedCount
+        goalWords = settings.dailyWords
         stars = game.stars
         earned = game.earned
     }
@@ -242,7 +248,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
-                TodayCard(dueCount, minOf(newCount, StudyViewModel.NEW_PER_DAY), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, onToday)
+                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, vm.learned, vm.goalWords, onToday)
             }
             if (decks.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -438,6 +444,8 @@ private fun TodayCard(
     streak: Int,
     stars: Int,
     earned: Int,
+    learned: Int,
+    goalWords: Int,
     onToday: () -> Unit,
 ) {
     Card(
@@ -474,6 +482,20 @@ private fun TodayCard(
                         color = MaterialTheme.colorScheme.outline,
                     )
                 }
+            }
+            if (goalWords > 0) {
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("🧠 오늘 외운 단어", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        if (learned >= goalWords) "$learned / $goalWords 달성 🎉" else "$learned / $goalWords",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                ThickProgress((learned / goalWords.toFloat()).coerceAtMost(1f), Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(12.dp))
             // Level bar: stars earned toward the next level.

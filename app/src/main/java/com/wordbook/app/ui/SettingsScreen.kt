@@ -67,6 +67,7 @@ fun SettingsScreen() {
     var autoSpeak by remember { mutableStateOf(settings.autoSpeak) }
     var size by remember { mutableStateOf(settings.sessionSize) }
     var goal by remember { mutableStateOf(settings.dailyGoalMinutes) }
+    var dailyWords by remember { mutableStateOf(settings.dailyWords.takeIf { it > 0 }?.toString() ?: "") }
     var idle by remember { mutableStateOf(settings.idleSeconds) }
     var hand by remember { mutableStateOf(settings.handSize) }
     var recentShare by remember { mutableStateOf(settings.recentShare) }
@@ -268,6 +269,27 @@ fun SettingsScreen() {
                 }
                 Switch(checked = autoSpeak, onCheckedChange = { autoSpeak = it; settings.autoSpeak = it; saved() })
             }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("하루 외울 단어")
+            OutlinedTextField(
+                value = dailyWords,
+                onValueChange = { v ->
+                    dailyWords = v.filter { it.isDigit() }.take(3)
+                    settings.dailyWords = dailyWords.toIntOrNull() ?: 0
+                },
+                label = { Text("하루 목표 (단어 수)") },
+                suffix = { Text("개") },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp).width(200.dp),
+            )
+            Text(
+                "객관식·빈칸·듣고 쓰기에서 맞힌 단어만 세요(뜻 카드 스와이프는 안 세요). 오늘 학습에 새 단어도 이만큼 나와요. 비우면 목표 없음.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Section("학습 시간")

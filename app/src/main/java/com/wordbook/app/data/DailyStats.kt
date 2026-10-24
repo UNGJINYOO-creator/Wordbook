@@ -28,6 +28,27 @@ class DailyStats(context: Context) {
     val right: Int get() { ensureToday(); return prefs.getInt("right", 0) }
     val missedWords: List<String>
         get() { ensureToday(); return prefs.getString("missed", "")!!.split('\n').filter { it.isNotBlank() } }
+    /** Different words answered right in a quiz today (card swipes don't count). */
+    val learnedCount: Int
+        get() { ensureToday(); return learnedIds().size }
+
+    private fun learnedIds(): Set<String> = prefs.getString("learned", "")!!.split(',').filter { it.isNotBlank() }.toSet()
+
+    /** Counts [wordId] toward today's word goal; returns true the first time today. */
+    fun addLearned(wordId: Long): Boolean {
+        ensureToday()
+        val ids = learnedIds()
+        if (wordId.toString() in ids) return false
+        prefs.edit().putString("learned", (ids + wordId.toString()).joinToString(",")).apply()
+        val key = "words_${today()}"
+        history.edit().putInt(key, history.getInt(key, 0) + 1).apply()
+        return true
+    }
+
+    var wordGoalNotified: Boolean
+        get() { ensureToday(); return prefs.getBoolean("wordsNotified", false) }
+        set(v) { ensureToday(); prefs.edit().putBoolean("wordsNotified", v).apply() }
+
     var goalNotified: Boolean
         get() { ensureToday(); return prefs.getBoolean("notified", false) }
         set(v) { ensureToday(); prefs.edit().putBoolean("notified", v).apply() }
@@ -71,13 +92,16 @@ class DailyStats(context: Context) {
             .apply()
     }
 
-    fun summary(goalMinutes: Int): String {
+    fun summary(goalMinutes: Int, goalWords: Int = 0): String {
         val total = studyMs / 1000
         val missed = missedWords
         return buildString {
             append("📚 단어장 오늘의 학습 완료!\n\n")
             append("⏱ 학습 시간: ${total / 60}분 ${total % 60}초")
             if (goalMinutes > 0) append(" (목표 ${goalMinutes}분)")
+            append("\n")
+            append("🧠 외운 단어: ${learnedCount}개")
+            if (goalWords > 0) append(" (목표 ${goalWords}개)")
             append("\n")
             append("✏️ 푼 카드: ${answered}개 · 맞힘 ${right} · 틀림 ${answered - right}\n")
             if (answered > 0) append("🎯 정답률: ${right * 100 / answered}%\n")

@@ -54,6 +54,11 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("idleSeconds", 20)
         set(v) = prefs.edit().putInt("idleSeconds", v).apply()
 
+    /** Words to learn per day (right in a quiz), 0 = no goal; also the new words in 오늘 학습. */
+    var dailyWords: Int
+        get() = prefs.getInt("dailyWords", 30)
+        set(v) = prefs.edit().putInt("dailyWords", v).apply()
+
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int
         get() = prefs.getInt("dailyGoal", 0)
