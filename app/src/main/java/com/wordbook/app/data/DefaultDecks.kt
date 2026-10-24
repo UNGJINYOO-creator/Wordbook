@@ -6,6 +6,29 @@ import android.content.Context
 object DefaultDecks {
     private const val KEY_MIDDLE = "seededMiddle"
 
+    /** Meanings corrected in an update ("word|pos" to the old meaning), so installed copies get the fix. */
+    private val OLD_MEANINGS = mapOf(
+        "adapt|동" to "적응시키다, 개작하다",
+        "alphabet|명" to "알파벳, 자음모음",
+        "bowl|명" to "사발",
+        "counselor|명" to "카운셀러, 상담원",
+        "driver|명" to "운전하는 사람",
+        "frighten|동" to "소스라쳐 놀라게 하다",
+        "ice|명" to "얼음, (영국)아이스크림",
+        "let|동" to "~을 시키다, ~하게 하다",
+        "like|동" to "좋아하다, 바라다",
+        "merry|형" to "명랑한",
+        "narrator|명" to "나레이터, 이야기하는 사람",
+        "now|부" to "지금 / 지금",
+        "officer|명" to "장교, 공무원, 순경",
+        "pal|명" to "친구, 동아리",
+        "scene|명" to "장면, 무대, 장치",
+        "statue|명" to "상, 조상",
+        "steak|명" to "두껍게 썬 고기, 비프 스테이크",
+        "terrible|형" to "무서운, 지독한",
+        "wrong|형" to "나쁜, 틀린",
+    )
+
     private fun rows(context: Context) = context.assets.open("default_middle.tsv").bufferedReader().readLines()
         .mapNotNull { line ->
             val parts = line.split('\t')
@@ -26,6 +49,14 @@ object DefaultDecks {
                 Word(deckId = deckId, text = it[0], pos = it[1], meaning = it[2], example = it.getOrElse(3) { "" }, addedAt = 0)
             })
             prefs.edit().putBoolean(KEY_MIDDLE, true).apply()
+        }
+        run {
+            // A word still holding an old, corrected meaning gets the new one; edited words are left alone.
+            val current = rows(context).associate { "${it[0]}|${it[1]}" to it[2] }
+            dao.getAllWords().forEach { w ->
+                val key = "${w.text}|${w.pos}"
+                if (OLD_MEANINGS[key] == w.meaning) current[key]?.let { dao.updateWord(w.copy(meaning = it)) }
+            }
         }
         run {
             // Each start: any word with the same spelling gets the example, new photo words included.
