@@ -74,6 +74,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -865,17 +866,25 @@ fun StudyScreen(
                         val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
                         // 말하기: speech recognition inside the app (no Google popup) checks the pronunciation.
                         var sayFeedback by remember(vm.turn) { mutableStateOf<String?>(null) }
+                        // After 3 misses (or 패스) the mic is put away for this card, so it never loops.
+                        var sayMisses by remember(vm.turn) { mutableIntStateOf(0) }
+                        var sayDone by remember(vm.turn) { mutableStateOf(false) }
                         val speech = rememberSpeechCheck()
                         val context = LocalContext.current
                         val startListening = {
                             sayFeedback = "🎤 듣고 있어요… \"${word.text}\" 말해 보세요"
                             speech.start { heard, error ->
+                                val right = heard.any { it.trim().equals(word.text.trim(), ignoreCase = true) }
+                                if (!right) sayMisses++
                                 sayFeedback = when {
-                                    error != null -> "🎤 $error"
-                                    heard.any { it.trim().equals(word.text.trim(), ignoreCase = true) } -> "🎤 발음 정확해요! 👍"
-                                    heard.isNotEmpty() -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 다시 해 볼까요?"
+                                    right -> "🎤 발음 정확해요! 👍"
+                                    sayMisses >= 3 -> "🎤 3번 해 봤어요! 정답 발음을 들어 보고 카드를 넘겨요"
+                                    error != null -> "🎤 $error (${sayMisses}/3)"
+                                    heard.isNotEmpty() -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 다시 해 볼까요? (${sayMisses}/3)"
                                     else -> null
                                 }
+                                if (right || sayMisses >= 3) sayDone = true
+                                if (!right && sayMisses >= 3) speak()
                             }
                         }
                         val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -939,12 +948,20 @@ fun StudyScreen(
                                         onFlip = { vm.flipped = !vm.flipped },
                                         onSpeak = { speak() },
                                         onSay = say,
+                                        canSay = !sayDone,
                                         onResult = vm::mark,
                                         onUndo = vm::undo,
                                         modifier = Modifier.weight(1f),
                                     )
                                     sayFeedback?.let {
                                         Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                    if (speech.listening || (sayMisses > 0 && !sayDone)) {
+                                        TextButton(onClick = {
+                                            speech.stop()
+                                            sayDone = true
+                                            sayFeedback = "🎤 패스했어요. 카드를 넘겨요"
+                                        }) { Text("지금 말할 수 없어요 · 패스") }
                                     }
                                     Spacer(Modifier.height(16.dp))
                                     // One guide line instead of buttons: the gestures themselves are the controls.
@@ -989,6 +1006,7 @@ private fun SwipeCard(
     onFlip: () -> Unit,
     onSpeak: () -> Unit,
     onSay: () -> Unit,
+    canSay: Boolean = true,
     onResult: (Answer) -> Unit,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1097,7 +1115,7 @@ private fun SwipeCard(
                             Spacer(Modifier.width(6.dp))
                             Text("발음 듣기")
                         }
-                        FilledTonalButton(onClick = onSay) {
+                        if (canSay) FilledTonalButton(onClick = onSay) {
                             Icon(Icons.Default.Mic, null, Modifier.size(20.dp))
                             Spacer(Modifier.width(6.dp))
                             Text("말해 보기")
