@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.ui.DeckScreen
 import com.wordbook.app.ui.HomeScreen
+import com.wordbook.app.ui.MatchScreen
 import com.wordbook.app.ui.OnboardingScreen
 import com.wordbook.app.ui.ReviewScreen
 import com.wordbook.app.ui.ScanScreen
@@ -156,6 +157,12 @@ private fun AppContent() {
                             )
                         }
                         composable(
+                            "match/{deckId}",
+                            arguments = listOf(navArgument("deckId") { type = NavType.LongType }),
+                        ) {
+                            MatchScreen(onBack = { nav.popBackStack() })
+                        }
+                        composable(
                             "deck/{deckId}",
                             arguments = listOf(navArgument("deckId") { type = NavType.LongType }),
                         ) {
@@ -168,6 +175,7 @@ private fun AppContent() {
                                     nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&mode=$modes&staged=$staged")
                                 },
                                 onTest = { deckId -> nav.navigate("study/$deckId?test=true") },
+                                onMatch = { deckId -> nav.navigate("match/$deckId") },
                             )
                         }
                         composable(

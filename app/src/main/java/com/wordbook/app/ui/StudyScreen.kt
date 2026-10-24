@@ -109,6 +109,7 @@ import com.wordbook.app.data.AnswerEntry
 import com.wordbook.app.data.AnswerLog
 import com.wordbook.app.data.Report
 import com.wordbook.app.data.Weakness
+import com.wordbook.app.data.MasterCheck
 import com.wordbook.app.data.WrongNote
 import com.wordbook.app.data.Word
 import kotlinx.coroutines.launch
@@ -193,6 +194,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** Quiz answers for the detailed Telegram report. */
     private val answerLog = AnswerLog(app)
     private val weakness = Weakness.lastWeek(answerLog)
+    private val masterCheck = MasterCheck(app)
+    /** Words claimed 외웠어요 on a card in an earlier session, waiting for a quiz check. */
+    private var checkIds = masterCheck.ids
     private var questionAt = System.currentTimeMillis()
     /** What was picked or typed for the current question. */
     private var lastResponse = ""
@@ -504,6 +508,11 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             }
         }
         val others = pool.filter { it.id != word.id && !it.text.equals(word.text, true) }.distinctBy { it.text.lowercase() }
+        // A word waiting for its 외웠어요 check gets a question instead of a card.
+        if (m == StudyMode.CARD && word.id in checkIds && word.id !in scheduled) {
+            m = StudyMode.CHOICE
+            modeNote = "외웠어요 확인 문제예요"
+        }
         if (m == StudyMode.CHOICE && others.size < 3) m = StudyMode.CARD
         if (m != StudyMode.CARD && word.text.length < 2) m = StudyMode.CARD
         mode = m
@@ -641,6 +650,23 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             )
             answer == Answer.MASTERED -> word.copy(mastered = true, known = true)
             else -> word
+        }.let { w ->
+            when {
+                // 외웠어요 on a card is only a claim: check it with a quiz question next time.
+                mode == StudyMode.CARD && answer == Answer.MASTERED -> {
+                    masterCheck.add(word.id)
+                    w.copy(mastered = false)
+                }
+                mode != StudyMode.CARD && word.id in checkIds -> {
+                    masterCheck.remove(word.id)
+                    checkIds = checkIds - word.id
+                    if (answer != Answer.UNKNOWN && !guessed) {
+                        celebrate("외웠어요 확인 완료! ✅")
+                        w.copy(mastered = true, known = true)
+                    } else w
+                }
+                else -> w
+            }
         }
         scheduled += word.id
         if (updated != word) {
