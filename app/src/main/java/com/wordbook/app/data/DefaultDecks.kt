@@ -5,6 +5,7 @@ import android.content.Context
 /** Built-in word lists added once, on first launch or after an update. */
 object DefaultDecks {
     private const val KEY_MIDDLE = "seededMiddle"
+    private const val KEY_REMOVED_EASY = "removedEasy1"
 
     /** Meanings corrected in an update ("word|pos" to the old meaning), so installed copies get the fix. */
     private val OLD_MEANINGS = mapOf(
@@ -49,6 +50,13 @@ object DefaultDecks {
                 Word(deckId = deckId, text = it[0], pos = it[1], meaning = it[2], example = it.getOrElse(3) { "" }, addedAt = 0)
             })
             prefs.edit().putBoolean(KEY_MIDDLE, true).apply()
+        }
+        if (!prefs.getBoolean(KEY_REMOVED_EASY, false)) {
+            // Words too easy for middle school were taken out of the list; take them out of installed copies too.
+            // Built-in words have addedAt = 0, so photo decks with the same words are left alone.
+            val easy = context.assets.open("removed_easy.txt").bufferedReader().readLines().filter { it.isNotBlank() }.toSet()
+            dao.getAllWords().filter { it.addedAt == 0L && it.text in easy }.forEach { dao.deleteWord(it) }
+            prefs.edit().putBoolean(KEY_REMOVED_EASY, true).apply()
         }
         run {
             // A word still holding an old, corrected meaning gets the new one; edited words are left alone.

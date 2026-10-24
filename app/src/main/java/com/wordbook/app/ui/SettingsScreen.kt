@@ -479,13 +479,22 @@ fun SettingsScreen() {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
-            OutlinedTextField(
-                value = chatId,
-                onValueChange = { chatId = it; settings.telegramChatId = it },
-                label = { Text("채팅 ID (여러 명은 쉼표로)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            // Two receivers (아빠, 엄마), saved together as "id1, id2".
+            val ids = Telegram.splitIds(chatId)
+            listOf("받는 사람 1 (예: 아빠) 채팅 ID", "받는 사람 2 (예: 엄마) 채팅 ID").forEachIndexed { i, label ->
+                OutlinedTextField(
+                    value = ids.getOrElse(i) { "" },
+                    onValueChange = { v ->
+                        val next = List(2) { j -> if (j == i) v.trim() else ids.getOrElse(j) { "" } }
+                        chatId = next.filter { it.isNotEmpty() }.joinToString(", ")
+                        settings.telegramChatId = chatId
+                    },
+                    label = { Text(label) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
             Row(Modifier.padding(horizontal = 16.dp)) {
                 TextButton(onClick = {
                     scope.launch {
@@ -493,10 +502,10 @@ fun SettingsScreen() {
                         Telegram.findChatIds(token)
                             .onSuccess { found ->
                                 // Keep the ids already saved: Telegram only remembers the last day's messages.
-                                val ids = (Telegram.splitIds(chatId) + found).distinct()
-                                chatId = ids.joinToString(", ")
+                                val all = (Telegram.splitIds(chatId) + found).distinct().take(2)
+                                chatId = all.joinToString(", ")
                                 settings.telegramChatId = chatId
-                                tgStatus = "${ids.size}명에게 보낼게요"
+                                tgStatus = "${all.size}명에게 보낼게요"
                             }
                             .onFailure { tgStatus = it.message }
                     }
@@ -504,7 +513,7 @@ fun SettingsScreen() {
                 TextButton(onClick = {
                     scope.launch {
                         tgStatus = "보내는 중…"
-                        val error = Telegram.send(token, chatId, "✅ 낚아보카과 연결됐어요! 목표를 채우면 여기로 결과를 보내드릴게요.")
+                        val error = Telegram.send(token, chatId, "✅ 낚아보카와 연결됐어요! 목표를 채우면 여기로 결과를 보내드릴게요.")
                         tgStatus = error ?: "테스트 메시지를 보냈어요. 텔레그램을 확인하세요"
                     }
                 }, enabled = token.isNotBlank() && chatId.isNotBlank()) { Text("테스트 보내기") }
