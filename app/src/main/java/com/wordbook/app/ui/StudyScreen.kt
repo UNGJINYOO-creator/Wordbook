@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,6 +54,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -1093,11 +1095,18 @@ private fun SwipeCard(
                 contentAlignment = Alignment.Center,
             ) {
                 if (showWord) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(word.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                        Row {
-                            IconButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "발음 듣기") }
-                            IconButton(onClick = onSay) { Icon(Icons.Default.Mic, "말해 보기") }
+                    Text(word.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    // Labelled buttons at the bottom of the card, away from the tap-to-flip middle.
+                    Row(Modifier.align(Alignment.BottomCenter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(onClick = onSpeak) {
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("발음 듣기")
+                        }
+                        FilledTonalButton(onClick = onSay) {
+                            Icon(Icons.Default.Mic, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("말해 보기")
                         }
                     }
                 } else {
