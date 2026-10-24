@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.BlankLevel
+import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.DictationPass
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Reward
@@ -424,6 +425,18 @@ fun SettingsScreen() {
                     }
                 }, enabled = token.isNotBlank() && chatId.isNotBlank()) { Text("테스트 보내기") }
             }
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        tgStatus = "보내는 중…"
+                        val report = DailyStats(context).summary(settings.dailyGoalMinutes, settings.dailyWords)
+                        val error = Telegram.send(token, chatId, report)
+                        tgStatus = error ?: "오늘 학습 결과를 보냈어요"
+                    }
+                },
+                enabled = token.isNotBlank() && chatId.isNotBlank(),
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text("지금 오늘 학습 결과 보내기") }
             tgStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp))
             }
