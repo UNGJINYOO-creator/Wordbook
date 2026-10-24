@@ -5,30 +5,8 @@ import android.content.Context
 /** Built-in word lists added once, on first launch or after an update. */
 object DefaultDecks {
     private const val KEY_MIDDLE = "seededMiddle"
-    private const val KEY_REMOVED_EASY = "removedEasy1"
-
-    /** Meanings corrected in an update ("word|pos" to the old meaning), so installed copies get the fix. */
-    private val OLD_MEANINGS = mapOf(
-        "adapt|동" to "적응시키다, 개작하다",
-        "alphabet|명" to "알파벳, 자음모음",
-        "bowl|명" to "사발",
-        "counselor|명" to "카운셀러, 상담원",
-        "driver|명" to "운전하는 사람",
-        "frighten|동" to "소스라쳐 놀라게 하다",
-        "ice|명" to "얼음, (영국)아이스크림",
-        "let|동" to "~을 시키다, ~하게 하다",
-        "like|동" to "좋아하다, 바라다",
-        "merry|형" to "명랑한",
-        "narrator|명" to "나레이터, 이야기하는 사람",
-        "now|부" to "지금 / 지금",
-        "officer|명" to "장교, 공무원, 순경",
-        "pal|명" to "친구, 동아리",
-        "scene|명" to "장면, 무대, 장치",
-        "statue|명" to "상, 조상",
-        "steak|명" to "두껍게 썬 고기, 비프 스테이크",
-        "terrible|형" to "무서운, 지독한",
-        "wrong|형" to "나쁜, 틀린",
-    )
+    /** Set once the list is the 뜯어먹는 영단어 1800 (60 DAYs); older installs are switched over. */
+    private const val KEY_1800 = "middle1800"
 
     private fun rows(context: Context) = context.assets.open("default_middle.tsv").bufferedReader().readLines()
         .mapNotNull { line ->
@@ -49,22 +27,30 @@ object DefaultDecks {
             dao.insertWords(rows(context).map {
                 Word(deckId = deckId, text = it[0], pos = it[1], meaning = it[2], example = it.getOrElse(3) { "" }, addedAt = 0)
             })
-            prefs.edit().putBoolean(KEY_MIDDLE, true).apply()
+            prefs.edit().putBoolean(KEY_MIDDLE, true).putBoolean(KEY_1800, true).apply()
         }
-        if (!prefs.getBoolean(KEY_REMOVED_EASY, false)) {
-            // Words too easy for middle school were taken out of the list; take them out of installed copies too.
-            // Built-in words have addedAt = 0, so photo decks with the same words are left alone.
-            val easy = context.assets.open("removed_easy.txt").bufferedReader().readLines().filter { it.isNotBlank() }.toSet()
-            dao.getAllWords().filter { it.addedAt == 0L && it.text in easy }.forEach { dao.deleteWord(it) }
-            prefs.edit().putBoolean(KEY_REMOVED_EASY, true).apply()
-        }
-        run {
-            // A word still holding an old, corrected meaning gets the new one; edited words are left alone.
-            val current = rows(context).associate { "${it[0]}|${it[1]}" to it[2] }
-            dao.getAllWords().forEach { w ->
-                val key = "${w.text}|${w.pos}"
-                if (OLD_MEANINGS[key] == w.meaning) current[key]?.let { dao.updateWord(w.copy(meaning = it)) }
+        if (!prefs.getBoolean(KEY_1800, false)) {
+            // The built-in list became the 1800-word book. Words in both keep their study progress and get the
+            // book's meaning; the rest of the old built-in words go, and the new ones are added.
+            // Built-in words have addedAt = 0, so photo decks are left alone.
+            val old = dao.getAllWords().filter { it.addedAt == 0L }
+            val deckId = old.groupingBy { it.deckId }.eachCount().maxByOrNull { it.value }?.key
+                ?: dao.insertDeck(Deck(name = "중학 영단어", emoji = "📚", isCollection = true))
+            val byText = old.filter { it.deckId == deckId }.groupBy { it.text.trim().lowercase() }
+            val kept = mutableSetOf<Long>()
+            val added = mutableListOf<Word>()
+            rows(context).forEach { r ->
+                val w = byText[r[0].lowercase()]?.firstOrNull()
+                if (w == null) {
+                    added += Word(deckId = deckId, text = r[0], pos = r[1], meaning = r[2], example = r.getOrElse(3) { "" }, addedAt = 0)
+                } else {
+                    kept += w.id
+                    dao.updateWord(w.copy(text = r[0], pos = r[1], meaning = r[2], example = r.getOrElse(3) { w.example }))
+                }
             }
+            old.filter { it.deckId == deckId && it.id !in kept }.forEach { dao.deleteWord(it) }
+            dao.insertWords(added)
+            prefs.edit().putBoolean(KEY_1800, true).apply()
         }
         run {
             // Each start: any word with the same spelling gets the example, new photo words included.
