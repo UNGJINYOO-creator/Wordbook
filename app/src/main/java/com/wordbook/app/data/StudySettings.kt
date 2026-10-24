@@ -84,6 +84,21 @@ class StudySettings(context: Context) {
         get() = prefs.getFloat("textScale", 1f)
         set(v) = prefs.edit().putFloat("textScale", v).apply()
 
+    /** Send a backup file to the parents' Telegram every week. */
+    var telegramBackup: Boolean
+        get() = prefs.getBoolean("telegramBackup", true)
+        set(v) = prefs.edit().putBoolean("telegramBackup", v).apply()
+
+    /** Combo and celebration sounds. */
+    var soundEffects: Boolean
+        get() = prefs.getBoolean("soundEffects", true)
+        set(v) = prefs.edit().putBoolean("soundEffects", v).apply()
+
+    /** Questions in 시험 모드. */
+    var testSize: Int
+        get() = prefs.getInt("testSize", 20)
+        set(v) = prefs.edit().putInt("testSize", v).apply()
+
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int
         get() = prefs.getInt("dailyGoal", 0)

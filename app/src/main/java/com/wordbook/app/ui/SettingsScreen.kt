@@ -1,5 +1,11 @@
 package com.wordbook.app.ui
 
+import androidx.compose.foundation.background
+import com.wordbook.app.data.Backup
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -90,6 +96,40 @@ fun SettingsScreen() {
     var repeatMissed by remember { mutableStateOf(settings.repeatMissed) }
     var backFirst by remember { mutableStateOf(settings.backFirst) }
     var hasPin by remember { mutableStateOf(settings.hasPin) }
+    var soundEffects by remember { mutableStateOf(settings.soundEffects) }
+    var testSize by remember { mutableStateOf(settings.testSize) }
+    var telegramBackup by remember { mutableStateOf(settings.telegramBackup) }
+    var backupStatus by remember { mutableStateOf<String?>(null) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
+    var restored by remember { mutableStateOf(false) }
+    val exportBackup = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) scope.launch(Dispatchers.IO) {
+            val error = runCatching { Backup.save(context, uri) }.exceptionOrNull()
+            backupStatus = error?.let { "백업 실패: ${it.message}" } ?: "백업 파일을 저장했어요"
+        }
+    }
+    val importBackup = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch(Dispatchers.IO) {
+            val error = runCatching { Backup.restore(context, uri) }.exceptionOrNull()
+            if (error == null) restored = true else backupStatus = "불러오기 실패: ${error.message}"
+        }
+    }
+    if (restored) {
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("백업을 불러왔어요") },
+            text = { Text("앱을 다시 시작하면 백업한 내용으로 바뀌어요.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    // Restart so every screen and setting reads the restored files.
+                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    Runtime.getRuntime().exit(0)
+                }) { Text("다시 시작") }
+            },
+        )
+    }
     val game = remember { Game(context) }
     var rewards by remember { mutableStateOf(game.rewards) }
     var rewardName by remember { mutableStateOf("") }
@@ -118,6 +158,7 @@ fun SettingsScreen() {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+            GroupHeader("📚 학습 방법")
             Section("학습 순서")
             Text(
                 "켜 둔 단계가 위에서부터 순서대로 진행돼요. ▲▼로 순서를 바꿀 수 있어요",
@@ -152,7 +193,6 @@ fun SettingsScreen() {
                 )
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
             Section("빈칸 난이도")
             Text(
                 "자동은 잘 외운 단어일수록 빈칸이 늘어나요",
@@ -171,20 +211,27 @@ fun SettingsScreen() {
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("한 번에 학습할 카드 수")
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                listOf(0 to "전부", 10 to "10", 20 to "20", 30 to "30", 50 to "50").forEach { (n, label) ->
-                    FilterChip(
-                        selected = size == n,
-                        onClick = { size = n; settings.sessionSize = n; saved() },
-                        label = { Text(label) },
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
+            Section("카드 순서")
+            ToggleRow("카드 섞기", "학습할 때마다 순서를 무작위로 (끄면 알파벳 순)", shuffle) {
+                shuffle = it; settings.shuffle = it; saved()
+            }
+            ToggleRow("뒷면 먼저", "뜻을 먼저 보고 영어 단어 떠올리기", backFirst) {
+                backFirst = it; settings.backFirst = it; saved()
+            }
+            Row(
+                Modifier.fillMaxWidth().clickable { autoSpeak = !autoSpeak; settings.autoSpeak = autoSpeak; saved() }.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("발음 자동 재생", style = MaterialTheme.typography.bodyLarge)
+                    Text("카드가 나올 때마다 발음을 들려줘요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
+                Switch(checked = autoSpeak, onCheckedChange = { autoSpeak = it; settings.autoSpeak = it; saved() })
+            }
+            ToggleRow("효과음", "콤보·레벨 업 때 소리를 내요", soundEffects) {
+                soundEffects = it; settings.soundEffects = it
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
             Section("카드 글자 크기")
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 listOf(0.85f to "작게", 1f to "보통", 1.2f to "크게").forEach { (v, label) ->
@@ -196,101 +243,7 @@ fun SettingsScreen() {
                     )
                 }
             }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("카드 순서")
-            ToggleRow("카드 섞기", "학습할 때마다 순서를 무작위로 (끄면 알파벳 순)", shuffle) {
-                shuffle = it; settings.shuffle = it; saved()
-            }
-            ToggleRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
-                repeatMissed = it; settings.repeatMissed = it; saved()
-            }
-            ToggleRow("뒷면 먼저", "뜻을 먼저 보고 영어 단어 떠올리기", backFirst) {
-                backFirst = it; settings.backFirst = it; saved()
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("종합단어장")
-            Text(
-                "종합단어장을 학습할 때 최근 넣은 단어를 얼마나 내고, 나머지는 기존 단어로 채워요. " +
-                    "기존 단어는 복습할 때가 된 것과 자주 틀린 것부터 나와요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Text("최근 추가 단어 비율", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
-                listOf(50, 70, 80, 90, 100).forEach { n ->
-                    FilterChip(
-                        selected = recentShare == n,
-                        onClick = { recentShare = n; settings.recentShare = n; saved() },
-                        label = { Text("${n}%") },
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                }
-            }
-            Text(
-                "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Text("며칠 안에 넣은 단어를 '최근'으로 볼까요?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                listOf(3, 7, 14).forEach { n ->
-                    FilterChip(
-                        selected = recentDays == n,
-                        onClick = { recentDays = n; settings.recentDays = n; saved() },
-                        label = { Text("${n}일") },
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("카드 반복")
-            Text(
-                "카드 몇 장을 돌려 가며 보다가, 충분히 맞힌 카드는 빠지고 다음 카드가 들어와요",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Text("한 번에 돌리는 카드", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                listOf(5, 10, 20, 30).forEach { n ->
-                    FilterChip(
-                        selected = hand == n,
-                        onClick = { hand = n; settings.handSize = n; saved() },
-                        label = { Text("${n}장") },
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                }
-            }
-            Text("헷갈려요 몇 번이면 빠질까요? (외웠어요는 1번)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                listOf(1, 2, 3).forEach { n ->
-                    FilterChip(
-                        selected = leave == n,
-                        onClick = { leave = n; settings.knownToLeave = n; saved() },
-                        label = { Text("${n}번") },
-                        modifier = Modifier.padding(end = 8.dp),
-                    )
-                }
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Row(
-                Modifier.fillMaxWidth().clickable { autoSpeak = !autoSpeak; settings.autoSpeak = autoSpeak; saved() }.padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("발음 자동 재생", style = MaterialTheme.typography.bodyLarge)
-                    Text("카드가 나올 때마다 발음을 들려줘요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                }
-                Switch(checked = autoSpeak, onCheckedChange = { autoSpeak = it; settings.autoSpeak = it; saved() })
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
+            GroupHeader("🎯 목표와 학습량")
             Section("하루 외울 단어")
             OutlinedTextField(
                 value = dailyWords,
@@ -311,7 +264,6 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
             Section("학습 시간")
             Text("하루 최소 학습 시간", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
@@ -324,19 +276,31 @@ fun SettingsScreen() {
                     )
                 }
             }
-            Text("이 시간 동안 화면을 안 건드리면 시간이 멈춰요", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section("한 번에 학습할 카드 수")
             Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                listOf(10, 20, 30, 60).forEach { n ->
+                listOf(0 to "전부", 10 to "10", 20 to "20", 30 to "30", 50 to "50").forEach { (n, label) ->
                     FilterChip(
-                        selected = idle == n,
-                        onClick = { idle = n; settings.idleSeconds = n; saved() },
-                        label = { Text("${n}초") },
+                        selected = size == n,
+                        onClick = { size = n; settings.sessionSize = n; saved() },
+                        label = { Text(label) },
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
+            Section("시험 문제 수")
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(10, 20, 30, 50).forEach { n ->
+                    FilterChip(
+                        selected = testSize == n,
+                        onClick = { testSize = n; settings.testSize = n; saved() },
+                        label = { Text("${n}문제") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("저녁 알림")
             Text(
                 "이 시간까지 오늘 목표를 못 채우면 휴대폰에 알림을 띄워요",
@@ -359,9 +323,22 @@ fun SettingsScreen() {
                     )
                 }
             }
+            GroupHeader("👨‍👩‍👧 부모님")
+            Section("비밀번호")
+            Text(
+                if (hasPin) "설정을 열 때 비밀번호 4자리를 물어봐요" else "아이가 설정을 바꾸지 못하게 비밀번호를 걸 수 있어요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Row(Modifier.padding(horizontal = 8.dp)) {
+                TextButton(onClick = { settingPin = true }) { Text(if (hasPin) "비밀번호 바꾸기" else "비밀번호 설정") }
+                if (hasPin) {
+                    TextButton(onClick = { settings.setPin(null); hasPin = false; saved() }) { Text("비밀번호 끄기") }
+                }
+            }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("보상 쿠폰 (부모님용)")
+            Section("보상 쿠폰")
             Text(
                 "아이가 정답으로 모은 별로 받을 수 있는 보상을 정해요. 쿠폰은 복습·통계 탭에서 받아요.",
                 style = MaterialTheme.typography.bodySmall,
@@ -414,22 +391,6 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
-            Section("비밀번호")
-            Text(
-                if (hasPin) "설정을 열 때 비밀번호 4자리를 물어봐요" else "아이가 설정을 바꾸지 못하게 비밀번호를 걸 수 있어요",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            Row(Modifier.padding(horizontal = 8.dp)) {
-                TextButton(onClick = { settingPin = true }) { Text(if (hasPin) "비밀번호 바꾸기" else "비밀번호 설정") }
-                if (hasPin) {
-                    TextButton(onClick = { settings.setPin(null); hasPin = false; saved() }) { Text("비밀번호 끄기") }
-                }
-            }
-            HorizontalDivider(Modifier.padding(vertical = 8.dp))
-
             Section("텔레그램 알림")
             Text(
                 "하루 최소 학습 시간을 채우면 오늘의 학습 리포트를 텔레그램으로 보내요. 엄마·아빠 모두 받으려면 각자 봇에게 /start를 보낸 뒤 '채팅 ID 자동으로 찾기'를 누르세요.",
@@ -498,7 +459,122 @@ fun SettingsScreen() {
             ToggleRow("저녁에 목표를 못 채웠으면 알림", "저녁 알림 시간에 아직 남은 양을 알려요", alertEvening) {
                 alertEvening = it; settings.alertEvening = it
             }
-
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section("백업")
+            Text(
+                "휴대폰을 바꿀 때를 대비해 단어장, 학습 기록, 별·레벨, 설정을 파일 하나로 저장해요. 구글 드라이브나 카톡 나에게 보내기로 보관하세요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SecondaryButton("💾 백업하기", { exportBackup.launch(Backup.fileName()) }, Modifier.weight(1f))
+                SecondaryButton("📂 불러오기", { importBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, Modifier.weight(1f))
+            }
+            ToggleRow("매주 텔레그램으로 자동 백업", "일주일에 한 번 부모님 텔레그램에 백업 파일을 보내요", telegramBackup) {
+                telegramBackup = it; settings.telegramBackup = it
+            }
+            TextButton(
+                onClick = {
+                    scope.launch {
+                        backupStatus = "보내는 중…"
+                        backupStatus = Backup.sendToTelegram(context) ?: "텔레그램으로 백업을 보냈어요"
+                    }
+                },
+                enabled = token.isNotBlank() && chatId.isNotBlank(),
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text("지금 텔레그램으로 백업 보내기") }
+            backupStatus?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+            // Rarely changed options, folded away.
+            TextButton(onClick = { advanced = !advanced }, modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                Text(if (advanced) "▾ 고급 설정 접기" else "▸ 고급 설정 (카드 반복, 종합단어장, 타이머)")
+            }
+            if (advanced) {
+            Section("카드 반복")
+            Text(
+                "카드 몇 장을 돌려 가며 보다가, 충분히 맞힌 카드는 빠지고 다음 카드가 들어와요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text("한 번에 돌리는 카드", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(5, 10, 20, 30).forEach { n ->
+                    FilterChip(
+                        selected = hand == n,
+                        onClick = { hand = n; settings.handSize = n; saved() },
+                        label = { Text("${n}장") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            Text("헷갈려요 몇 번이면 빠질까요? (외웠어요는 1번)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(1, 2, 3).forEach { n ->
+                    FilterChip(
+                        selected = leave == n,
+                        onClick = { leave = n; settings.knownToLeave = n; saved() },
+                        label = { Text("${n}번") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            ToggleRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
+                repeatMissed = it; settings.repeatMissed = it; saved()
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section("종합단어장")
+            Text(
+                "종합단어장을 학습할 때 최근 넣은 단어를 얼마나 내고, 나머지는 기존 단어로 채워요. " +
+                    "기존 단어는 복습할 때가 된 것과 자주 틀린 것부터 나와요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text("최근 추가 단어 비율", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
+                listOf(50, 70, 80, 90, 100).forEach { n ->
+                    FilterChip(
+                        selected = recentShare == n,
+                        onClick = { recentShare = n; settings.recentShare = n; saved() },
+                        label = { Text("${n}%") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            Text(
+                "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text("며칠 안에 넣은 단어를 '최근'으로 볼까요?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(3, 7, 14).forEach { n ->
+                    FilterChip(
+                        selected = recentDays == n,
+                        onClick = { recentDays = n; settings.recentDays = n; saved() },
+                        label = { Text("${n}일") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            Section("타이머 멈춤")
+            Text("이 시간 동안 화면을 안 건드리면 시간이 멈춰요", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(10, 20, 30, 60).forEach { n ->
+                    FilterChip(
+                        selected = idle == n,
+                        onClick = { idle = n; settings.idleSeconds = n; saved() },
+                        label = { Text("${n}초") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            }
             Text(
                 "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
                     "틀리면 간격이 절반으로 줄고 오늘 다시 나와요.",
@@ -508,6 +584,18 @@ fun SettingsScreen() {
             )
         }
     }
+}
+
+@Composable
+private fun GroupHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+        modifier = Modifier.fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    )
 }
 
 @Composable

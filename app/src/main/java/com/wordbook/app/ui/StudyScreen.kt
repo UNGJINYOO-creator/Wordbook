@@ -150,7 +150,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** 🔥 오답노트: the words missed twice in quizzes. */
     private val wrongOnly: Boolean = handle.get<Boolean>("wrong") ?: false
     private val wrongNote = WrongNote(app)
-    /** 시험 모드: [TEST_SIZE] random words, each asked once with no second chance; the score goes to Telegram. */
+    /** 시험 모드: settings.testSize random words, each asked once with no second chance; the score goes to Telegram. */
     val test: Boolean = handle.get<Boolean>("test") ?: false
     /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
     private val modes: List<StudyMode> =
@@ -295,7 +295,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             sessionWords = when {
                 review -> dao.getDueWords(System.currentTimeMillis())
                 wrongOnly -> wrongNote.ids.let { ids -> all.filter { it.id in ids && !it.excluded } }
-                test -> (if (deckId > 0) dao.getWords(deckId) else all).filter { !it.excluded }.shuffled().take(TEST_SIZE)
+                test -> (if (deckId > 0) dao.getWords(deckId) else all).filter { !it.excluded }.shuffled().take(settings.testSize)
                 today -> {
                     // 약점 맞춤: among the next new words, the weak part of speech comes first.
                     val limit = newPerDay(settings)
@@ -374,7 +374,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private fun celebrate(text: String, sound: Boolean = true) {
         cheer = text
         cheerId++
-        if (sound) tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
+        if (sound && settings.soundEffects) tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
     }
 
     /** One star per right answer, two more every 5 in a row. */
@@ -754,7 +754,6 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         const val NEW_PER_DAY = 20
         /** 객관식 answers faster than this count as guesses. */
         const val GUESS_MS = 1000L
-        const val TEST_SIZE = 20
 
         /** New words in 오늘 학습: the daily word goal, or [NEW_PER_DAY] without one. */
         fun newPerDay(settings: StudySettings) = settings.dailyWords.takeIf { it > 0 } ?: NEW_PER_DAY

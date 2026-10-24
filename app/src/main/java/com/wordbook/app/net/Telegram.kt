@@ -39,6 +39,45 @@ object Telegram {
         errors.distinct().joinToString("\n").ifEmpty { null }
     }
 
+    /** Sends a file to every chat id. Returns null on success, or an error message. */
+    suspend fun sendDocument(token: String, chatIds: String, fileName: String, bytes: ByteArray, caption: String): String? =
+        withContext(Dispatchers.IO) {
+            val ids = splitIds(chatIds)
+            if (token.isBlank() || ids.isEmpty()) return@withContext "봇 토큰과 채팅 ID를 먼저 입력하세요"
+            val errors = ids.mapNotNull { id ->
+                runCatching {
+                    val boundary = "----vocafishing${System.currentTimeMillis()}"
+                    val conn = URL("https://api.telegram.org/bot$token/sendDocument").openConnection() as HttpURLConnection
+                    try {
+                        conn.requestMethod = "POST"
+                        conn.connectTimeout = 15_000
+                        conn.readTimeout = 60_000
+                        conn.doOutput = true
+                        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+                        conn.outputStream.use { out ->
+                            fun field(name: String, value: String) {
+                                out.write("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n".toByteArray())
+                            }
+                            field("chat_id", id)
+                            field("caption", caption)
+                            out.write(
+                                ("--$boundary\r\nContent-Disposition: form-data; name=\"document\"; filename=\"$fileName\"\r\n" +
+                                    "Content-Type: application/zip\r\n\r\n").toByteArray(),
+                            )
+                            out.write(bytes)
+                            out.write("\r\n--$boundary--\r\n".toByteArray())
+                        }
+                        val stream = if (conn.responseCode in 200..299) conn.inputStream else conn.errorStream
+                        val r = JSONObject(stream.bufferedReader().use { it.readText() })
+                        if (r.optBoolean("ok")) null else "$id: ${r.optString("description", "보내기 실패")}"
+                    } finally {
+                        conn.disconnect()
+                    }
+                }.getOrElse { "연결 실패: ${it.message}" }
+            }
+            errors.distinct().joinToString("\n").ifEmpty { null }
+        }
+
     fun splitIds(chatIds: String) = chatIds.split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
     /** Chat ids of everyone who messaged the bot recently (each person presses Start first). */

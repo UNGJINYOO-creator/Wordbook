@@ -33,6 +33,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.lifecycleScope
+import com.wordbook.app.data.Backup
 import com.wordbook.app.data.DefaultDecks
 import com.wordbook.app.data.ParentAlerts
 import com.wordbook.app.data.Reminder
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             DefaultDecks.seed(applicationContext)
             ParentAlerts.checkStreak(applicationContext)
+            Backup.weeklyToTelegram(applicationContext)
         }
         Reminder.schedule(applicationContext)
         if (android.os.Build.VERSION.SDK_INT >= 33 && settings.reminderHour >= 0) {

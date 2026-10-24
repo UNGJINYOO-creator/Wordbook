@@ -263,7 +263,7 @@ fun DeckScreen(
                     PrimaryButton("학습 시작", { showStudy = true }, enabled = active.isNotEmpty())
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SecondaryButton("📝 시험 (${minOf(active.size, StudyViewModel.TEST_SIZE)}문제)", { onTest(vm.deckId) }, Modifier.weight(1f), enabled = active.size >= 4)
+                        SecondaryButton("📝 시험 (${minOf(active.size, vm.settings.testSize)}문제)", { onTest(vm.deckId) }, Modifier.weight(1f), enabled = active.size >= 4)
                         SecondaryButton("🧩 짝 맞추기", { onMatch(vm.deckId) }, Modifier.weight(1f), enabled = active.size >= 2)
                     }
                     Spacer(Modifier.height(12.dp))

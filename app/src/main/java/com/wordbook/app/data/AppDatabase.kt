@@ -57,6 +57,12 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Closes the database so a backup can replace its file. */
+        fun close() = synchronized(this) {
+            instance?.close()
+            instance = null
+        }
+
         fun get(context: Context): AppDatabase =
             instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
