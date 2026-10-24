@@ -70,6 +70,7 @@ fun SettingsScreen() {
     var size by remember { mutableStateOf(settings.sessionSize) }
     var goal by remember { mutableStateOf(settings.dailyGoalMinutes) }
     var reminderHour by remember { mutableStateOf(settings.reminderHour) }
+    var textScale by remember { mutableStateOf(settings.textScale) }
     var alertCoupon by remember { mutableStateOf(settings.alertCoupon) }
     var alertStreak by remember { mutableStateOf(settings.alertStreak) }
     var alertEvening by remember { mutableStateOf(settings.alertEvening) }
@@ -177,6 +178,19 @@ fun SettingsScreen() {
                     FilterChip(
                         selected = size == n,
                         onClick = { size = n; settings.sessionSize = n; saved() },
+                        label = { Text(label) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("카드 글자 크기")
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(0.85f to "작게", 1f to "보통", 1.2f to "크게").forEach { (v, label) ->
+                    FilterChip(
+                        selected = textScale == v,
+                        onClick = { textScale = v; settings.textScale = v; saved() },
                         label = { Text(label) },
                         modifier = Modifier.padding(end = 8.dp),
                     )

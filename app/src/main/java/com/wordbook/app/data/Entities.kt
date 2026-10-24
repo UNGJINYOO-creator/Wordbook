@@ -66,6 +66,8 @@ data class Word(
     val flagged: Boolean = false,
     /** When the word was saved, for the 최근 추가 share in a 종합단어장; 0 = before this was kept. */
     val addedAt: Long = System.currentTimeMillis(),
+    /** Example sentence with its Korean translation, shown on the back of the card. */
+    val example: String = "",
 )
 
 /** Deck row with counts for the home screen. */

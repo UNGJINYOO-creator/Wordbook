@@ -196,6 +196,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val handSize = settings.handSize.coerceAtLeast(1)
     private val knownToLeave = settings.knownToLeave.coerceAtLeast(1)
     val autoSpeak: Boolean get() = settings.autoSpeak
+    val textScale: Float = settings.textScale
 
     // Study timer: counts only while the screen is being touched; pauses after idleSeconds.
     private val stats = DailyStats(app)
@@ -923,6 +924,7 @@ fun StudyScreen(
                                 else -> Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                                     SwipeCard(
                                         word = word,
+                                        textScale = vm.textScale,
                                         backFirst = vm.backFirst,
                                         flipped = vm.flipped,
                                         canUndo = vm.canUndo,
@@ -972,6 +974,7 @@ fun StudyScreen(
 @Composable
 private fun SwipeCard(
     word: Word,
+    textScale: Float,
     backFirst: Boolean,
     flipped: Boolean,
     canUndo: Boolean,
@@ -1065,7 +1068,14 @@ private fun SwipeCard(
                 contentAlignment = Alignment.Center,
             ) {
                 if (showWord) {
-                    Text(word.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    // 실력 점: how far along the review steps this word is.
+                    Text(
+                        (1..5).joinToString("") { if (it <= word.box) "●" else "○" },
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.align(Alignment.TopEnd),
+                    )
+                    Text(word.text, fontSize = 40.sp * textScale, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                     // Labelled buttons at the bottom of the card, away from the tap-to-flip middle.
                     Row(Modifier.align(Alignment.BottomCenter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilledTonalButton(onClick = onSpeak) {
@@ -1080,7 +1090,13 @@ private fun SwipeCard(
                         }
                     }
                 } else {
-                    PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 30.sp, badgeSize = 18.sp)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 30.sp * textScale, badgeSize = 18.sp * textScale)
+                        if (word.example.isNotBlank()) {
+                            Spacer(Modifier.height(16.dp))
+                            ExampleText(word.example, 16.sp * textScale)
+                        }
+                    }
                 }
             }
         }

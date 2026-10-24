@@ -79,6 +79,11 @@ class StudySettings(context: Context) {
         get() = prefs.getBoolean("alertEvening", true)
         set(v) = prefs.edit().putBoolean("alertEvening", v).apply()
 
+    /** Card text size: 0.85 작게, 1.0 보통, 1.2 크게. */
+    var textScale: Float
+        get() = prefs.getFloat("textScale", 1f)
+        set(v) = prefs.edit().putFloat("textScale", v).apply()
+
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int
         get() = prefs.getInt("dailyGoal", 0)
