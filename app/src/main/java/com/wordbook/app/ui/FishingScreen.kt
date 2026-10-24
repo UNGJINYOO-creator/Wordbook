@@ -445,7 +445,7 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             Text("❌ 틀리면 ${f.wrong.toInt()}m 멀어져요, 너무 빨리 찍으면 0m")
             Text("🐋 0m가 되면 낚아요! ${f.goal.toInt()}m까지 멀어지면 줄이 끊어져요")
             Text("📈 가까워질수록 물고기가 세게 버텨서 더 빨리 도망가요")
-            Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개 + 오늘 공부 끝!" + vm.fishing.triesNote)
+            Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개!" + vm.fishing.triesNote)
         }
         Spacer(Modifier.height(16.dp))
         val reason = vm.lockReason
@@ -650,7 +650,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
             if (vm.newRecord) Text("🏆 최고 기록이에요!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             Text("⭐${Fishing.CATCH_STARS}개를 받았어요", style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(8.dp))
-            Text("🎣 오늘 공부 끝! 정말 잘했어요. 내일 또 만나요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
+            Text("🎣 물고기를 낚았어요! 정말 잘했어요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         } else {
             Text("줄이 끊어져서 도망갔어요 😢", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             if (!vm.fishing.unlimited) Text("남은 도전 ${vm.triesLeft}번", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)

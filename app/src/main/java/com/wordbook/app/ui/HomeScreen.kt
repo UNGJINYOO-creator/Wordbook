@@ -82,6 +82,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -193,7 +194,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         fishOpen = !timeLeft && !wordsLeft && fishing.triesLeft > 0
         fishLine = when {
             timeLeft || wordsLeft -> "🔒 오늘 목표를 채우면 열려요"
-            fishing.caughtToday -> "오늘 ${fishing.caughtFishToday} 낚았어요! 오늘 공부 끝 🎣"
+            fishing.caughtToday -> "오늘 ${fishing.caughtFishToday} 낚았어요! 🎣"
             fishing.triesLeft <= 0 -> "오늘 도전 끝! 내일 다시 도전해요"
             else -> "열렸어요! 도전해 보세요" + fishing.triesNote
         }
@@ -374,15 +375,27 @@ fun HomeScreen(
 
     Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-        HomeHeader(vm.learned, vm.goalWords, vm.todayMs, vm.goalMs, onToday)
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            // The first card rides up over the bottom of the blue header.
-            modifier = Modifier.fillMaxSize().offset(y = (-30).dp),
-            contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp, 0.dp, 16.dp, 24.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // The header scrolls with the cards, so the first card can ride over its bottom without a cut edge.
+            item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
+                HomeHeader(
+                    vm.learned, vm.goalWords, vm.todayMs, vm.goalMs, onToday,
+                    Modifier.layout { measurable, constraints ->
+                        val side = 16.dp.roundToPx()
+                        val overlap = (30 + 10).dp.roundToPx()
+                        val width = constraints.maxWidth + side * 2
+                        val p = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
+                        // Full screen width past the grid padding, and 30dp shorter so the next card overlaps it.
+                        layout(constraints.maxWidth, p.height - overlap) { p.place(-side, 0) }
+                    },
+                )
+            }
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
                 TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
             }
@@ -625,9 +638,9 @@ fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Uni
 
 /** Blue sea header: the app name, a greeting, today's progress pill (starts 오늘 학습) and the picture in a frame on the right. */
 @Composable
-private fun HomeHeader(learned: Int, goalWords: Int, todayMs: Long, goalMs: Long, onToday: () -> Unit) {
+private fun HomeHeader(learned: Int, goalWords: Int, todayMs: Long, goalMs: Long, onToday: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        Modifier
+        modifier
             .fillMaxWidth()
             .background(
                 Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
