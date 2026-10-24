@@ -529,8 +529,11 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         )
         if (undoStack.size > 30) undoStack.removeFirst()
         canUndo = true
-        stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
-        reward(answer != Answer.UNKNOWN)
+        // Card swipes are the child's own word, so only quiz answers count for stars and the right rate.
+        if (mode != StudyMode.CARD) {
+            stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
+            reward(answer != Answer.UNKNOWN)
+        }
 
         val firstAnswer = word.id !in scheduled
         val updated = when {
