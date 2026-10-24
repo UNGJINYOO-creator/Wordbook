@@ -38,7 +38,11 @@ data class OcrLine(
  *     or a Korean line right below it.
  * A page of plain text (all one size) still works: every line is "big", sentences are split into words.
  */
-class VocabPairer(private val isWord: (String) -> Boolean) {
+class VocabPairer(
+    /** Fixes a misread English word ("domitory" -> "dormitory"), or null when there's no sure fix. */
+    private val correct: (String) -> String? = { null },
+    private val isWord: (String) -> Boolean,
+) {
     private val wordRegex = Regex("[A-Za-z]+(?:['-][A-Za-z]+)*")
     private val hangulRegex = Regex("[\\uAC00-\\uD7A3]")
     // Part-of-speech markers between word and meaning: "apple n. 사과"
@@ -50,6 +54,19 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
     private val phoneticRegex = Regex("\\[[^\\]가-힣]*]|/[^/가-힣]*/")
     // Bracketed part-of-speech badge in front of a meaning: "(동) 발명하다"
     private val bracketBadgeRegex = Regex("^[(\\[][명동형부전접대감][)\\]]\\s*")
+    // The same markers without a dot, as a separate token after the headword: "dormitory n 기숙사"
+    private val barePos = setOf("n", "v", "vt", "vi", "a", "adj", "ad", "adv", "prep", "conj", "pron")
+
+    private fun posOf(marker: String): String = when (marker.lowercase().trimEnd('.')) {
+        "n" -> "명"
+        "v", "vt", "vi" -> "동"
+        "a", "adj" -> "형"
+        "ad", "adv" -> "부"
+        "prep" -> "전"
+        "conj" -> "접"
+        "pron" -> "대"
+        else -> ""
+    }
 
     private val stopWords = setOf(
         "a", "an", "the", "and", "or", "but", "if", "of", "to", "in", "on", "at", "by", "for",
@@ -60,7 +77,7 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
         "who", "when", "where", "how", "all",
     )
 
-    private class Entry(val line: OcrLine, val english: List<String>, val korean: String?)
+    private class Entry(val line: OcrLine, val english: List<String>, val korean: String?, val pos: String = "")
 
     fun pair(raw: List<OcrLine>): List<ExtractedWord> {
         val lines = raw.map { it.copy(text = phoneticRegex.replace(numberingRegex.replace(it.text, ""), " ").trim()) }
@@ -69,9 +86,15 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
         val entries = lines.mapNotNull { line ->
             val hangul = hangulRegex.find(line.text)
             val englishPart = if (hangul != null) line.text.substring(0, hangul.range.first) else line.text
-            val english = wordRegex.findAll(posRegex.replace(englishPart, " ")).map { it.value }.toList()
+            var pos = posRegex.find(englishPart)?.let { posOf(it.value) } ?: ""
+            var english = wordRegex.findAll(posRegex.replace(englishPart, " ")).map { it.value }.toList()
+            // A part-of-speech letter left after the headword is a label, not part of the word.
+            while (english.size >= 2 && english.last().lowercase() in barePos) {
+                if (pos.isEmpty()) pos = posOf(english.last())
+                english = english.dropLast(1)
+            }
             if (english.isEmpty()) null
-            else Entry(line, english, hangul?.let { cleanMeaning(line.text.substring(it.range.first)) })
+            else Entry(line, english, hangul?.let { cleanMeaning(line.text.substring(it.range.first)) }, pos)
         }
         val koreanLines = lines.filter { l ->
             val h = hangulRegex.find(l.text) ?: return@filter false
@@ -106,24 +129,26 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
         }
 
         val result = linkedMapOf<String, ExtractedWord>()
-        fun add(text: String, meaning: String) {
+        fun add(text: String, meaning: String, pos: String = "") {
             val key = text.lowercase()
             val existing = result[key]
             if (existing == null || (existing.meaning.isBlank() && meaning.isNotBlank())) {
-                result[key] = ExtractedWord(key, meaning)
+                result[key] = ExtractedWord(key, meaning, pos)
             }
         }
 
         val used = mutableSetOf<OcrLine>()
         for (e in big.sortedWith(compareBy({ it.line.top }, { it.line.left }))) {
-            // 3. Real words only.
-            val words = e.english.filter { isWord(it.lowercase()) }
+            // 3. Real words only; a word misread by one letter is fixed when the fix is clear.
+            val words = e.english
+                .map { w -> if (isWord(w.lowercase())) w else correct(w.lowercase()) ?: w }
+                .filter { isWord(it.lowercase()) }
             if (words.isEmpty()) continue
             if (e.english.size <= MAX_PHRASE_WORDS && words.size == e.english.size) {
                 val meaning = e.korean?.takeIf { it.isNotBlank() }
                     ?: findMeaning(e.line, koreanLines, used)?.let { cleanMeaning(it.text) }
                     ?: ""
-                add(words.joinToString(" "), meaning)
+                add(words.joinToString(" "), meaning, e.pos)
             } else {
                 // A sentence: collect its study-worthy words.
                 words.map { it.lowercase() }.filter { it.length >= 2 && it !in stopWords }.forEach { add(it, "") }
@@ -132,7 +157,7 @@ class VocabPairer(private val isWord: (String) -> Boolean) {
         val words = result.values.toList()
         val cleaned = MeaningCheck.cleanPage(words.map { it.meaning })
         return words.mapIndexed { i, w ->
-            w.copy(meaning = cleaned[i].meaning, pos = cleaned[i].pos.ifEmpty { MeaningCheck.posFromEnglish(w.text) })
+            w.copy(meaning = cleaned[i].meaning, pos = w.pos.ifEmpty { cleaned[i].pos.ifEmpty { MeaningCheck.posFromEnglish(w.text) } })
         }
     }
 

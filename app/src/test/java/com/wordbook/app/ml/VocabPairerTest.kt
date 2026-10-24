@@ -87,6 +87,20 @@ class VocabPairerTest {
     }
 
     @Test
+    fun barePosLetterAndMisreadWordAreFixed() {
+        val dict = dictionary + setOf("dormitory", "n")
+        val result = VocabPairer(correct = { w -> SpellFix.fix(dict, w) }) { it in dict }.pair(
+            listOf(
+                line("domitory n 기숙사", 40, 100, 300, 130),
+                line("connect v 연결하다", 40, 140, 300, 170),
+            )
+        )
+        assertEquals(listOf("dormitory" to "기숙사", "connect" to "연결하다"), result.map { it.text to it.meaning })
+        assertEquals("명", result[0].pos)
+        assertEquals("동", result[1].pos)
+    }
+
+    @Test
     fun simpleListOnOneLine() {
         val result = pairer.pair(
             listOf(

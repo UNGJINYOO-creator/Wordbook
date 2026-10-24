@@ -66,4 +66,11 @@ class CleanPageTest {
         org.junit.Assert.assertEquals("명", MeaningCheck.posFromEnglish("invention"))
         org.junit.Assert.assertEquals("", MeaningCheck.posFromEnglish("connect"))
     }
+
+    @Test
+    fun nearMissIsOneMisreadSyllable() {
+        assertTrue(MeaningCheck.nearMiss("가숙사", "기숙사"))
+        assertFalse(MeaningCheck.nearMiss("기숙사", "기숙사"))
+        assertFalse(MeaningCheck.nearMiss("연결하다", "접속"))
+    }
 }

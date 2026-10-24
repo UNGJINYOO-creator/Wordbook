@@ -164,6 +164,12 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
                     c.meaning = translated
                     c.source = "번역 (사진 뜻이 이상해서)"
                 }
+            } else if (translated.isNotBlank() && MeaningCheck.nearMiss(c.meaning, translated)) {
+                // One syllable off from the translation: the photo letter was misread.
+                c.suggestion = c.meaning
+                c.suggestionSource = "사진"
+                c.meaning = translated
+                c.source = "번역 (사진 글자가 잘못 읽혀서)"
             } else if (translated.isNotBlank() && MeaningCheck.disagree(c.meaning, translated)) {
                 c.suggestion = translated
                 c.suggestionSource = "번역"

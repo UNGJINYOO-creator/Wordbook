@@ -123,6 +123,18 @@ object MeaningCheck {
         return hangul.findAll(chars).count() < chars.length * 0.8
     }
 
+    /**
+     * True if the photo meaning is the translation with one syllable misread ("가숙사" vs "기숙사"):
+     * same length, only Korean, exactly one syllable different.
+     */
+    fun nearMiss(photo: String, translated: String): Boolean {
+        val a = photo.split(',', ';').first().trim()
+        val b = translated.split(',', ';').first().trim()
+        if (a == b || a.length != b.length || a.length < 2) return false
+        if (!a.all { hangul.matches(it.toString()) } || !b.all { hangul.matches(it.toString()) }) return false
+        return a.indices.count { a[it] != b[it] } == 1
+    }
+
     /** True if the two Korean meanings share no syllable at all (likely different meanings). */
     fun disagree(a: String, b: String): Boolean {
         val sa = hangul.findAll(a).map { it.value }.toSet()

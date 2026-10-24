@@ -46,6 +46,6 @@ object WordExtractor {
             recognizer.close()
         }
         lastLines = lines.sortedWith(compareBy({ it.top }, { it.left }))
-        return VocabPairer { isWord(dict, it) }.pair(lines)
+        return VocabPairer(correct = { SpellFix.fix(dict, it) }) { isWord(dict, it) }.pair(lines)
     }
 }
