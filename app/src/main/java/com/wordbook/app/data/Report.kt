@@ -26,7 +26,7 @@ object Report {
         val goalWords = settings.dailyWords
 
         return buildString {
-            append("🎣 보카피싱 오늘의 학습 리포트\n\n")
+            append("🎣 낚아보카 오늘의 학습 리포트\n\n")
             append("⏱ 학습 시간 ${minutes(stats.studyMs)}")
             if (goalMinutes > 0) append(" (목표 ${goalMinutes}분)")
             append("\n🧠 외운 단어 ${stats.learnedCount}개")
