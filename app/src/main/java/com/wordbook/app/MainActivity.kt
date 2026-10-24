@@ -40,6 +40,7 @@ import com.wordbook.app.data.Reminder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.wordbook.app.data.StudySettings
+import com.wordbook.app.ui.FishingScreen
 import com.wordbook.app.ui.DeckScreen
 import com.wordbook.app.ui.HomeScreen
 import com.wordbook.app.ui.MatchScreen
