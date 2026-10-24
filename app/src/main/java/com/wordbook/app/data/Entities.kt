@@ -17,6 +17,16 @@ data class Deck(
     val repeatMissed: Boolean = true,
     /** Show the meaning (back side) first. */
     val backFirst: Boolean = false,
+    /** Cover colour index into the home palette; 0 = picked from the id. */
+    val color: Int = 0,
+    /** Cover emoji; "" = picked from the id. */
+    val emoji: String = "",
+    /** Last time any of its words was studied, for the 최근 학습순 sort. */
+    val lastStudiedAt: Long = 0,
+    /** A 종합단어장 that gathers other decks' words. */
+    val isCollection: Boolean = false,
+    /** The 종합단어장 this deck belongs to, 0 = none. */
+    val collectionId: Long = 0,
 )
 
 @Entity(
@@ -63,4 +73,7 @@ data class DeckSummary(
     val createdAt: Long,
     val wordCount: Int,
     val knownCount: Int,
+    val color: Int = 0,
+    val emoji: String = "",
+    val lastStudiedAt: Long = 0,
 )

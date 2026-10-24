@@ -123,6 +123,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
     val review: Boolean = handle.get<Boolean>("review") ?: false
     private val allDecks: Boolean = handle.get<Boolean>("all") ?: false
+    /** 오늘 학습: today's reviews plus up to [NEW_PER_DAY] new words, across all decks. */
+    private val today: Boolean = handle.get<Boolean>("today") ?: false
     /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
     private val modes: List<StudyMode> = decodeModes(handle.get<String>("mode")) ?: settings.modes
     private val staged: Boolean = handle.get<String>("staged")?.toBooleanStrictOrNull() ?: settings.staged
@@ -245,6 +247,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             pool = all
             sessionWords = when {
                 review -> dao.getDueWords(System.currentTimeMillis())
+                today -> dao.getDueWords(System.currentTimeMillis()) + dao.getNewWords(NEW_PER_DAY)
                 allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
                 else -> {
                     val words = dao.getWords(deckId).filter { !it.excluded }
@@ -256,6 +259,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             }
             val limit = settings.sessionSize
             sessionWords = order(sessionWords).let { if (limit > 0) it.take(limit) else it }
+            dao.touchDecks(sessionWords.map { it.deckId }.distinct(), System.currentTimeMillis())
             start(sessionWords)
             loading = false
         }
@@ -542,6 +546,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     }
 
     companion object {
+        const val NEW_PER_DAY = 20
+
         val Factory = viewModelFactory {
             initializer { StudyViewModel(this[APPLICATION_KEY]!!, createSavedStateHandle()) }
         }

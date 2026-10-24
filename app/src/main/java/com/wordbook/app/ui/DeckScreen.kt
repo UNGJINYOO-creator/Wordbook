@@ -361,11 +361,20 @@ fun DeckScreen(
         )
     }
     if (showDelete) {
-        ConfirmDialog(
-            text = "'${deck?.name}' 단어장과 단어 ${words.size}개를 삭제할까요?",
-            onDismiss = { showDelete = false },
-            onConfirm = { showDelete = false; vm.deleteDeck(onBack) },
-        )
+        if (vm.settings.hasPin) {
+            PinConfirmDialog(
+                text = "'${deck?.name}' 단어장과 단어 ${words.size}개를 삭제하려면 비밀번호를 입력하세요.",
+                check = vm.settings::checkPin,
+                onDismiss = { showDelete = false },
+                onConfirm = { showDelete = false; vm.deleteDeck(onBack) },
+            )
+        } else {
+            ConfirmDialog(
+                text = "'${deck?.name}' 단어장과 단어 ${words.size}개를 삭제할까요?",
+                onDismiss = { showDelete = false },
+                onConfirm = { showDelete = false; vm.deleteDeck(onBack) },
+            )
+        }
     }
 }
 

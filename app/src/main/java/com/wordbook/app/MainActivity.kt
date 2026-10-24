@@ -112,7 +112,8 @@ private fun AppContent() {
                             HomeScreen(
                                 onPhoto = { uris -> nav.navigate("scan?uri=${encodeUris(uris)}&deckId=-1") },
                                 onOpenDeck = { id -> nav.navigate("deck/$id") },
-                                onReview = { nav.navigate("study/-1?review=true") },
+                                onToday = { nav.navigate("study/-1?today=true") },
+                                onStudyDeck = { id -> nav.navigate("study/$id") },
                             )
                         }
                         composable("review") {
@@ -154,7 +155,7 @@ private fun AppContent() {
                             )
                         }
                         composable(
-                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}",
+                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}&today={today}",
                             arguments = listOf(
                                 navArgument("deckId") { type = NavType.LongType },
                                 navArgument("onlyUnknown") { type = NavType.BoolType; defaultValue = false },
@@ -162,6 +163,7 @@ private fun AppContent() {
                                 navArgument("mode") { type = NavType.StringType; defaultValue = "" },
                                 navArgument("staged") { type = NavType.StringType; defaultValue = "" },
                                 navArgument("all") { type = NavType.BoolType; defaultValue = false },
+                                navArgument("today") { type = NavType.BoolType; defaultValue = false },
                             ),
                         ) {
                             StudyScreen(onBack = { nav.popBackStack() })
