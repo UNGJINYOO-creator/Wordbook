@@ -192,7 +192,7 @@ private fun AppContent() {
                                 navArgument("test") { type = NavType.BoolType; defaultValue = false },
                             ),
                         ) {
-                            StudyScreen(onBack = { nav.popBackStack() })
+                            StudyScreen(onBack = { nav.popBackStack() }, onSettings = { nav.navigate("settings") })
                         }
                     }
                 }

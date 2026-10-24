@@ -169,6 +169,12 @@ fun DeckScreen(
     var showOptions by rememberSaveable { mutableStateOf(false) }
     var showRename by rememberSaveable { mutableStateOf(false) }
     var showDelete by rememberSaveable { mutableStateOf(false) }
+    // With a password set, changing words asks for it once per visit so the child can't edit cards.
+    var unlocked by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val guard: (() -> Unit) -> Unit = { action ->
+        if (!vm.settings.hasPin || unlocked) action() else pending = action
+    }
     var menuOpen by remember { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(WordFilter.ALL) }
     var editing by remember { mutableStateOf<Word?>(null) }
@@ -199,7 +205,7 @@ fun DeckScreen(
                             DropdownMenuItem(
                                 text = { Text("이름 바꾸기") },
                                 leadingIcon = { Icon(Icons.Default.Edit, null) },
-                                onClick = { menuOpen = false; showRename = true },
+                                onClick = { menuOpen = false; guard { showRename = true } },
                             )
                             DropdownMenuItem(
                                 text = { Text("내보내기") },
@@ -293,11 +299,11 @@ fun DeckScreen(
             items(shown, key = { it.id }) { word ->
                 WordRow(
                     word = word,
-                    onClick = { editing = word },
-                    onToggleMastered = { vm.toggleMastered(word) },
-                    onFlag = { vm.setFlagged(word, !word.flagged) },
-                    onExclude = { vm.setExcluded(word, !word.excluded) },
-                    onDelete = { vm.deleteWord(word) },
+                    onClick = { guard { editing = word } },
+                    onToggleMastered = { guard { vm.toggleMastered(word) } },
+                    onFlag = { guard { vm.setFlagged(word, !word.flagged) } },
+                    onExclude = { guard { vm.setExcluded(word, !word.excluded) } },
+                    onDelete = { guard { vm.deleteWord(word) } },
                 )
             }
         }
@@ -369,6 +375,15 @@ fun DeckScreen(
                 if (name.isNotBlank()) vm.updateDeck { it.copy(name = name) }
                 showRename = false
             },
+        )
+    }
+    pending?.let { action ->
+        PinConfirmDialog(
+            text = "단어를 고치려면 비밀번호를 입력하세요.",
+            check = vm.settings::checkPin,
+            onDismiss = { pending = null },
+            onConfirm = { unlocked = true; pending = null; action() },
+            confirmText = "확인",
         )
     }
     if (showDelete) {

@@ -15,6 +15,9 @@ import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -779,12 +782,11 @@ private fun rememberTts(): TextToSpeech? {
 @Composable
 fun StudyScreen(
     onBack: () -> Unit,
+    onSettings: () -> Unit,
     vm: StudyViewModel = viewModel(factory = StudyViewModel.Factory),
 ) {
     val tts = rememberTts()
     var confirmExit by remember { mutableStateOf(false) }
-    var menuOpen by remember { mutableStateOf(false) }
-    var editing by remember { mutableStateOf(false) }
     val inSession = !vm.loading && !vm.finished
     // Leaving in the middle of a session asks first, from the back button and the system back gesture.
     BackHandler(enabled = inSession) { confirmExit = true }
@@ -808,28 +810,8 @@ fun StudyScreen(
                 },
                 actions = {
                     StudyTimer(vm)
-                    if (inSession && vm.current != null) {
-                        Box {
-                            IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "카드 메뉴") }
-                            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                DropdownMenuItem(
-                                    text = { Text("카드 수정") },
-                                    leadingIcon = { Icon(Icons.Default.Edit, null) },
-                                    onClick = { menuOpen = false; editing = true },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text(if (vm.current?.flagged == true) "수정 필요 표시 지우기" else "오타·수정 필요 표시") },
-                                    leadingIcon = { Icon(Icons.Default.Flag, null) },
-                                    onClick = { menuOpen = false; vm.toggleFlag() },
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("이 카드 학습에서 빼기") },
-                                    leadingIcon = { Icon(Icons.Default.Block, null) },
-                                    onClick = { menuOpen = false; vm.excludeCurrent() },
-                                )
-                            }
-                        }
-                    }
+                    // Card editing lives with the parent (deck screen, settings), not in the child's study screen.
+                    IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "설정") }
                 },
             )
         },
@@ -985,18 +967,6 @@ fun StudyScreen(
             dismissButton = { TextButton(onClick = { confirmExit = false }) { Text("계속하기") } },
         )
     }
-    if (editing) {
-        vm.current?.let { w ->
-            CardEditDialog(
-                title = "카드 수정",
-                initialText = w.text,
-                initialMeaning = w.meaning,
-                initialPos = w.pos,
-                onDismiss = { editing = false },
-                onConfirm = { t, m, p -> vm.editCurrent(t, m, p); editing = false },
-            )
-        }
-    }
 }
 
 @Composable
@@ -1148,12 +1118,36 @@ private fun formatTime(ms: Long): String {
 @Composable
 private fun StudyTimer(vm: StudyViewModel) {
     val goal = if (vm.goalMs > 0) " / ${formatTime(vm.goalMs)}" else ""
+    var help by remember { mutableStateOf(false) }
+    if (help) {
+        AlertDialog(
+            onDismissRequest = { help = false },
+            title = { Text("위에 있는 숫자들") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "⏱ ${formatTime(vm.todayMs)}$goal\n오늘 공부한 시간" +
+                            (if (vm.goalMs > 0) " / 하루 최소 학습 시간" else "") +
+                            "이에요. 화면을 잠시 안 건드리면 ⏸로 멈춰요.",
+                    )
+                    if (vm.goalWords > 0) {
+                        Text(
+                            "🧠 ${vm.learnedToday}/${vm.goalWords}\n오늘 외운 단어 / 하루 목표예요. " +
+                                "객관식·빈칸·듣고 쓰기에서 맞힌 단어만 세요. 뜻 카드 넘기기는 안 세요.",
+                        )
+                    }
+                    Text("제목의 ${vm.doneCount}/${vm.sessionSize}\n이번 학습에서 끝낸 카드 / 전체 카드예요.")
+                }
+            },
+            confirmButton = { TextButton(onClick = { help = false }) { Text("알겠어요") } },
+        )
+    }
     Text(
         (if (vm.paused) "⏸ " else "⏱ ") + formatTime(vm.todayMs) + goal +
             if (vm.goalWords > 0) "  🧠 ${vm.learnedToday}/${vm.goalWords}" else "",
         style = MaterialTheme.typography.titleSmall,
         color = if (vm.paused) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(end = 16.dp),
+        modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { help = true }.padding(horizontal = 6.dp, vertical = 4.dp),
     )
 }
 
