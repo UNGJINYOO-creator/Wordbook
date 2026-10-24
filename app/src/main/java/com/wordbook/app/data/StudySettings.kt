@@ -59,6 +59,26 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("dailyWords", 30)
         set(v) = prefs.edit().putInt("dailyWords", v).apply()
 
+    /** Hour of the evening reminder, -1 = off. */
+    var reminderHour: Int
+        get() = prefs.getInt("reminderHour", 20)
+        set(v) = prefs.edit().putInt("reminderHour", v).apply()
+
+    /** Telegram the parents when the child claims a coupon. */
+    var alertCoupon: Boolean
+        get() = prefs.getBoolean("alertCoupon", true)
+        set(v) = prefs.edit().putBoolean("alertCoupon", v).apply()
+
+    /** Telegram the parents when a study streak breaks. */
+    var alertStreak: Boolean
+        get() = prefs.getBoolean("alertStreak", true)
+        set(v) = prefs.edit().putBoolean("alertStreak", v).apply()
+
+    /** Telegram the parents at reminder time when the goal isn't met yet. */
+    var alertEvening: Boolean
+        get() = prefs.getBoolean("alertEvening", true)
+        set(v) = prefs.edit().putBoolean("alertEvening", v).apply()
+
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int
         get() = prefs.getInt("dailyGoal", 0)

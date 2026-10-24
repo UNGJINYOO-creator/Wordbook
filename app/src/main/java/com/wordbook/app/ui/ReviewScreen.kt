@@ -33,11 +33,13 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.Coupon
 import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.Game
+import com.wordbook.app.data.ParentAlerts
 import com.wordbook.app.data.Reward
 import com.wordbook.app.data.StudySettings
 import androidx.compose.foundation.layout.size
@@ -81,7 +83,11 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     fun claim(reward: Reward) {
-        game.claim(reward)
+        if (game.claim(reward) && StudySettings(getApplication()).alertCoupon) {
+            viewModelScope.launch {
+                ParentAlerts.send(getApplication(), "🎟 쿠폰을 받았어요: ${reward.name} (⭐${reward.cost})")
+            }
+        }
         refresh()
     }
 

@@ -34,6 +34,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.lifecycle.lifecycleScope
 import com.wordbook.app.data.DefaultDecks
+import com.wordbook.app.data.ParentAlerts
+import com.wordbook.app.data.Reminder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.wordbook.app.data.StudySettings
@@ -62,7 +64,14 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val settings = StudySettings(this)
-        lifecycleScope.launch(Dispatchers.IO) { DefaultDecks.seed(applicationContext) }
+        lifecycleScope.launch(Dispatchers.IO) {
+            DefaultDecks.seed(applicationContext)
+            ParentAlerts.checkStreak(applicationContext)
+        }
+        Reminder.schedule(applicationContext)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && settings.reminderHour >= 0) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
         setContent {
             WordBookTheme {
                 var onboarding by remember { mutableStateOf(!settings.onboarded) }

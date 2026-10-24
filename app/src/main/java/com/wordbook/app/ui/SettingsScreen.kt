@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.BlankLevel
+import com.wordbook.app.data.Reminder
 import com.wordbook.app.data.Report
 import com.wordbook.app.data.DictationPass
 import com.wordbook.app.data.Game
@@ -68,6 +69,10 @@ fun SettingsScreen() {
     var autoSpeak by remember { mutableStateOf(settings.autoSpeak) }
     var size by remember { mutableStateOf(settings.sessionSize) }
     var goal by remember { mutableStateOf(settings.dailyGoalMinutes) }
+    var reminderHour by remember { mutableStateOf(settings.reminderHour) }
+    var alertCoupon by remember { mutableStateOf(settings.alertCoupon) }
+    var alertStreak by remember { mutableStateOf(settings.alertStreak) }
+    var alertEvening by remember { mutableStateOf(settings.alertEvening) }
     var dailyWords by remember { mutableStateOf(settings.dailyWords.takeIf { it > 0 }?.toString() ?: "") }
     var idle by remember { mutableStateOf(settings.idleSeconds) }
     var hand by remember { mutableStateOf(settings.handSize) }
@@ -318,6 +323,30 @@ fun SettingsScreen() {
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
+            Section("저녁 알림")
+            Text(
+                "이 시간까지 오늘 목표를 못 채우면 휴대폰에 알림을 띄워요",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
+                listOf(-1 to "끔", 18 to "오후 6시", 19 to "7시", 20 to "8시", 21 to "9시", 22 to "10시").forEach { (h, label) ->
+                    FilterChip(
+                        selected = reminderHour == h,
+                        onClick = {
+                            reminderHour = h
+                            settings.reminderHour = h
+                            Reminder.schedule(context)
+                            saved()
+                        },
+                        label = { Text(label) },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
             Section("보상 쿠폰 (부모님용)")
             Text(
                 "아이가 정답으로 모은 별로 받을 수 있는 보상을 정해요. 쿠폰은 복습·통계 탭에서 받아요.",
@@ -445,6 +474,15 @@ fun SettingsScreen() {
             ) { Text("지금 오늘 학습 결과 보내기") }
             tgStatus?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 16.dp))
+            }
+            ToggleRow("쿠폰을 받으면 알림", "아이가 별로 보상 쿠폰을 받는 순간 알려요", alertCoupon) {
+                alertCoupon = it; settings.alertCoupon = it
+            }
+            ToggleRow("연속 학습이 끊기면 알림", "이틀 이상 이어지던 공부를 하루 쉬면 다음 날 알려요", alertStreak) {
+                alertStreak = it; settings.alertStreak = it
+            }
+            ToggleRow("저녁에 목표를 못 채웠으면 알림", "저녁 알림 시간에 아직 남은 양을 알려요", alertEvening) {
+                alertEvening = it; settings.alertEvening = it
             }
 
             Text(
