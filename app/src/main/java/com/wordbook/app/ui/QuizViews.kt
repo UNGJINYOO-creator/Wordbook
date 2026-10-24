@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -112,7 +113,7 @@ fun ChoiceQuiz(
                     colors = colors,
                     shape = ButtonShape,
                     border = null,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
                 ) { Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, textAlign = TextAlign.Center) }
             }
         }

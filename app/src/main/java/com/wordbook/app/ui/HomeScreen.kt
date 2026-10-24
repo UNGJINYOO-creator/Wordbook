@@ -666,16 +666,13 @@ private fun HomeHeader(learned: Int, goalWords: Int, todayMs: Long, goalMs: Long
                 if (goalMs > 0) "${todayMs / 60_000}/${goalMs / 60_000}분" else null,
             )
             val done = (goalWords == 0 || learned >= goalWords) && (goalMs == 0L || todayMs >= goalMs)
-            Text(
+            FitText(
                 when {
                     parts.isEmpty() -> "▶ 오늘 학습 시작"
                     done -> "✅ 오늘 목표 달성!"
                     else -> "▶ 오늘 " + parts.joinToString(" · ")
                 },
-                color = Color(0xFF0B3C9E),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
+                MaterialTheme.typography.labelLarge.copy(color = Color(0xFF0B3C9E), fontWeight = FontWeight.Bold),
                 modifier = Modifier
                     .padding(end = 140.dp)
                     .clip(RoundedCornerShape(20.dp))
@@ -912,7 +909,7 @@ private fun CoverDialog(deck: DeckSummary, level: Int, onDismiss: () -> Unit, on
                 Box(
                     Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(DeckColors[color]),
                     contentAlignment = Alignment.Center,
-                ) { Text("$emoji  ${deck.name}", color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1) }
+                ) { Text("$emoji  ${deck.name}", color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 Text("색", style = MaterialTheme.typography.labelLarge)
                 DeckColors.chunked(4).forEachIndexed { row, colors ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

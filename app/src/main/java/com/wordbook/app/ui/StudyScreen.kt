@@ -810,12 +810,13 @@ fun StudyScreen(
         topBar = {
             AppTopBar(
                 title = {
-                    Text(
+                    FitText(
                         if (vm.finished) "학습 결과"
                         else (if (vm.test) "📝 시험 " else if (vm.review) "복습 " else "") +
                             (if (vm.stepCount > 1) "${vm.stepIndex + 1}/${vm.stepCount} ${vm.stepLabel} · " else "") +
                             if (vm.mode == StudyMode.LIST) "${vm.runWords.size}개" else "${vm.doneCount}/${vm.sessionSize}",
-                        maxLines = 1,
+                        androidx.compose.material3.LocalTextStyle.current,
+                        align = androidx.compose.ui.text.style.TextAlign.Start,
                     )
                 },
                 navigationIcon = {

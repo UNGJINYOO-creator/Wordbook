@@ -194,7 +194,7 @@ fun DeckScreen(
         topBar = {
             AppTopBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                title = { Text(deck?.name ?: "", maxLines = 1) },
+                title = { Text(deck?.name ?: "", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
