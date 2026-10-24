@@ -13,8 +13,9 @@ android {
         applicationId = "com.wordbook.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // The CI run number, so the app can tell when a newer build is out (see net/Updater.kt).
+        versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionName = "build-$versionCode"
         // Modern phones are all 64-bit ARM; dropping other ABIs keeps the APK much smaller
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -45,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

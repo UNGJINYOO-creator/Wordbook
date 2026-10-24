@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     AppContent()
                 }
+                com.wordbook.app.ui.UpdateDialog()
             }
         }
     }
