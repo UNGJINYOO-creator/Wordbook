@@ -66,6 +66,8 @@ fun SettingsScreen() {
     var goal by remember { mutableStateOf(settings.dailyGoalMinutes) }
     var idle by remember { mutableStateOf(settings.idleSeconds) }
     var hand by remember { mutableStateOf(settings.handSize) }
+    var recentShare by remember { mutableStateOf(settings.recentShare) }
+    var recentDays by remember { mutableStateOf(settings.recentDays) }
     var leave by remember { mutableStateOf(settings.knownToLeave) }
     var token by remember { mutableStateOf(settings.telegramToken) }
     var chatId by remember { mutableStateOf(settings.telegramChatId) }
@@ -177,6 +179,44 @@ fun SettingsScreen() {
             }
             ToggleRow("뒷면 먼저", "뜻을 먼저 보고 영어 단어 떠올리기", backFirst) {
                 backFirst = it; settings.backFirst = it; saved()
+            }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("종합단어장")
+            Text(
+                "종합단어장을 학습할 때 최근 넣은 단어를 얼마나 내고, 나머지는 기존 단어로 채워요. " +
+                    "기존 단어는 복습할 때가 된 것과 자주 틀린 것부터 나와요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text("최근 추가 단어 비율", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
+                listOf(50, 70, 80, 90, 100).forEach { n ->
+                    FilterChip(
+                        selected = recentShare == n,
+                        onClick = { recentShare = n; settings.recentShare = n; saved() },
+                        label = { Text("${n}%") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
+            }
+            Text(
+                "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text("며칠 안에 넣은 단어를 '최근'으로 볼까요?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                listOf(3, 7, 14).forEach { n ->
+                    FilterChip(
+                        selected = recentDays == n,
+                        onClick = { recentDays = n; settings.recentDays = n; saved() },
+                        label = { Text("${n}일") },
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 

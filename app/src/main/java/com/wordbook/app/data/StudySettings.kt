@@ -136,4 +136,14 @@ class StudySettings(context: Context) {
     var dictationPass: DictationPass
         get() = runCatching { DictationPass.valueOf(prefs.getString("dictPass", null)!!) }.getOrDefault(DictationPass.SESSION)
         set(v) = prefs.edit().putString("dictPass", v.name).apply()
+
+    /** In a 종합단어장, the share of each session taken from recently added words (percent). */
+    var recentShare: Int
+        get() = prefs.getInt("recentShare", 90)
+        set(v) = prefs.edit().putInt("recentShare", v).apply()
+
+    /** Words added within this many days count as 최근 추가. */
+    var recentDays: Int
+        get() = prefs.getInt("recentDays", 7)
+        set(v) = prefs.edit().putInt("recentDays", v).apply()
 }

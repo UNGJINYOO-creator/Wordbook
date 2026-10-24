@@ -253,8 +253,21 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     val words = dao.getWords(deckId).filter { !it.excluded }
                     if (words.size >= 4) pool = words
                     // Mastered cards are skipped, unless that leaves nothing to study.
-                    if (onlyUnknown) words.filter { !it.known }
+                    val candidates = if (onlyUnknown) words.filter { !it.known }
                     else words.filter { !it.mastered }.ifEmpty { words }
+                    if (dao.getDeck(deckId)?.isCollection == true) {
+                        // 종합단어장: mostly recent words, plus the old words that most need a look.
+                        val limit = settings.sessionSize.takeIf { it > 0 } ?: COLLECTION_SESSION
+                        val days = settings.recentDays
+                        val share = settings.recentShare
+                        val picked = CollectionMix.pick(candidates, limit, share, days, System.currentTimeMillis())
+                        sessionWords = order(picked)
+                        dao.touchDecks(listOf(deckId) + sessionWords.map { it.deckId }.distinct(), System.currentTimeMillis())
+                        start(sessionWords)
+                        loading = false
+                        return@launch
+                    }
+                    candidates
                 }
             }
             val limit = settings.sessionSize
@@ -547,6 +560,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     companion object {
         const val NEW_PER_DAY = 20
+        /** Cards per 종합단어장 session when 한 번에 학습할 카드 수 is 전부. */
+        const val COLLECTION_SESSION = 20
 
         val Factory = viewModelFactory {
             initializer { StudyViewModel(this[APPLICATION_KEY]!!, createSavedStateHandle()) }

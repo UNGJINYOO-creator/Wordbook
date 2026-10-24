@@ -64,6 +64,8 @@ data class Word(
     val excluded: Boolean = false,
     /** Marked during study as needing a fix (typo, wrong meaning). */
     val flagged: Boolean = false,
+    /** When the word was saved, for the 최근 추가 share in a 종합단어장; 0 = before this was kept. */
+    val addedAt: Long = System.currentTimeMillis(),
 )
 
 /** Deck row with counts for the home screen. */
