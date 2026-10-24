@@ -509,12 +509,17 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val stepModes = steps[stepIndex]
         var m = (stepModes + listOfNotNull(weakness.mode?.takeIf { it in stepModes })).random()
         modeNote = null
+        // Dictation that can't be heard becomes: read the meaning, write the whole word.
+        var fullSpelling = false
         if (m == StudyMode.DICTATION) {
             if (audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) {
                 m = StudyMode.SPELLING
-                modeNote = "소리가 꺼져 있어서 빈칸 문제로 바꿨어요"
+                fullSpelling = true
+                modeNote = "🔇 소리가 꺼져 있어서 뜻을 보고 스펠링 전체 쓰기로 바꿨어요"
             } else if (dictationOff) {
                 m = StudyMode.SPELLING
+                fullSpelling = true
+                modeNote = "🔇 들을 수 없어서 뜻을 보고 스펠링 전체 쓰기로 나와요"
             }
         }
         val others = pool.filter { it.id != word.id && !it.text.equals(word.text, true) }.distinctBy { it.text.lowercase() }
@@ -532,8 +537,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             val wrong = (same + others.shuffled()).distinctBy { it.id }.take(3)
             choices = (wrong + word).shuffled()
         }
-        if (m == StudyMode.SPELLING) pattern = makePattern(word)
+        if (m == StudyMode.SPELLING) pattern = if (fullSpelling) allBlanks(word) else makePattern(word)
     }
+
+    private fun allBlanks(word: Word) = word.text.map { if (it.isLetter()) '_' else it }.joinToString("")
 
     private fun makePattern(word: Word): String {
         val level = when (settings.blankLevel) {
@@ -558,12 +565,12 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val word = current ?: return
         if (settings.dictationPass == DictationPass.SESSION) {
             dictationOff = true
-            modeNote = "이번 학습 동안 듣고 쓰기는 빈칸 문제로 나와요"
+            modeNote = "🔇 들을 수 없어서 뜻을 보고 스펠링 전체 쓰기로 바꿨어요 (이번 학습 내내)"
         } else {
-            modeNote = "이번 단어만 빈칸 문제로 바꿨어요"
+            modeNote = "🔇 들을 수 없어서 뜻을 보고 스펠링 전체 쓰기로 바꿨어요"
         }
         mode = StudyMode.SPELLING
-        pattern = makePattern(word)
+        pattern = allBlanks(word)
         answered = null
         turn++
     }
