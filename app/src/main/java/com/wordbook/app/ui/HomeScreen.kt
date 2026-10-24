@@ -10,6 +10,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -140,6 +143,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var learned by mutableIntStateOf(0)
         private set
+    var totalMs by mutableLongStateOf(0L)
+        private set
+    var totalLearned by mutableIntStateOf(0)
+        private set
     var goalWords by mutableIntStateOf(0)
         private set
     private val game = Game(app)
@@ -154,6 +161,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         goalMs = settings.dailyGoalMinutes * 60_000L
         streak = stats.streak
         learned = stats.learnedCount
+        totalMs = stats.totalStudyMs
+        totalLearned = stats.totalLearned
         goalWords = settings.dailyWords
         stars = game.stars
         earned = game.earned
@@ -196,6 +205,69 @@ internal fun newPhotoUri(context: Context): Uri {
 }
 
 internal fun minutesText(ms: Long): String = "${ms / 60_000}분"
+
+/** "3시간 12분", or "12분" under an hour. */
+internal fun hoursText(ms: Long): String {
+    val m = ms / 60_000
+    return if (m >= 60) "${m / 60}시간 ${m % 60}분" else "${m}분"
+}
+
+/** Explains levels, what they unlock and what stars are for. */
+@Composable
+private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: Int, onDismiss: () -> Unit) {
+    val level = Levels.levelOf(earned)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Lv.$level ${Levels.title(level)}") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("📊 지금까지 ${hoursText(totalMs)} 공부했고, 단어 ${totalLearned}개를 외웠어요.", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(4.dp))
+                Text("⭐ 별은 뭐예요?", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "객관식·빈칸·듣고 쓰기에서 맞히면 ⭐1개, 5문제 연속으로 맞히면 ⭐2개를 더 받아요. " +
+                        "7일 연속 출석하면 🏅 배지와 ⭐20개! 모은 별은 복습·통계 탭에서 부모님이 정한 보상 쿠폰으로 바꿀 수 있어요. " +
+                        "지금 쓸 수 있는 별은 ⭐$stars 개예요.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text("🏆 레벨", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "지금까지 받은 별이 쌓이면 레벨이 올라가요. 별을 쿠폰으로 써도 레벨은 내려가지 않아요. " +
+                        "레벨이 오르면 칭호가 바뀌고 단어장 표지에 쓸 새 이모지가 열려요.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                (1..Levels.titles.size).forEach { n ->
+                    val reached = n <= level
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+                            .background(if (n == level) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(if (reached) "✅" else "🔒", fontSize = 14.sp)
+                        Text(
+                            " Lv.$n ${Levels.title(n)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (n == level) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            (Levels.unlocks[n]?.joinToString("") ?: "") + "  ⭐${Levels.starsFor(n)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                }
+                Text(
+                    "Lv.${Levels.titles.size} 다음부터는 단어 왕의 레벨 숫자가 계속 올라가요. 오늘도 화이팅! 💪",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("좋아요") } },
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -248,7 +320,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
-                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, vm.learned, vm.goalWords, onToday)
+                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
             }
             if (decks.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -396,6 +468,7 @@ fun HomeScreen(
     deckToStyle?.let { deck ->
         CoverDialog(
             deck = deck,
+            level = Levels.levelOf(vm.earned),
             onDismiss = { deckToStyle = null },
             onSave = { color, emoji ->
                 vm.updateDeck(deck.id) { it.copy(color = color, emoji = emoji) }
@@ -446,8 +519,12 @@ private fun TodayCard(
     earned: Int,
     learned: Int,
     goalWords: Int,
+    totalMs: Long,
+    totalLearned: Int,
     onToday: () -> Unit,
 ) {
+    var showLevels by remember { mutableStateOf(false) }
+    if (showLevels) LevelDialog(earned, stars, totalMs, totalLearned) { showLevels = false }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -502,19 +579,28 @@ private fun TodayCard(
             val level = Levels.levelOf(earned)
             val from = Levels.starsFor(level)
             val to = Levels.starsFor(level + 1)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Lv.$level ${Levels.title(level)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                Text("⭐ $stars", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            // Tapping the level part explains levels and stars.
+            Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { showLevels = true }.padding(vertical = 2.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Lv.$level ${Levels.title(level)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text(" ⓘ", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
+                    Spacer(Modifier.weight(1f))
+                    Text("⭐ $stars", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                }
+                Spacer(Modifier.height(6.dp))
+                ThickProgress((earned - from) / (to - from).toFloat(), Modifier.fillMaxWidth())
+                Text(
+                    "다음 레벨까지 ⭐ ${to - earned} · 누르면 레벨 설명",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    "📊 지금까지 ${hoursText(totalMs)} 공부 · 외운 단어 ${totalLearned}개",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
-            Spacer(Modifier.height(6.dp))
-            ThickProgress((earned - from) / (to - from).toFloat(), Modifier.fillMaxWidth())
-            Text(
-                "다음 레벨까지 ⭐ ${to - earned}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(top = 4.dp),
-            )
             Spacer(Modifier.height(12.dp))
             if (dueCount + newCount > 0) {
                 PrimaryButton("오늘 학습 시작", onToday)
@@ -625,7 +711,7 @@ private fun DeckTile(
 
 /** Picks a cover colour and emoji; the colour is saved 1-based. */
 @Composable
-private fun CoverDialog(deck: DeckSummary, onDismiss: () -> Unit, onSave: (color: Int, emoji: String) -> Unit) {
+private fun CoverDialog(deck: DeckSummary, level: Int, onDismiss: () -> Unit, onSave: (color: Int, emoji: String) -> Unit) {
     var color by remember { mutableIntStateOf(deckColorIndex(deck)) }
     var emoji by remember { mutableStateOf(deckEmoji(deck)) }
     AlertDialog(
@@ -650,15 +736,21 @@ private fun CoverDialog(deck: DeckSummary, onDismiss: () -> Unit, onSave: (color
                     }
                 }
                 Text("이모지", style = MaterialTheme.typography.labelLarge)
-                DeckEmojis.chunked(6).forEach { row ->
+                // Emojis from higher levels show locked until the level is reached.
+                (DeckEmojis + Levels.unlocks.values.flatten()).chunked(6).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         row.forEach { e ->
+                            val need = Levels.levelFor(e)
+                            val open = level >= need
                             Box(
                                 Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
                                     .background(if (e == emoji) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                                    .clickable { emoji = e },
+                                    .clickable(enabled = open) { emoji = e },
                                 contentAlignment = Alignment.Center,
-                            ) { Text(e, fontSize = 22.sp) }
+                            ) {
+                                Text(e, fontSize = 22.sp, modifier = Modifier.alpha(if (open) 1f else 0.25f))
+                                if (!open) Text("Lv$need", fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.BottomCenter))
+                            }
                         }
                     }
                 }

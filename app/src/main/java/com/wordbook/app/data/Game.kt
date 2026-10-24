@@ -27,6 +27,20 @@ object Levels {
     }
 
     fun title(level: Int): String = titles[(level - 1).coerceAtMost(titles.lastIndex)]
+
+    /** Deck cover emojis that each level unlocks (level 1 has the basic set). */
+    val unlocks: Map<Int, List<String>> = mapOf(
+        2 to listOf("🦊", "🐱"),
+        3 to listOf("🧭", "🗺️"),
+        4 to listOf("🛡️", "⚔️"),
+        5 to listOf("🪄", "🔮"),
+        6 to listOf("🎓", "🔬"),
+        7 to listOf("🦁", "🔥"),
+        8 to listOf("👑", "💎"),
+    )
+
+    /** The level that unlocks [emoji], or 1 for a basic one. */
+    fun levelFor(emoji: String): Int = unlocks.entries.firstOrNull { emoji in it.value }?.key ?: 1
 }
 
 /** Stars, attendance stamps, badges and reward coupons. Kept in SharedPreferences. */

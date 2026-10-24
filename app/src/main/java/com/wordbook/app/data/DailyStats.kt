@@ -41,7 +41,11 @@ class DailyStats(context: Context) {
         if (wordId.toString() in ids) return false
         prefs.edit().putString("learned", (ids + wordId.toString()).joinToString(",")).apply()
         val key = "words_${today()}"
-        history.edit().putInt(key, history.getInt(key, 0) + 1).apply()
+        val ever = history.getStringSet("ever", emptySet())!!
+        history.edit()
+            .putInt(key, history.getInt(key, 0) + 1)
+            .putStringSet("ever", ever + wordId.toString())
+            .apply()
         return true
     }
 
@@ -66,6 +70,13 @@ class DailyStats(context: Context) {
     /** Study time per day for the last [n] days, oldest first. */
     fun lastDays(n: Int): List<Pair<String, Long>> =
         (n - 1 downTo 0).map { daysAgo(it).let { d -> d to history.getLong("ms_$d", 0) } }
+
+    /** Study time over all days. */
+    val totalStudyMs: Long
+        get() = history.all.entries.filter { it.key.startsWith("ms_") }.sumOf { (it.value as? Long) ?: 0L }
+
+    /** Different words ever answered right in a quiz. */
+    val totalLearned: Int get() = history.getStringSet("ever", emptySet())!!.size
 
     /** Answers and right answers over all days. */
     val totalAnswered: Int get() = history.getInt("answered", 0)
