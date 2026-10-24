@@ -145,7 +145,15 @@ private fun AppContent() {
                             )
                         }
                         composable("settings") {
-                            SettingsScreen()
+                            SettingsScreen(onAdd = { kind ->
+                                // The home screen opens the camera, album or name dialog.
+                                com.wordbook.app.ui.AddRequest.kind = kind
+                                nav.navigate("home") {
+                                    popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            })
                         }
                         composable(
                             "scan?uri={uri}&deckId={deckId}",

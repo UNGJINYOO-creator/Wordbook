@@ -356,10 +356,25 @@ fun HomeScreen(
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
         if (uris.isNotEmpty()) onPhoto(uris)
     }
+    // 단어 추가 lives in the settings (behind the password); it hands the chosen way over to this screen.
+    LaunchedEffect(AddRequest.kind) {
+        when (AddRequest.kind) {
+            AddKind.CAMERA -> {
+                val uri = newPhotoUri(context)
+                pendingUri = uri.toString()
+                takePicture.launch(uri)
+            }
+            AddKind.ALBUM -> pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            AddKind.DECK -> showNewDeck = true
+            AddKind.COLLECTION -> showNewCollection = true
+            null -> {}
+        }
+        AddRequest.kind = null
+    }
 
     Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-        HomeHeader(onAdd = { guard { showAdd = true } })
+        HomeHeader(vm.learned, vm.goalWords, vm.todayMs, vm.goalMs, onToday)
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             // The first card rides up over the bottom of the blue header.
@@ -608,9 +623,9 @@ fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Uni
     )
 }
 
-/** Blue sea header: the app name, a greeting, the add button and the picture in a frame on the right. */
+/** Blue sea header: the app name, a greeting, today's progress pill (starts 오늘 학습) and the picture in a frame on the right. */
 @Composable
-private fun HomeHeader(onAdd: () -> Unit) {
+private fun HomeHeader(learned: Int, goalWords: Int, todayMs: Long, goalMs: Long, onToday: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
@@ -633,15 +648,26 @@ private fun HomeHeader(onAdd: () -> Unit) {
             )
             Text("오늘도 단어\n낚으러 가볼까? 🐟", color = Color.White.copy(alpha = 0.92f), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(10.dp))
+            val parts = listOfNotNull(
+                if (goalWords > 0) "$learned/${goalWords}개" else null,
+                if (goalMs > 0) "${todayMs / 60_000}/${goalMs / 60_000}분" else null,
+            )
+            val done = (goalWords == 0 || learned >= goalWords) && (goalMs == 0L || todayMs >= goalMs)
             Text(
-                "＋ 단어 추가",
+                when {
+                    parts.isEmpty() -> "▶ 오늘 학습 시작"
+                    done -> "✅ 오늘 목표 달성!"
+                    else -> "▶ 오늘 " + parts.joinToString(" · ")
+                },
                 color = Color(0xFF0B3C9E),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
                 modifier = Modifier
+                    .padding(end = 140.dp)
                     .clip(RoundedCornerShape(20.dp))
                     .background(Color.White)
-                    .clickable(onClick = onAdd)
+                    .clickable(onClick = onToday)
                     .padding(horizontal = 14.dp, vertical = 7.dp),
             )
         }
@@ -946,4 +972,11 @@ fun PinConfirmDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
+}
+
+enum class AddKind { CAMERA, ALBUM, DECK, COLLECTION }
+
+/** A way of adding words picked in the settings, carried out by the home screen. */
+object AddRequest {
+    var kind by mutableStateOf<AddKind?>(null)
 }

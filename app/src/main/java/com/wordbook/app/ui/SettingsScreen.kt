@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
     val context = LocalContext.current
     val settings = remember { StudySettings(context) }
     val game = remember { Game(context) }
@@ -150,6 +150,26 @@ fun SettingsScreen() {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
+            }
+            Column(
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 5.dp)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+            ) {
+                Text("➕ 단어 추가", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("사진·스크린샷으로 단어를 넣거나 단어장을 만들어요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton("📷 사진 찍기", { onAdd(AddKind.CAMERA) }, Modifier.weight(1f))
+                    SecondaryButton("🖼 앨범에서", { onAdd(AddKind.ALBUM) }, Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryButton("📒 빈 단어장", { onAdd(AddKind.DECK) }, Modifier.weight(1f))
+                    SecondaryButton("📚 종합단어장", { onAdd(AddKind.COLLECTION) }, Modifier.weight(1f))
+                }
             }
             Text(
                 "아래 항목을 누르면 펼쳐져요. 바꾸면 바로 저장돼요.",
