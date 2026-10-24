@@ -44,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -127,6 +128,10 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     var pickedId by mutableStateOf<Long?>(null)
         private set
     private var turn = 0
+    /** 듣고 쓰기 was passed for the rest of this game: those questions become meaning + full spelling. */
+    private var listenOff = false
+    var modeNote by mutableStateOf<String?>(null)
+        private set
     private var questionAt = 0L
 
     var combo by mutableIntStateOf(0)
@@ -198,6 +203,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         combo = 0; right = 0; total = 0
         missed.clear()
         recent.clear()
+        listenOff = false
         startedAt = System.currentTimeMillis()
         phase = FishPhase.PLAYING
         nextQuestion()
@@ -220,6 +226,13 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             roll < 0.85 || muted -> StudyMode.SPELLING
             else -> StudyMode.DICTATION
         }
+        modeNote = null
+        if (mode == StudyMode.DICTATION && listenOff) {
+            mode = StudyMode.SPELLING
+            pattern = w.text.map { if (it.isLetter()) '_' else it }.joinToString("")
+            modeNote = "🔇 뜻을 보고 스펠링 전체를 쓰세요"
+            return
+        }
         if (mode == StudyMode.CHOICE) {
             val others = pool.filter { it.id != w.id && !it.text.equals(w.text, true) }
             val same = others.filter { it.pos == w.pos && w.pos.isNotEmpty() }.shuffled()
@@ -238,6 +251,17 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         val startAt = (0..candidates.size - count).random()
         val set = candidates.subList(startAt, startAt + count).toSet()
         return text.mapIndexed { i, c -> if (i in set) '_' else c }.joinToString("")
+    }
+
+    /** "지금 들을 수 없어요": the same word with its meaning shown and every letter blank, not counted as wrong. */
+    fun passDictation() {
+        val w = word ?: return
+        if (mode != StudyMode.DICTATION || answered != null) return
+        if (settings.dictationPass == com.wordbook.app.data.DictationPass.SESSION) listenOff = true
+        mode = StudyMode.SPELLING
+        pattern = w.text.map { if (it.isLetter()) '_' else it }.joinToString("")
+        modeNote = "🔇 들을 수 없어서 뜻을 보고 스펠링 전체 쓰기로 바꿨어요"
+        questionAt = System.currentTimeMillis()
     }
 
     fun pick(choice: Word) {
@@ -470,7 +494,16 @@ private fun ColumnScope.Playing(vm: FishingViewModel, tts: TextToSpeech?) {
                 onNext = vm::next,
                 modifier = Modifier.fillMaxWidth(),
             )
-        } else {
+        } else key(vm.mode) {
+            vm.modeNote?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                )
+            }
             TypingQuiz(
                 word = w,
                 pattern = vm.pattern,
@@ -481,6 +514,11 @@ private fun ColumnScope.Playing(vm: FishingViewModel, tts: TextToSpeech?) {
                 onSpeak = { tts?.speak(w.text, TextToSpeech.QUEUE_FLUSH, null, "f${w.id}") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (vm.mode == StudyMode.DICTATION && vm.answered == null) {
+                TextButton(onClick = vm::passDictation, modifier = Modifier.fillMaxWidth()) {
+                    Text("🔇 지금 들을 수 없어요 · 뜻 보고 쓰기")
+                }
+            }
         }
     }
 }
