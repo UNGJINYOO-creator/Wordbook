@@ -121,7 +121,11 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     fun setExcluded(word: Word, excluded: Boolean) = viewModelScope.launch { dao.updateWord(word.copy(excluded = excluded)) }
 
-    fun deleteDeck(onDone: () -> Unit) = viewModelScope.launch { dao.deleteDeck(deckId); onDone() }
+    fun deleteDeck(onDone: () -> Unit) = viewModelScope.launch {
+        dao.unlinkChildren(deckId)
+        dao.deleteDeck(deckId)
+        onDone()
+    }
 
     /** The study mode chosen in settings, offered first on the 학습 시작 sheet. */
     val settings = StudySettings(getApplication())

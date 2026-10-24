@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -152,7 +153,21 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         onCreated(dao.insertDeck(Deck(name = name)))
     }
 
-    fun deleteDeck(id: Long) = viewModelScope.launch { dao.deleteDeck(id) }
+    fun deleteDeck(id: Long) = viewModelScope.launch {
+        dao.unlinkChildren(id)
+        dao.deleteDeck(id)
+    }
+
+    val collections = dao.observeCollections()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun link(deckId: Long, collectionId: Long) = viewModelScope.launch { dao.setCollection(deckId, collectionId) }
+
+    fun createCollectionAndLink(deckId: Long, name: String) = viewModelScope.launch {
+        dao.setCollection(deckId, dao.insertDeck(Deck(name = name, isCollection = true)))
+    }
+
+    fun createCollection(name: String) = viewModelScope.launch { dao.insertDeck(Deck(name = name, isCollection = true)) }
 
     fun updateDeck(id: Long, transform: (Deck) -> Deck) = viewModelScope.launch {
         dao.getDeck(id)?.let { dao.updateDeck(transform(it)) }
@@ -188,6 +203,9 @@ fun HomeScreen(
     var deckToDelete by remember { mutableStateOf<DeckSummary?>(null) }
     var deckToRename by remember { mutableStateOf<DeckSummary?>(null) }
     var deckToStyle by remember { mutableStateOf<DeckSummary?>(null) }
+    var deckToLink by remember { mutableStateOf<DeckSummary?>(null) }
+    var showNewCollection by rememberSaveable { mutableStateOf(false) }
+    val collections by vm.collections.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) { vm.refresh() }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -263,6 +281,8 @@ fun HomeScreen(
                         onStudy = { onStudyDeck(deck.id) },
                         onRename = { deckToRename = deck },
                         onStyle = { deckToStyle = deck },
+                        onLink = { deckToLink = deck },
+                        collectionName = collections.firstOrNull { it.id == deck.collectionId }?.name,
                         onDelete = { deckToDelete = deck },
                     )
                 }
@@ -300,6 +320,10 @@ fun HomeScreen(
                     showAdd = false
                     showNewDeck = true
                 }
+                SheetItem(Icons.Default.CollectionsBookmark, "종합단어장 만들기", "여러 단어장을 묶어서 한꺼번에 학습해요") {
+                    showAdd = false
+                    showNewCollection = true
+                }
             }
         }
     }
@@ -314,6 +338,31 @@ fun HomeScreen(
                 showNewDeck = false
                 vm.createEmptyDeck(name.ifBlank { "새 단어장" }, onOpenDeck)
             },
+        )
+    }
+    if (showNewCollection) {
+        TextInputDialog(
+            title = "새 종합단어장",
+            label = "이름",
+            initial = "종합 단어장",
+            confirmText = "만들기",
+            onDismiss = { showNewCollection = false },
+            onConfirm = { name ->
+                showNewCollection = false
+                vm.createCollection(name.ifBlank { "종합 단어장" })
+            },
+        )
+    }
+    deckToLink?.let { deck ->
+        CollectionDialog(
+            title = "종합단어장에 넣기",
+            collections = collections,
+            current = deck.collectionId,
+            onPick = { c -> vm.link(deck.id, c); deckToLink = null },
+            onCreate = { name -> vm.createCollectionAndLink(deck.id, name); deckToLink = null },
+            onRemove = if (deck.collectionId > 0) ({ vm.link(deck.id, 0); deckToLink = null }) else null,
+            onDismiss = { deckToLink = null },
+            dismissText = "취소",
         )
     }
     deckToRename?.let { deck ->
@@ -350,7 +399,8 @@ fun HomeScreen(
             )
         } else {
             ConfirmDialog(
-                text = "'${deck.name}' 단어장과 단어 ${deck.wordCount}개를 삭제할까요?",
+                text = if (deck.isCollection) "'${deck.name}' 종합단어장을 삭제할까요? 묶여 있던 단어장과 단어는 그대로 남아요."
+                else "'${deck.name}' 단어장과 단어 ${deck.wordCount}개를 삭제할까요?",
                 onDismiss = { deckToDelete = null },
                 onConfirm = { vm.deleteDeck(deck.id); deckToDelete = null },
             )
@@ -438,6 +488,8 @@ private fun DeckTile(
     onStudy: () -> Unit,
     onRename: () -> Unit,
     onStyle: () -> Unit,
+    onLink: () -> Unit,
+    collectionName: String?,
     onDelete: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -477,7 +529,10 @@ private fun DeckTile(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "${deck.wordCount}개 · ${(progress * 100).toInt()}%",
+                (if (deck.isCollection) "📚 종합 · " else "") + "${deck.wordCount}개 · ${(progress * 100).toInt()}%" +
+                    (collectionName?.let { " · $it" } ?: ""),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 color = Color.White.copy(alpha = 0.9f),
                 style = MaterialTheme.typography.labelMedium,
             )
@@ -494,6 +549,13 @@ private fun DeckTile(
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text("이름 바꾸기") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; onRename() })
             DropdownMenuItem(text = { Text("표지 바꾸기") }, leadingIcon = { Icon(Icons.Default.Palette, null) }, onClick = { menu = false; onStyle() })
+            if (!deck.isCollection) {
+                DropdownMenuItem(
+                    text = { Text(if (deck.collectionId > 0) "종합단어장 바꾸기·빼기" else "종합단어장에 넣기") },
+                    leadingIcon = { Icon(Icons.Default.CollectionsBookmark, null) },
+                    onClick = { menu = false; onLink() },
+                )
+            }
             DropdownMenuItem(
                 text = { Text("단어장 삭제", color = MaterialTheme.colorScheme.error) },
                 leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },

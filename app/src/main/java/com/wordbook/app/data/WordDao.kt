@@ -11,10 +11,11 @@ import kotlinx.coroutines.flow.Flow
 interface WordDao {
     @Query(
         """
-        SELECT d.id, d.name, d.createdAt, d.color, d.emoji, d.lastStudiedAt,
+        SELECT d.id, d.name, d.createdAt, d.color, d.emoji, d.lastStudiedAt, d.isCollection, d.collectionId,
                COUNT(w.id) AS wordCount,
                COALESCE(SUM(CASE WHEN w.known THEN 1 ELSE 0 END), 0) AS knownCount
-        FROM decks d LEFT JOIN words w ON w.deckId = d.id
+        FROM decks d LEFT JOIN words w
+            ON w.deckId = d.id OR w.deckId IN (SELECT c.id FROM decks c WHERE c.collectionId = d.id)
         GROUP BY d.id ORDER BY d.createdAt DESC
         """
     )
@@ -26,10 +27,14 @@ interface WordDao {
     @Query("SELECT * FROM decks WHERE id = :id")
     fun observeDeck(id: Long): Flow<Deck?>
 
-    @Query("SELECT * FROM words WHERE deckId = :deckId ORDER BY text COLLATE NOCASE")
+    // A 종합단어장 also shows the words of every deck linked to it; for other decks the subquery is empty.
+    @Query(
+        "SELECT * FROM words WHERE deckId = :deckId OR deckId IN (SELECT id FROM decks WHERE collectionId = :deckId) " +
+            "ORDER BY text COLLATE NOCASE",
+    )
     fun observeWords(deckId: Long): Flow<List<Word>>
 
-    @Query("SELECT * FROM words WHERE deckId = :deckId")
+    @Query("SELECT * FROM words WHERE deckId = :deckId OR deckId IN (SELECT id FROM decks WHERE collectionId = :deckId)")
     suspend fun getWords(deckId: Long): List<Word>
 
     @Query("SELECT DISTINCT LOWER(text) FROM words")
@@ -78,6 +83,16 @@ interface WordDao {
 
     @Query("SELECT COUNT(*) FROM words WHERE box = 0 AND mastered = 0 AND excluded = 0")
     fun observeNewCount(): Flow<Int>
+
+    @Query("SELECT * FROM decks WHERE isCollection = 1 ORDER BY name COLLATE NOCASE")
+    fun observeCollections(): Flow<List<Deck>>
+
+    @Query("UPDATE decks SET collectionId = :collectionId WHERE id = :deckId")
+    suspend fun setCollection(deckId: Long, collectionId: Long)
+
+    /** Call before deleting a 종합단어장: the linked decks and their words stay. */
+    @Query("UPDATE decks SET collectionId = 0 WHERE collectionId = :id")
+    suspend fun unlinkChildren(id: Long)
 
     @Query("DELETE FROM decks WHERE id = :id")
     suspend fun deleteDeck(id: Long)

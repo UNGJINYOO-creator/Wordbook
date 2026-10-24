@@ -62,6 +62,9 @@ import com.wordbook.app.ml.EnKoTranslator
 import com.wordbook.app.ml.MeaningCheck
 import com.wordbook.app.ml.WordExtractor
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -172,6 +175,17 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     fun setAll(selected: Boolean) = candidates.forEach { it.selected = selected }
 
+    val collections = dao.observeCollections()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Links the new deck into a 종합단어장 (no copies). */
+    fun link(deckId: Long, collectionId: Long) = viewModelScope.launch { dao.setCollection(deckId, collectionId) }
+
+    fun createCollectionAndLink(deckId: Long, name: String) = viewModelScope.launch {
+        val id = dao.insertDeck(Deck(name = name, isCollection = true))
+        dao.setCollection(deckId, id)
+    }
+
     fun save(onSaved: (Long) -> Unit) = viewModelScope.launch {
         val chosen = candidates.filter { it.selected }.map { it to it.meaning.trim() }
         val deckId = if (targetDeckId >= 0) {
@@ -204,6 +218,20 @@ fun ScanScreen(
 ) {
     val selectedCount = vm.candidates.count { it.selected }
     var savedDeckId by remember { mutableStateOf<Long?>(null) }
+    // A new deck from photos is offered to a 종합단어장 first, then 바로 학습할까요?
+    var askCollection by remember { mutableStateOf<Long?>(null) }
+    val collections by vm.collections.collectAsStateWithLifecycle()
+    askCollection?.let { id ->
+        CollectionDialog(
+            title = "종합단어장에 추가할까요?",
+            collections = collections,
+            current = 0,
+            onPick = { c -> vm.link(id, c); askCollection = null; savedDeckId = id },
+            onCreate = { name -> vm.createCollectionAndLink(id, name); askCollection = null; savedDeckId = id },
+            onRemove = null,
+            onDismiss = { askCollection = null; savedDeckId = id },
+        )
+    }
     var editing by remember { mutableStateOf<Candidate?>(null) }
     editing?.let { c -> CandidateDialog(c, onDismiss = { editing = null }) }
     savedDeckId?.let { id ->
@@ -230,7 +258,7 @@ fun ScanScreen(
             if (vm.candidates.isNotEmpty()) {
                 PrimaryButton(
                     "단어 ${selectedCount}개 저장",
-                    { vm.save { id -> savedDeckId = id } },
+                    { vm.save { id -> if (vm.targetDeckId < 0) askCollection = id else savedDeckId = id } },
                     Modifier.padding(16.dp).navigationBarsPadding(),
                     enabled = selectedCount > 0 && !vm.busy,
                 )

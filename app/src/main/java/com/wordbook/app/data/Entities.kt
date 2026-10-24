@@ -76,4 +76,6 @@ data class DeckSummary(
     val color: Int = 0,
     val emoji: String = "",
     val lastStudiedAt: Long = 0,
+    val isCollection: Boolean = false,
+    val collectionId: Long = 0,
 )
