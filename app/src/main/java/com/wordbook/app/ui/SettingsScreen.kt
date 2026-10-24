@@ -135,6 +135,7 @@ fun SettingsScreen() {
     var rewardName by remember { mutableStateOf("") }
     var rewardCost by remember { mutableStateOf("50") }
     var settingPin by remember { mutableStateOf(false) }
+    var wizard by remember { mutableStateOf(false) }
     // Locks again whenever the tab is left, since this state is forgotten then.
     var unlocked by remember { mutableStateOf(!settings.hasPin) }
     if (!unlocked) {
@@ -148,6 +149,19 @@ fun SettingsScreen() {
         )
     }
 
+    if (wizard) {
+        SetupWizard(settings, onSetPin = { settingPin = true }, onClose = {
+            wizard = false
+            // The wizard saved straight to settings; show its choices here too.
+            modes = settings.modes; staged = settings.staged
+            dailyWords = settings.dailyWords.takeIf { it > 0 }?.toString() ?: ""
+            goal = settings.dailyGoalMinutes; size = settings.sessionSize; testSize = settings.testSize
+            reminderHour = settings.reminderHour; textScale = settings.textScale
+            autoSpeak = settings.autoSpeak; soundEffects = settings.soundEffects
+            saved()
+        })
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
@@ -158,6 +172,20 @@ fun SettingsScreen() {
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
+            Column(
+                Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+                    .clickable { wizard = true }
+                    .padding(16.dp),
+            ) {
+                Text("🧭 설정 길잡이", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "중요한 설정 8가지를 팝업으로 한 장씩 차례로 정해요. ⭐ 추천 설정으로 한 번에 맞출 수도 있어요.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             GroupHeader("📚 학습 방법")
             Section("학습 순서")
             Text(
@@ -266,7 +294,7 @@ fun SettingsScreen() {
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("학습 시간")
             Text("하루 최소 학습 시간", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(0 to "끔", 5 to "5분", 10 to "10분", 15 to "15분", 20 to "20분", 30 to "30분", 60 to "60분").forEach { (n, label) ->
                     FilterChip(
                         selected = goal == n,
@@ -275,10 +303,11 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(goal, listOf(0, 5, 10, 15, 20, 30, 60), "분", 180) { goal = it; settings.dailyGoalMinutes = it }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("한 번에 학습할 카드 수")
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(0 to "전부", 10 to "10", 20 to "20", 30 to "30", 50 to "50").forEach { (n, label) ->
                     FilterChip(
                         selected = size == n,
@@ -287,10 +316,11 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(size, listOf(0, 10, 20, 30, 50), "장", 999) { size = it; settings.sessionSize = it }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("시험 문제 수")
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(10, 20, 30, 50).forEach { n ->
                     FilterChip(
                         selected = testSize == n,
@@ -299,6 +329,7 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(testSize, listOf(10, 20, 30, 50), "문제", 200) { testSize = it; settings.testSize = it }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("저녁 알림")
@@ -500,7 +531,7 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Text("한 번에 돌리는 카드", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(5, 10, 20, 30).forEach { n ->
                     FilterChip(
                         selected = hand == n,
@@ -509,9 +540,10 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(hand, listOf(5, 10, 20, 30), "장", 100) { hand = it; settings.handSize = it }
             }
             Text("헷갈려요 몇 번이면 빠질까요? (외웠어요는 1번)", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(1, 2, 3).forEach { n ->
                     FilterChip(
                         selected = leave == n,
@@ -520,6 +552,7 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(leave, listOf(1, 2, 3), "번", 9) { leave = it; settings.knownToLeave = it }
             }
             ToggleRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
                 repeatMissed = it; settings.repeatMissed = it; saved()
@@ -534,7 +567,7 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Text("최근 추가 단어 비율", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState())) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(50, 70, 80, 90, 100).forEach { n ->
                     FilterChip(
                         selected = recentShare == n,
@@ -543,6 +576,7 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(recentShare, listOf(50, 70, 80, 90, 100), "%", 100) { recentShare = it; settings.recentShare = it }
             }
             Text(
                 "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제",
@@ -551,7 +585,7 @@ fun SettingsScreen() {
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Text("며칠 안에 넣은 단어를 '최근'으로 볼까요?", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(3, 7, 14).forEach { n ->
                     FilterChip(
                         selected = recentDays == n,
@@ -560,11 +594,12 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(recentDays, listOf(3, 7, 14), "일", 60) { recentDays = it; settings.recentDays = it }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             Section("타이머 멈춤")
             Text("이 시간 동안 화면을 안 건드리면 시간이 멈춰요", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(horizontal = 16.dp))
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
                 listOf(10, 20, 30, 60).forEach { n ->
                     FilterChip(
                         selected = idle == n,
@@ -573,6 +608,7 @@ fun SettingsScreen() {
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+                CustomNumber(idle, listOf(10, 20, 30, 60), "초", 600) { idle = it; settings.idleSeconds = it }
             }
             }
             Text(

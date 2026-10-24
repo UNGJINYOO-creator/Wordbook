@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
@@ -415,7 +416,7 @@ fun HomeScreen(
                 }
                 item(key = "hint", span = { GridItemSpan(maxLineSpan) }) {
                     Text(
-                        "단어장을 길게 누르면 이름·표지 바꾸기, 삭제를 할 수 있어요",
+                        "단어장을 누르면 바로 학습해요 · 목록은 오른쪽 위 '목록' · 길게 누르면 이름·표지 바꾸기, 삭제",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.padding(top = 4.dp, start = 4.dp),
@@ -663,7 +664,7 @@ internal fun Stat(label: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Coloured deck cover: emoji, name, progress, a 학습 button; long press for the menu. */
+/** Coloured deck cover: tap to study, the 목록 chip opens the word list; long press for the menu. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DeckTile(
@@ -685,21 +686,21 @@ private fun DeckTile(
                 .height(168.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(DeckColors[deckColorIndex(deck)])
-                .combinedClickable(onClick = onOpen, onLongClick = { menu = true })
+                .combinedClickable(onClick = if (deck.wordCount > 0) onStudy else onOpen, onLongClick = { menu = true })
                 .padding(14.dp),
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 Text(deckEmoji(deck), fontSize = 30.sp, modifier = Modifier.weight(1f))
                 if (deck.wordCount > 0) {
                     Text(
-                        "학습 ›",
+                        "목록 ›",
                         color = Color.White,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
                             .background(Color.White.copy(alpha = 0.25f))
-                            .clickable(onClick = onStudy)
+                            .clickable(onClick = onOpen)
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
                 }
@@ -731,6 +732,7 @@ private fun DeckTile(
             )
         }
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text("단어 목록·편집") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { menu = false; onOpen() })
             DropdownMenuItem(text = { Text("이름 바꾸기") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; onRename() })
             DropdownMenuItem(text = { Text("표지 바꾸기") }, leadingIcon = { Icon(Icons.Default.Palette, null) }, onClick = { menu = false; onStyle() })
             if (!deck.isCollection) {
