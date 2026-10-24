@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -124,7 +125,8 @@ private fun AppContent() {
                     NavHost(
                         navController = nav,
                         startDestination = "home",
-                        modifier = Modifier.padding(padding).consumeWindowInsets(padding),
+                        // imePadding: every screen shrinks above the keyboard instead of being covered by it.
+                        modifier = Modifier.padding(padding).consumeWindowInsets(padding).imePadding(),
                     ) {
                         composable("home") {
                             HomeScreen(

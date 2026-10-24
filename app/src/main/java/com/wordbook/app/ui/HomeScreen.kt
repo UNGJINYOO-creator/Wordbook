@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -791,7 +792,7 @@ private fun DeckTile(
         Column(
             Modifier
                 .fillMaxWidth()
-                .height(168.dp)
+                .heightIn(min = 168.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(DeckColors[deckColorIndex(deck)])
                 .combinedClickable(onClick = if (deck.wordCount > 0) onStudy else onOpen, onLongClick = { menu = true })

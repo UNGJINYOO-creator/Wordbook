@@ -1,5 +1,7 @@
 package com.wordbook.app.ui
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import android.app.Application
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -377,7 +379,7 @@ private fun CandidateDialog(c: Candidate, onDismiss: () -> Unit) {
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (c.source.isNotEmpty()) {
                     Text("지금 뜻: ${c.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }

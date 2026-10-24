@@ -1,5 +1,7 @@
 package com.wordbook.app.ui
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -53,7 +55,7 @@ fun CardEditDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(text, { text = it }, label = { Text("앞면 (영어 단어)") }, singleLine = true, modifier = Modifier.weight(1f))
                     PosChips(pos) { pos = it }

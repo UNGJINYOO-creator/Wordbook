@@ -1117,7 +1117,11 @@ private fun SwipeCard(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Scrolls, and stays clear of the buttons below, when a long word and example don't fit.
+                    Column(
+                        Modifier.padding(top = 20.dp, bottom = 52.dp).verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
                         Text(word.text, fontSize = 40.sp * textScale, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                         if (word.example.isNotBlank() && backFirst) {
                             Spacer(Modifier.height(12.dp))
@@ -1138,8 +1142,14 @@ private fun SwipeCard(
                         }
                     }
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 30.sp * textScale, badgeSize = 18.sp * textScale)
+                    // Long meanings (several parts of speech) get a smaller size and can scroll instead of being cut.
+                    val meaningSize = when {
+                        word.meaning.length > 32 -> 22.sp
+                        word.meaning.length > 18 -> 26.sp
+                        else -> 30.sp
+                    }
+                    Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                        PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = meaningSize * textScale, badgeSize = 18.sp * textScale)
                         // The example names the word, so it goes on whichever side is seen second.
                         if (word.example.isNotBlank() && !backFirst) {
                             Spacer(Modifier.height(16.dp))
