@@ -2,6 +2,7 @@ package com.wordbook.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -227,8 +229,9 @@ fun TypingQuiz(
                 if (answered != null) return@BasicTextField
                 typed = v.filter { it.isLetter() }.take(blanks)
                 onActivity()
-                if (typed.length == blanks) onSubmit(filled())
+                // No auto-check on the last letter: the child confirms first, so a slip can still be fixed.
             },
+            keyboardActions = KeyboardActions(onDone = { if (typed.length == blanks && answered == null) onSubmit(filled()) }),
             singleLine = true,
             keyboardOptions = KeyboardOptions(
                 capitalization = KeyboardCapitalization.None,
@@ -242,11 +245,22 @@ fun TypingQuiz(
         when (answered) {
             true -> Text("정답!", color = RightGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             false -> Text("정답: ${word.text}", color = WrongRed, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            null -> Text(
-                "남은 글자 ${blanks - typed.length}개 · 키보드가 없으면 단어를 누르세요",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
+            null -> if (typed.length == blanks) {
+                Text("'${filled()}' 맞나요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = { typed = typed.dropLast(1); onActivity(); openKeyboard() }, shape = ButtonShape) {
+                        Text("⌫ 고치기")
+                    }
+                    Button(onClick = { onSubmit(filled()) }, shape = ButtonShape) { Text("✔ 맞아요, 채점") }
+                }
+            } else {
+                Text(
+                    "남은 글자 ${blanks - typed.length}개 · 키보드가 없으면 단어를 누르세요",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
         }
         AutoAdvance(answered, onNext)
     }
