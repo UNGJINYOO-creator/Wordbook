@@ -80,7 +80,6 @@ private fun NumberChoice(
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.Center,
-        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         options.forEach { (n, label) ->
             FilterChip(selected = current == n, onClick = { onSet(n) }, label = { Text(if (n == recommended) "⭐ $label" else label) })
