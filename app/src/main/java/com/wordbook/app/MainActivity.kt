@@ -171,7 +171,11 @@ private fun AppContent() {
                             )
                         }
                         composable("fishing") {
-                            FishingScreen(onBack = { nav.popBackStack() })
+                            FishingScreen(
+                                onBack = { nav.popBackStack() },
+                                // 오늘 학습 again: the reviews are done, so it brings the next new words.
+                                onMoreWords = { nav.navigate("study/-1?today=true") { popUpTo("home") } },
+                            )
                         }
                         composable(
                             "match/{deckId}",

@@ -114,6 +114,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     var seconds by mutableDoubleStateOf(fishing.start)
         private set
     val goal: Double get() = fishing.goal
+    /** How many new words the 새 단어 더 배우기 button brings (the daily word goal). */
+    val newWords: Int get() = StudyViewModel.newPerDay(settings)
 
     var word by mutableStateOf<Word?>(null)
         private set
@@ -394,7 +396,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
 }
 
 @Composable
-fun FishingScreen(onBack: () -> Unit, vm: FishingViewModel = viewModel()) {
+fun FishingScreen(onBack: () -> Unit, onMoreWords: () -> Unit = {}, vm: FishingViewModel = viewModel()) {
     val tts = rememberTts()
     var showBook by remember { mutableStateOf(false) }
     if (showBook) FishBook(vm.fishing) { showBook = false }
@@ -413,8 +415,8 @@ fun FishingScreen(onBack: () -> Unit, vm: FishingViewModel = viewModel()) {
             when (vm.phase) {
                 FishPhase.INTRO -> Intro(vm, onBook = { showBook = true })
                 FishPhase.PLAYING -> Playing(vm, tts)
-                FishPhase.WON -> Result(vm, won = true, onBack = onBack, onBook = { showBook = true })
-                FishPhase.LOST -> Result(vm, won = false, onBack = onBack, onBook = { showBook = true })
+                FishPhase.WON -> Result(vm, won = true, onBack = onBack, onBook = { showBook = true }, onMoreWords = onMoreWords)
+                FishPhase.LOST -> Result(vm, won = false, onBack = onBack, onBook = { showBook = true }, onMoreWords = onMoreWords)
             }
         }
     }
@@ -545,6 +547,10 @@ private fun SeaBand(vm: FishingViewModel) {
     val danger = distance > vm.goal * 0.85
     // With the keyboard up (빈칸, 듣고 쓰기) the band shrinks so the question still fits.
     val compact = WindowInsets.isImeVisible
+    // Eased instead of switched, so the question card glides up with the keyboard rather than jumping.
+    val k by animateFloatAsState(if (compact) 1f else 0f, tween(250), label = "compact")
+    fun dp(wide: Int, narrow: Int) = androidx.compose.ui.unit.lerp(wide.dp, narrow.dp, k)
+    fun sp(wide: Int, narrow: Int) = (wide + (narrow - wide) * k).sp
     Box(
         Modifier
             .fillMaxWidth()
@@ -552,32 +558,32 @@ private fun SeaBand(vm: FishingViewModel) {
                 Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
                 RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
             )
-            .padding(start = 16.dp, end = 16.dp, top = if (compact) 6.dp else 10.dp, bottom = if (compact) 32.dp else 38.dp),
+            .padding(start = 16.dp, end = 16.dp, top = dp(10, 6), bottom = dp(38, 32)),
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "🐟 물고기까지 ${"%.1f".format(distance)}m",
                     color = if (danger) Color(0xFFFFB4B4) else Color.White,
-                    fontSize = if (compact) 18.sp else 22.sp,
+                    fontSize = sp(22, 18),
                     fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.weight(1f),
                 )
                 if (vm.combo >= 2) Text("🔥 콤보 ${vm.combo}", color = Color.White, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(if (compact) 4.dp else 10.dp))
+            Spacer(Modifier.height(dp(10, 4)))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painterResource(R.drawable.angler),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(if (compact) 36.dp else 56.dp)
-                        .clip(RoundedCornerShape(if (compact) 10.dp else 16.dp))
-                        .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(if (compact) 10.dp else 16.dp)),
+                        .size(dp(56, 36))
+                        .clip(RoundedCornerShape(dp(16, 10)))
+                        .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(dp(16, 10))),
                 )
-                BoxWithConstraints(Modifier.weight(1f).height(if (compact) 36.dp else 56.dp)) {
-                    val fishSize = if (compact) 26.dp else 34.dp
+                BoxWithConstraints(Modifier.weight(1f).height(dp(56, 36))) {
+                    val fishSize = dp(34, 26)
                     // The fish starts at the far right and swims to the angler as the line fills.
                     val fishX = 6.dp + (maxWidth - fishSize - 6.dp) * (1f - closeness)
                     Canvas(Modifier.fillMaxSize()) {
@@ -591,13 +597,13 @@ private fun SeaBand(vm: FishingViewModel) {
                     }
                     Text(
                         vm.fish.emoji,
-                        fontSize = if (compact) 22.sp else 30.sp,
+                        fontSize = sp(30, 22),
                         modifier = Modifier.align(Alignment.CenterStart).offset(x = fishX + jerk.value.dp),
                     )
                 }
             }
-            if (!compact) Spacer(Modifier.height(8.dp))
-            if (!compact) Row {
+            androidx.compose.animation.AnimatedVisibility(!compact) {
+            Row(Modifier.padding(top = 8.dp)) {
                 Text(
                     when {
                         danger -> "⚠️ 줄이 끊어지려 해요!"
@@ -610,6 +616,7 @@ private fun SeaBand(vm: FishingViewModel) {
                     modifier = Modifier.weight(1f),
                 )
                 Text("${vm.goal.toInt()}m면 줄이 끊어져요", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
+            }
             }
         }
         PopText(vm.pop, vm.popId, Modifier.align(Alignment.TopCenter).padding(top = 34.dp))
@@ -637,7 +644,7 @@ private fun PopText(text: String?, id: Int, modifier: Modifier) {
 }
 
 @Composable
-private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBook: () -> Unit) {
+private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBook: () -> Unit, onMoreWords: () -> Unit) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -667,8 +674,17 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
             missed.forEach { Text("${it.text}  ${it.meaning.substringBefore(" /")}", style = MaterialTheme.typography.bodyMedium) }
         }
         Spacer(Modifier.height(24.dp))
+        // Riding the good mood after a catch: straight into the next new words.
+        PrimaryButton("📚 새 단어 ${vm.newWords}개 더 배우기", onMoreWords)
+        Text(
+            "아직 안 배운 단어가 나와요. 맞힌 만큼 레벨이 올라가요!",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+        Spacer(Modifier.height(12.dp))
         if (vm.triesLeft > 0) {
-            PrimaryButton(if (won) "🎣 한 번 더" else "🎣 다시 도전", vm::start)
+            SecondaryButton(if (won) "🎣 한 번 더" else "🎣 다시 도전", vm::start)
             Spacer(Modifier.height(8.dp))
         }
         SecondaryButton("📖 물고기 도감", onBook)
