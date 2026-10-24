@@ -27,8 +27,8 @@ object Levels {
         "깊은 바다에 숨은 단어까지 낚는, 아무도 정체를 모르는 고수",
     )
 
-    /** Stars needed to reach [level] (1-based): 0, 30, 90, 180, 300, … */
-    fun starsFor(level: Int): Int = 15 * (level - 1) * level
+    /** Fish (the app's points, once called stars) needed to reach [level] (1-based): 0, 20, 60, 120, 200, … */
+    fun starsFor(level: Int): Int = 10 * (level - 1) * level
 
     fun levelOf(stars: Int): Int {
         var level = 1

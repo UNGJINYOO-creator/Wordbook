@@ -41,7 +41,7 @@ object Report {
             val right = today.count { it.correct }
             append("🎯 정답률 ${pct(right, today.size)}% (${today.size}문제 중 ${right}개)\n")
             val guesses = today.count { it.mode == StudyMode.CHOICE && it.ms in 1 until 1000 }
-            if (guesses > 0) append("🎲 1초 안에 찍은 객관식 ${guesses}개 (별·목표에서 뺐어요)\n")
+            if (guesses > 0) append("🎲 1초 안에 찍은 객관식 ${guesses}개 (물고기·목표에서 뺐어요)\n")
 
             // 1. First try vs. missed again and again.
             val byWord = today.groupBy { it.wordId }

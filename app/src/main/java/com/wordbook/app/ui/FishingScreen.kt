@@ -461,7 +461,7 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             Text("❌ 틀리면 ${f.wrong.toInt()}m 멀어져요, 너무 빨리 찍으면 0m")
             Text("🐋 0m가 되면 낚아요! ${f.goal.toInt()}m까지 멀어지면 줄이 끊어져요")
             Text("📈 가까워질수록 물고기가 세게 버텨서 더 빨리 도망가요")
-            Text("🎯 낚으면 ⭐${Fishing.CATCH_STARS}개! (🌊 새 바다는 ⭐${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS}개)" + vm.fishing.triesNote)
+            Text("🎯 낚으면 선물 물고기 ${Fishing.CATCH_STARS}마리! (🌊 새 바다는 ${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS}마리)" + vm.fishing.triesNote)
         }
         Spacer(Modifier.height(16.dp))
         val reason = vm.lockReason
@@ -477,9 +477,9 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             // After 새 단어 더 배우기: fish the words just learned, or the usual mix.
             Text("어느 바다에서 낚을까요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            PrimaryButton("🌊 새 바다 · 방금 배운 ${vm.newSeaCount}단어 (⭐${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS})", { vm.start(true) })
+            PrimaryButton("🌊 새 바다 · 방금 배운 ${vm.newSeaCount}단어 (🐟${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS})", { vm.start(true) })
             Spacer(Modifier.height(8.dp))
-            SecondaryButton("🏝 오늘의 바다 · 오늘 + 예전 단어 (⭐${Fishing.CATCH_STARS})", { vm.start(false) })
+            SecondaryButton("🏝 오늘의 바다 · 오늘 + 예전 단어 (🐟${Fishing.CATCH_STARS})", { vm.start(false) })
             if (vm.fishing.triesNote.isNotEmpty()) {
                 Text(vm.fishing.triesNote.trim(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }
@@ -679,7 +679,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
         if (won) {
             Text("${vm.fish.name} ${Fishing.formatKg(vm.kg)}!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             if (vm.newRecord) Text("🏆 최고 기록이에요!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text("⭐${vm.catchStars}개를 받았어요" + if (vm.newSea) " (🌊 새 바다 보너스!)" else "", style = MaterialTheme.typography.bodyLarge)
+            Text("선물 물고기 ${vm.catchStars}마리를 받았어요 🐟" + if (vm.newSea) " (🌊 새 바다 보너스!)" else "", style = MaterialTheme.typography.bodyLarge)
             Spacer(Modifier.height(8.dp))
             Text("🎣 물고기를 낚았어요! 정말 잘했어요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         } else {

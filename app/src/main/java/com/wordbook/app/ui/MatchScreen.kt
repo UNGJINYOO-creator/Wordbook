@@ -185,7 +185,7 @@ fun MatchScreen(onBack: () -> Unit, vm: MatchViewModel = viewModel(factory = Mat
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
-                        if (vm.mistakes == 0) "실수 없이 끝내서 ⭐3개!" else "⭐1개 받았어요 · 실수 없이 하면 ⭐3개",
+                        if (vm.mistakes == 0) "실수 없이 끝내서 물고기 3마리! 🐟" else "물고기 1마리 낚았어요 · 실수 없이 하면 3마리",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )

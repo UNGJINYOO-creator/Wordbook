@@ -350,7 +350,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 TextButton(onClick = { settings.setPin(null); hasPin = false; saved() }) { Text("비밀번호 끄기") }
                             }
                         }
-                        Labeled("보상 쿠폰", "아이가 정답으로 모은 별로 받을 수 있는 보상이에요. 쿠폰은 복습·통계 탭에서 받아요.") {
+                        Labeled("보상 쿠폰", "아이가 단어를 외워 낚은 물고기로 받을 수 있는 보상이에요. 쿠폰은 복습·통계 탭에서 받아요.") {
                             RewardEditor(game) { rewardCount = game.rewards.size; saved() }
                         }
                     }
@@ -368,7 +368,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 Group("💾 백업", "휴대폰을 바꿀 때를 대비해 저장해 둬요", open == "backup", { toggle("backup") }) {
                     Body {
                         Text(
-                            "단어장, 학습 기록, 별·레벨, 설정을 파일 하나로 저장해요. 구글 드라이브나 카톡 나에게 보내기로 보관하세요.",
+                            "단어장, 학습 기록, 물고기·레벨, 설정을 파일 하나로 저장해요. 구글 드라이브나 카톡 나에게 보내기로 보관하세요.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                         )

@@ -85,7 +85,7 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
     fun claim(reward: Reward) {
         if (game.claim(reward) && StudySettings(getApplication()).alertCoupon) {
             viewModelScope.launch {
-                ParentAlerts.send(getApplication(), "🎟 쿠폰을 받았어요: ${reward.name} (⭐${reward.cost})")
+                ParentAlerts.send(getApplication(), "🎟 쿠폰을 받았어요: ${reward.name} (🐟${reward.cost}마리)")
             }
         }
         refresh()
@@ -164,8 +164,8 @@ fun ReviewScreen(
                         Text("🏅 × ${vm.badges}", style = MaterialTheme.typography.titleSmall)
                     }
                     Text(
-                        if (vm.settings.dailyGoalMinutes > 0) "하루 목표 ${vm.settings.dailyGoalMinutes}분을 채우면 도장을 찍어요. 7일 연속이면 배지와 ⭐20!"
-                        else "하루에 한 번 학습하면 도장을 찍어요. 7일 연속이면 배지와 ⭐20!",
+                        if (vm.settings.dailyGoalMinutes > 0) "하루 목표 ${vm.settings.dailyGoalMinutes}분을 채우면 도장을 찍어요. 7일 연속이면 배지와 물고기 20마리!"
+                        else "하루에 한 번 학습하면 도장을 찍어요. 7일 연속이면 배지와 물고기 20마리!",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.outline,
                     )
@@ -336,11 +336,11 @@ private fun RewardPanel(vm: ReviewViewModel) {
     Panel {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("보상 쿠폰", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            Text("⭐ ${vm.stars}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text("🐟 ${vm.stars}마리", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
         }
         if (vm.rewards.isEmpty()) {
             Text(
-                "부모님이 설정 → 보상 쿠폰에서 보상을 정하면 여기서 별로 쿠폰을 받을 수 있어요.",
+                "부모님이 설정 → 보상 쿠폰에서 보상을 정하면 여기서 낚은 물고기로 쿠폰을 받을 수 있어요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
@@ -349,10 +349,10 @@ private fun RewardPanel(vm: ReviewViewModel) {
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(r.name, style = MaterialTheme.typography.bodyLarge)
-                    Text("⭐ ${r.cost}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    Text("🐟 ${r.cost}마리", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 }
                 TextButton(onClick = { toClaim = r }, enabled = vm.stars >= r.cost) {
-                    Text(if (vm.stars >= r.cost) "쿠폰 받기" else "⭐ ${r.cost - vm.stars} 더")
+                    Text(if (vm.stars >= r.cost) "쿠폰 받기" else "🐟 ${r.cost - vm.stars}마리 더")
                 }
             }
         }
@@ -375,7 +375,7 @@ private fun RewardPanel(vm: ReviewViewModel) {
     }
     toClaim?.let { r ->
         ConfirmDialog(
-            text = "⭐ ${r.cost}개로 '${r.name}' 쿠폰을 받을까요?",
+            text = "물고기 ${r.cost}마리로 '${r.name}' 쿠폰을 받을까요?",
             onDismiss = { toClaim = null },
             onConfirm = { vm.claim(r); toClaim = null },
             confirmText = "받기",

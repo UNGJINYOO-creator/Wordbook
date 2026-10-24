@@ -154,7 +154,7 @@ fun RewardEditor(game: Game, onChange: () -> Unit = {}) {
         rewards.forEachIndexed { i, r ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("🎟 ${r.name}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-                Text("⭐ ${r.cost}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                Text("🐟 ${r.cost}마리", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                 TextButton(onClick = {
                     rewards = rewards.filterIndexed { j, _ -> j != i }
                     game.rewards = rewards
@@ -177,7 +177,7 @@ fun RewardEditor(game: Game, onChange: () -> Unit = {}) {
             OutlinedTextField(
                 value = cost,
                 onValueChange = { v -> cost = v.filter { it.isDigit() }.take(4) },
-                label = { Text("별") },
+                label = { Text("물고기") },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.width(76.dp),
@@ -193,7 +193,7 @@ fun RewardEditor(game: Game, onChange: () -> Unit = {}) {
             enabled = name.isNotBlank() && (cost.toIntOrNull() ?: 0) > 0,
         ) { Text("＋ 보상 추가") }
         Text(
-            "정답 1개에 ⭐1, 5콤보마다 ⭐2를 더 받아요. 하루에 보통 ⭐30~60개 정도 모여요.",
+            "단어 하나를 외울 때마다(그날 처음 맞힐 때) 물고기 1마리를 낚아요. 하루에 보통 20~40마리 모여요.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
         )
@@ -277,7 +277,7 @@ fun ParentAlerts(settings: StudySettings) {
     var evening by remember { mutableStateOf(settings.alertEvening) }
     var backup by remember { mutableStateOf(settings.telegramBackup) }
     Column {
-        SwitchRow("쿠폰을 받으면 알림", "아이가 별로 보상 쿠폰을 받는 순간", coupon) { coupon = it; settings.alertCoupon = it }
+        SwitchRow("쿠폰을 받으면 알림", "아이가 물고기로 보상 쿠폰을 받는 순간", coupon) { coupon = it; settings.alertCoupon = it }
         SwitchRow("연속 학습이 끊기면 알림", "이어지던 공부를 하루 쉬면 다음 날", streak) { streak = it; settings.alertStreak = it }
         SwitchRow("저녁에 목표를 못 채웠으면 알림", "저녁 알림 시간에 남은 양을", evening) { evening = it; settings.alertEvening = it }
         SwitchRow("매주 자동 백업", "일주일에 한 번 백업 파일을 보내요", backup) { backup = it; settings.telegramBackup = it }

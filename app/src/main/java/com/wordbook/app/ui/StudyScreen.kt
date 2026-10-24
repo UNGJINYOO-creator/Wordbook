@@ -382,23 +382,24 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (sound && settings.soundEffects) tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
     }
 
-    /** One star per right answer, two more every 5 in a row. */
-    private fun reward(correct: Boolean) {
+    /** One fish for each word learned (first right answer today); combos only cheer. */
+    private fun reward(correct: Boolean, caught: Boolean) {
         if (!correct) {
             combo = 0
             return
         }
         combo++
         bestCombo = maxOf(bestCombo, combo)
-        val stars = 1 + if (combo % 5 == 0) 2 else 0
-        sessionStars += stars
-        val levelUp = game.addStars(stars)
+        val fish = if (caught) 1 else 0
+        sessionStars += fish
+        val levelUp = if (fish > 0) game.addStars(fish) else null
         when {
             levelUp != null -> celebrate("레벨 업! Lv.$levelUp ${Levels.title(levelUp)} 🎉")
             combo >= 3 -> {
-                celebrate("${combo}콤보! 🔥" + if (combo % 5 == 0) " +2⭐" else "", sound = false)
+                celebrate("${combo}콤보! 🔥" + if (caught) " 🐟+1" else "", sound = false)
                 if (settings.soundEffects) sfx.combo(settings.comboSound, combo)
             }
+            caught -> celebrate("🐟 한 마리 낚았어요!", sound = false)
         }
         // Without a daily goal, the first right answer of the day earns the stamp.
         if (goalMs <= 0) stamp()
@@ -406,7 +407,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     private fun stamp() {
         if (game.hasStamp()) return
-        if (game.stampToday()) celebrate("🏅 7일 연속 출석 배지! +20⭐") else celebrate("오늘 출석 도장 쾅! 📮")
+        if (game.stampToday()) celebrate("🏅 7일 연속 출석 배지! 선물 물고기 20마리 🐟") else celebrate("오늘 출석 도장 쾅! 📮")
     }
 
     private fun checkGoal() {
@@ -651,8 +652,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 -1 -> celebrate("오답노트 졸업! 👏")
             }
             stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
-            reward(answer != Answer.UNKNOWN)
-            if (answer != Answer.UNKNOWN && stats.addLearned(word.id)) {
+            // A word answered right for the first time today is one fish caught.
+            val caught = answer != Answer.UNKNOWN && stats.addLearned(word.id)
+            reward(answer != Answer.UNKNOWN, caught)
+            if (caught) {
                 learnedToday = stats.learnedCount
                 if (goalWords > 0 && learnedToday >= goalWords && !stats.wordGoalNotified) {
                     stats.wordGoalNotified = true
@@ -1257,7 +1260,7 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
         if (vm.sessionStars > 0) {
             Spacer(Modifier.height(8.dp))
             Text(
-                "⭐ ${vm.sessionStars}개 받았어요 · 최고 ${vm.bestCombo}콤보",
+                "🐟 단어 물고기 ${vm.sessionStars}마리 낚았어요 · 최고 ${vm.bestCombo}콤보",
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.primary,
             )

@@ -267,17 +267,17 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("📊 지금까지 ${hoursText(totalMs)} 공부했고, 단어 ${totalLearned}개를 외웠어요.", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
-                Text("⭐ 별은 뭐예요?", style = MaterialTheme.typography.titleSmall)
+                Text("🐟 낚은 물고기는 뭐예요?", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "객관식·빈칸·듣고 쓰기에서 맞히면 ⭐1개, 5문제 연속으로 맞히면 ⭐2개를 더 받아요. " +
-                        "7일 연속 출석하면 🏅 배지와 ⭐20개! 모은 별은 복습·통계 탭에서 부모님이 정한 보상 쿠폰으로 바꿀 수 있어요. " +
-                        "지금 쓸 수 있는 별은 ⭐$stars 개예요.",
+                    "단어 하나를 외우면(객관식·빈칸·듣고 쓰기에서 그날 처음 맞히면) 물고기 한 마리를 낚아요. " +
+                        "7일 연속 출석하면 🏅 배지와 선물 물고기 20마리! 낚은 물고기는 복습·통계 탭에서 부모님이 정한 보상 쿠폰으로 바꿀 수 있어요. " +
+                        "지금 가진 물고기는 ${stars}마리예요.",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 Spacer(Modifier.height(4.dp))
                 Text("🏆 레벨", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "지금까지 받은 별이 쌓이면 레벨이 올라가요. 별을 쿠폰으로 써도 레벨은 내려가지 않아요. " +
+                    "지금까지 낚은 물고기가 쌓이면 레벨이 올라가요. 물고기를 쿠폰으로 써도 레벨은 내려가지 않아요. " +
                         "레벨이 오르면 칭호가 바뀌고 단어장 표지에 쓸 새 이모지가 열려요.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -299,7 +299,7 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
                             Text(Levels.description(n), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                         }
                         Text(
-                            (Levels.unlocks[n]?.joinToString("") ?: "") + "  ⭐${Levels.starsFor(n)}",
+                            (Levels.unlocks[n]?.joinToString("") ?: "") + "  🐟${Levels.starsFor(n)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
@@ -765,18 +765,18 @@ private fun TodayCard(
             val level = Levels.levelOf(earned)
             val from = Levels.starsFor(level)
             val to = Levels.starsFor(level + 1)
-            // Tapping the level part explains levels and stars.
+            // Tapping the level part explains levels and fish.
             Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { showLevels = true }.padding(vertical = 2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Lv.$level ${Levels.title(level)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Text(" ⓘ", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
                     Spacer(Modifier.weight(1f))
-                    Text("⭐ $stars", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text("🐟 ${stars}마리", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.height(6.dp))
                 ThickProgress((earned - from) / (to - from).toFloat(), Modifier.fillMaxWidth())
                 Text(
-                    "다음 레벨까지 ⭐ ${to - earned} · 누르면 레벨 설명",
+                    "다음 레벨까지 물고기 ${to - earned}마리 · 누르면 레벨 설명",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 4.dp),
