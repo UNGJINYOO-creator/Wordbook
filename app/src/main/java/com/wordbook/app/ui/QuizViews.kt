@@ -2,6 +2,7 @@ package com.wordbook.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -162,27 +163,30 @@ fun TypingQuiz(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // Kept compact so the keyboard (even a floating one) never covers the answer.
-        Text(
-            if (dictation) "발음을 듣고 단어를 쓰세요" else "빈칸을 채워 단어를 쓰세요",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.outline,
-        )
-        Spacer(Modifier.height(6.dp))
         if (dictation) {
-            FilledIconButton(onClick = onSpeak, modifier = Modifier.size(52.dp)) {
-                Icon(Icons.AutoMirrored.Filled.VolumeUp, "다시 듣기", modifier = Modifier.size(30.dp))
+            // Speaker, part of speech and hint on one line, so the word still fits above the keyboard.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FilledIconButton(onClick = onSpeak, modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.VolumeUp, "다시 듣기", modifier = Modifier.size(22.dp))
+                }
+                if (word.pos.isNotEmpty()) PosBadge(word.pos, Modifier.padding(start = 8.dp), fontSize = 13.sp)
+                Text(
+                    "  발음을 듣고 쓰세요",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline,
+                )
             }
-            Spacer(Modifier.height(6.dp))
-            if (word.pos.isNotEmpty()) PosBadge(word.pos, fontSize = 14.sp)
             // The meaning would give the answer away before the word is heard; show it afterwards.
             if (answered != null) {
                 Spacer(Modifier.height(4.dp))
                 Text(word.meaning, fontSize = 18.sp, textAlign = TextAlign.Center)
             }
         } else {
+            Text("빈칸을 채워 단어를 쓰세요", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            Spacer(Modifier.height(6.dp))
             MeaningPrompt(word)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(if (dictation) 8.dp else 12.dp))
 
         // The word with blanks; typed letters appear in place (tap it to bring the keyboard back).
         val shown = filled()

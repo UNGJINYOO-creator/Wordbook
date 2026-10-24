@@ -18,6 +18,9 @@ import com.wordbook.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -486,6 +489,7 @@ private fun ColumnScope.Playing(vm: FishingViewModel, tts: TextToSpeech?) {
  * The blue band on top: time left to a tenth of a second, the angler on the left and the fish coming
  * closer along the line as it fills, with a jerk on wrong answers.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SeaBand(vm: FishingViewModel) {
     val closeness by animateFloatAsState((vm.seconds / vm.goal).toFloat().coerceIn(0f, 1f), tween(300), label = "fish")
@@ -499,6 +503,8 @@ private fun SeaBand(vm: FishingViewModel) {
         jerk.animateTo(0f, tween(50))
     }
     val left = vm.seconds.coerceAtLeast(0.0)
+    // With the keyboard up (빈칸, 듣고 쓰기) the band shrinks so the question still fits.
+    val compact = WindowInsets.isImeVisible
     Box(
         Modifier
             .fillMaxWidth()
@@ -506,14 +512,14 @@ private fun SeaBand(vm: FishingViewModel) {
                 Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
                 RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
             )
-            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 38.dp),
+            .padding(start = 16.dp, end = 16.dp, top = if (compact) 6.dp else 10.dp, bottom = if (compact) 32.dp else 38.dp),
     ) {
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "⏱ ${"%.1f".format(left)}초",
                     color = if (left < 20) Color(0xFFFFD54F) else Color.White,
-                    fontSize = 22.sp,
+                    fontSize = if (compact) 18.sp else 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
@@ -524,19 +530,19 @@ private fun SeaBand(vm: FishingViewModel) {
                 )
                 if (vm.combo >= 2) Text("🔥 콤보 ${vm.combo}", color = Color.White, fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(if (compact) 4.dp else 10.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Image(
                     painterResource(R.drawable.angler),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
-                        .size(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(16.dp)),
+                        .size(if (compact) 36.dp else 56.dp)
+                        .clip(RoundedCornerShape(if (compact) 10.dp else 16.dp))
+                        .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(if (compact) 10.dp else 16.dp)),
                 )
-                BoxWithConstraints(Modifier.weight(1f).height(56.dp)) {
-                    val fishSize = 34.dp
+                BoxWithConstraints(Modifier.weight(1f).height(if (compact) 36.dp else 56.dp)) {
+                    val fishSize = if (compact) 26.dp else 34.dp
                     // The fish starts at the far right and swims to the angler as the line fills.
                     val fishX = 6.dp + (maxWidth - fishSize - 6.dp) * (1f - closeness)
                     Canvas(Modifier.fillMaxSize()) {
@@ -550,13 +556,13 @@ private fun SeaBand(vm: FishingViewModel) {
                     }
                     Text(
                         vm.fish.emoji,
-                        fontSize = 30.sp,
+                        fontSize = if (compact) 22.sp else 30.sp,
                         modifier = Modifier.align(Alignment.CenterStart).offset(x = fishX + jerk.value.dp),
                     )
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            Row {
+            if (!compact) Spacer(Modifier.height(8.dp))
+            if (!compact) Row {
                 Text(
                     "🎣 끌어올리기 ${(closeness * 100).roundToInt()}%",
                     color = Color.White,
