@@ -134,8 +134,9 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
             status = "영어 단어를 찾지 못했어요. 글자가 잘 보이게 다시 찍어 보세요."
             return
         }
-        val saved = dao.allWordTexts().toSet()
-        // Words already in some deck start unchecked so they aren't duplicated by accident.
+        // A photo makes its own new deck, so every word goes in even if another deck has it.
+        // Adding to an existing deck leaves out only the words that deck already has.
+        val saved = if (targetDeckId >= 0) dao.getWords(targetDeckId).map { it.text.lowercase() }.toSet() else emptySet()
         candidates.addAll(words.map {
             Candidate(it.text, it.meaning, it.pos, selected = it.text !in saved, alreadySaved = it.text in saved)
         })
@@ -332,7 +333,7 @@ fun ScanScreen(
                             val notes = listOfNotNull(
                                 if (c.needsCheck) "확인해 주세요" else null,
                                 c.source.takeIf { it.isNotEmpty() }?.let { "뜻: $it" },
-                                if (c.alreadySaved) "이미 저장된 단어" else null,
+                                if (c.alreadySaved) "이 단어장에 이미 있어요" else null,
                             )
                             if (notes.isNotEmpty()) {
                                 Text(notes.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
