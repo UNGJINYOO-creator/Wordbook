@@ -29,10 +29,13 @@ object DefaultDecks {
         }
         run {
             // Each start: any word with the same spelling gets the example, new photo words included.
-            val examples = rows(context).filter { it.size > 3 && it[3].isNotBlank() }
-                .associate { it[0].lowercase() to it[3] }
+            val withExample = rows(context).filter { it.size > 3 && it[3].isNotBlank() }
+            // can, may, will have two senses: match the part of speech first, then the spelling.
+            val byPos = withExample.associate { "${it[0].lowercase()}|${it[1]}" to it[3] }
+            val byText = withExample.associate { it[0].lowercase() to it[3] }
             dao.getAllWords().filter { it.example.isBlank() }.forEach { w ->
-                examples[w.text.trim().lowercase()]?.let { dao.updateWord(w.copy(example = it)) }
+                val key = w.text.trim().lowercase()
+                (byPos["$key|${w.pos}"] ?: byText[key])?.let { dao.updateWord(w.copy(example = it)) }
             }
         }
     }

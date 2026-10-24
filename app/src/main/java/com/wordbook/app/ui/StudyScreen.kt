@@ -1074,7 +1074,13 @@ private fun SwipeCard(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
-                    Text(word.text, fontSize = 40.sp * textScale, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(word.text, fontSize = 40.sp * textScale, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                        if (word.example.isNotBlank() && backFirst) {
+                            Spacer(Modifier.height(12.dp))
+                            ExampleText(word.example, 16.sp * textScale)
+                        }
+                    }
                     // Labelled buttons at the bottom of the card, away from the tap-to-flip middle.
                     Row(Modifier.align(Alignment.BottomCenter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilledTonalButton(onClick = onSpeak) {
@@ -1091,7 +1097,8 @@ private fun SwipeCard(
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 30.sp * textScale, badgeSize = 18.sp * textScale)
-                        if (word.example.isNotBlank()) {
+                        // The example names the word, so it goes on whichever side is seen second.
+                        if (word.example.isNotBlank() && !backFirst) {
                             Spacer(Modifier.height(16.dp))
                             ExampleText(word.example, 16.sp * textScale)
                         }
