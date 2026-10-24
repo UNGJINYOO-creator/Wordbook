@@ -455,7 +455,7 @@ fun SettingsScreen() {
                 TextButton(onClick = {
                     scope.launch {
                         tgStatus = "보내는 중…"
-                        val error = Telegram.send(token, chatId, "✅ 단어장 앱과 연결됐어요! 목표를 채우면 여기로 결과를 보내드릴게요.")
+                        val error = Telegram.send(token, chatId, "✅ 보카피싱과 연결됐어요! 목표를 채우면 여기로 결과를 보내드릴게요.")
                         tgStatus = error ?: "테스트 메시지를 보냈어요. 텔레그램을 확인하세요"
                     }
                 }, enabled = token.isNotBlank() && chatId.isNotBlank()) { Text("테스트 보내기") }

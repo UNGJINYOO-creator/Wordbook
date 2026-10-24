@@ -3,6 +3,9 @@ package com.wordbook.app.ui
 import android.app.Application
 import android.speech.tts.TextToSpeech
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -876,6 +879,29 @@ fun StudyScreen(
                         }
                         Spacer(Modifier.height(if (typing) 8.dp else 16.dp))
                         val speak = { tts?.speak(word.text, TextToSpeech.QUEUE_FLUSH, null, "w${word.id}") }
+                        // 말하기: the phone's speech recognition checks the pronunciation.
+                        var sayFeedback by remember(vm.turn) { mutableStateOf<String?>(null) }
+                        val listen = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                            val heard = result.data?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS).orEmpty()
+                            sayFeedback = when {
+                                heard.isEmpty() -> null
+                                heard.any { it.trim().equals(word.text.trim(), ignoreCase = true) } -> "🎤 발음 정확해요! 👍"
+                                else -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 다시 해 볼까요?"
+                            }
+                        }
+                        val say = {
+                            vm.touch()
+                            runCatching {
+                                listen.launch(
+                                    android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+                                        .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                        .putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                                        .putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+                                        .putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, "\"${word.text}\" 소리 내어 읽어 보세요"),
+                                )
+                            }.onFailure { sayFeedback = "이 휴대폰은 음성 인식을 쓸 수 없어요" }
+                            Unit
+                        }
                         // Speak automatically for dictation, and for every card when the setting is on.
                         LaunchedEffect(vm.turn, tts != null) {
                             if (tts != null && (vm.mode == StudyMode.DICTATION || vm.autoSpeak)) speak()
@@ -918,10 +944,14 @@ fun StudyScreen(
                                         canUndo = vm.canUndo,
                                         onFlip = { vm.flipped = !vm.flipped },
                                         onSpeak = { speak() },
+                                        onSay = say,
                                         onResult = vm::mark,
                                         onUndo = vm::undo,
                                         modifier = Modifier.weight(1f),
                                     )
+                                    sayFeedback?.let {
+                                        Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+                                    }
                                     Spacer(Modifier.height(16.dp))
                                     // One guide line instead of buttons: the gestures themselves are the controls.
                                     Text(
@@ -975,6 +1005,7 @@ private fun SwipeCard(
     canUndo: Boolean,
     onFlip: () -> Unit,
     onSpeak: () -> Unit,
+    onSay: () -> Unit,
     onResult: (Answer) -> Unit,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1064,7 +1095,10 @@ private fun SwipeCard(
                 if (showWord) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(word.text, fontSize = 40.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
-                        IconButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "발음 듣기") }
+                        Row {
+                            IconButton(onClick = onSpeak) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "발음 듣기") }
+                            IconButton(onClick = onSay) { Icon(Icons.Default.Mic, "말해 보기") }
+                        }
                     }
                 } else {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
