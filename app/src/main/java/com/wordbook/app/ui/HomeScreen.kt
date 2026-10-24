@@ -84,6 +84,8 @@ import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.Deck
 import com.wordbook.app.data.DeckSummary
+import com.wordbook.app.data.Game
+import com.wordbook.app.data.Levels
 import com.wordbook.app.data.StudySettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -136,12 +138,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var streak by mutableIntStateOf(0)
         private set
+    private val game = Game(app)
+    var stars by mutableIntStateOf(0)
+        private set
+    var earned by mutableIntStateOf(0)
+        private set
 
     /** Re-reads today's numbers; called whenever the home screen is shown. */
     fun refresh() {
         todayMs = stats.studyMs
         goalMs = settings.dailyGoalMinutes * 60_000L
         streak = stats.streak
+        stars = game.stars
+        earned = game.earned
     }
 
     fun setSort(s: DeckSort) {
@@ -233,7 +242,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
-                TodayCard(dueCount, minOf(newCount, StudyViewModel.NEW_PER_DAY), vm.todayMs, vm.goalMs, vm.streak, onToday)
+                TodayCard(dueCount, minOf(newCount, StudyViewModel.NEW_PER_DAY), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, onToday)
             }
             if (decks.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -421,7 +430,16 @@ fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Uni
 }
 
 @Composable
-private fun TodayCard(dueCount: Int, newCount: Int, todayMs: Long, goalMs: Long, streak: Int, onToday: () -> Unit) {
+private fun TodayCard(
+    dueCount: Int,
+    newCount: Int,
+    todayMs: Long,
+    goalMs: Long,
+    streak: Int,
+    stars: Int,
+    earned: Int,
+    onToday: () -> Unit,
+) {
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -457,7 +475,25 @@ private fun TodayCard(dueCount: Int, newCount: Int, todayMs: Long, goalMs: Long,
                     )
                 }
             }
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(12.dp))
+            // Level bar: stars earned toward the next level.
+            val level = Levels.levelOf(earned)
+            val from = Levels.starsFor(level)
+            val to = Levels.starsFor(level + 1)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Lv.$level ${Levels.title(level)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.weight(1f))
+                Text("⭐ $stars", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            }
+            Spacer(Modifier.height(6.dp))
+            ThickProgress((earned - from) / (to - from).toFloat(), Modifier.fillMaxWidth())
+            Text(
+                "다음 레벨까지 ⭐ ${to - earned}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(12.dp))
             if (dueCount + newCount > 0) {
                 PrimaryButton("오늘 학습 시작", onToday)
             } else {
@@ -613,7 +649,13 @@ private fun CoverDialog(deck: DeckSummary, onDismiss: () -> Unit, onSave: (color
 
 /** Asks for the settings password before a step that can't be undone. */
 @Composable
-fun PinConfirmDialog(text: String, check: (String) -> Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+fun PinConfirmDialog(
+    text: String,
+    check: (String) -> Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+    confirmText: String = "삭제",
+) {
     var pin by remember { mutableStateOf("") }
     var error by remember { mutableStateOf(false) }
     AlertDialog(
@@ -634,7 +676,7 @@ fun PinConfirmDialog(text: String, check: (String) -> Boolean, onDismiss: () -> 
         },
         confirmButton = {
             TextButton(onClick = { if (check(pin)) onConfirm() else { error = true; pin = "" } }, enabled = pin.length == 4) {
-                Text("삭제")
+                Text(confirmText)
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },

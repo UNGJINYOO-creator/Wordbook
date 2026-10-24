@@ -47,6 +47,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.BlankLevel
 import com.wordbook.app.data.DictationPass
+import com.wordbook.app.data.Game
+import com.wordbook.app.data.Reward
+import androidx.compose.foundation.layout.width
 import com.wordbook.app.data.StudyMode
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.net.Telegram
@@ -79,6 +82,10 @@ fun SettingsScreen() {
     var repeatMissed by remember { mutableStateOf(settings.repeatMissed) }
     var backFirst by remember { mutableStateOf(settings.backFirst) }
     var hasPin by remember { mutableStateOf(settings.hasPin) }
+    val game = remember { Game(context) }
+    var rewards by remember { mutableStateOf(game.rewards) }
+    var rewardName by remember { mutableStateOf("") }
+    var rewardCost by remember { mutableStateOf("50") }
     var settingPin by remember { mutableStateOf(false) }
     // Locks again whenever the tab is left, since this state is forgotten then.
     var unlocked by remember { mutableStateOf(!settings.hasPin) }
@@ -286,6 +293,60 @@ fun SettingsScreen() {
                     )
                 }
             }
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Section("보상 쿠폰 (부모님용)")
+            Text(
+                "아이가 정답으로 모은 별로 받을 수 있는 보상을 정해요. 쿠폰은 복습·통계 탭에서 받아요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            rewards.forEachIndexed { i, r ->
+                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("🎟 ${r.name}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text("⭐ ${r.cost}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                    TextButton(onClick = {
+                        rewards = rewards.filterIndexed { j, _ -> j != i }
+                        game.rewards = rewards
+                        saved()
+                    }) { Text("삭제") }
+                }
+            }
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = rewardName,
+                    onValueChange = { rewardName = it },
+                    label = { Text("보상 (예: 게임 30분)") },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                OutlinedTextField(
+                    value = rewardCost,
+                    onValueChange = { v -> rewardCost = v.filter { it.isDigit() }.take(4) },
+                    label = { Text("별") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.width(80.dp),
+                )
+            }
+            TextButton(
+                onClick = {
+                    rewards = rewards + Reward(rewardName.trim(), rewardCost.toInt())
+                    game.rewards = rewards
+                    rewardName = ""
+                    saved()
+                },
+                enabled = rewardName.isNotBlank() && (rewardCost.toIntOrNull() ?: 0) > 0,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) { Text("보상 추가") }
+            Text(
+                "정답 1개에 ⭐1, 5콤보마다 ⭐2를 더 받아요. 하루에 보통 ⭐30~60개 정도 모여요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Section("비밀번호")

@@ -72,11 +72,11 @@ fun CardEditDialog(
 }
 
 @Composable
-fun ConfirmDialog(text: String, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+fun ConfirmDialog(text: String, onDismiss: () -> Unit, onConfirm: () -> Unit, confirmText: String = "삭제") {
     AlertDialog(
         onDismissRequest = onDismiss,
         text = { Text(text) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("삭제") } },
+        confirmButton = { TextButton(onClick = onConfirm) { Text(confirmText) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
 }

@@ -35,7 +35,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wordbook.app.data.AppDatabase
+import com.wordbook.app.data.Coupon
 import com.wordbook.app.data.DailyStats
+import com.wordbook.app.data.Game
+import com.wordbook.app.data.Reward
+import com.wordbook.app.data.StudySettings
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableIntStateOf
 import com.wordbook.app.data.Word
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -57,7 +64,39 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
     var accuracy by mutableStateOf<Int?>(null)
         private set
 
+    private val game = Game(app)
+    val settings = StudySettings(app)
+    var stars by mutableStateOf(0)
+        private set
+    /** Stamps for the last 7 days, oldest first. */
+    var stamps by mutableStateOf(listOf<Boolean>())
+        private set
+    var stampStreak by mutableStateOf(0)
+        private set
+    var badges by mutableStateOf(0)
+        private set
+    var rewards by mutableStateOf(listOf<Reward>())
+        private set
+    var coupons by mutableStateOf(listOf<Coupon>())
+        private set
+
+    fun claim(reward: Reward) {
+        game.claim(reward)
+        refresh()
+    }
+
+    fun markUsed(index: Int) {
+        game.markUsed(index)
+        refresh()
+    }
+
     fun refresh() {
+        stars = game.stars
+        stamps = (6 downTo 0).map { game.hasStamp(it) }
+        stampStreak = game.stampStreak
+        badges = game.badges
+        rewards = game.rewards
+        coupons = game.coupons
         days = stats.lastDays(7)
         streak = stats.streak
         accuracy = stats.totalAnswered.takeIf { it > 0 }?.let { stats.totalRight * 100 / it }
@@ -111,6 +150,48 @@ fun ReviewScreen(
                         SecondaryButton("모든 단어장 합쳐서 학습", onStudyAll)
                     }
                 }
+            }
+            item {
+                Panel {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("출석 도장판", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        Text("🏅 × ${vm.badges}", style = MaterialTheme.typography.titleSmall)
+                    }
+                    Text(
+                        if (vm.settings.dailyGoalMinutes > 0) "하루 목표 ${vm.settings.dailyGoalMinutes}분을 채우면 도장을 찍어요. 7일 연속이면 배지와 ⭐20!"
+                        else "하루에 한 번 학습하면 도장을 찍어요. 7일 연속이면 배지와 ⭐20!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        vm.stamps.forEachIndexed { i, on ->
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(
+                                    Modifier.size(38.dp).background(
+                                        if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                        RoundedCornerShape(19.dp),
+                                    ),
+                                    contentAlignment = Alignment.Center,
+                                ) { Text(if (on) "📮" else "") }
+                                Text(
+                                    if (i == vm.stamps.lastIndex) "오늘" else vm.days.getOrNull(i)?.first?.substring(8)?.trimStart('0') ?: "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "연속 ${vm.stampStreak}일 · 배지까지 ${7 - vm.stampStreak % 7}일",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+            item {
+                RewardPanel(vm)
             }
             item {
                 Panel {
@@ -238,5 +319,80 @@ private fun HardWordRow(word: Word) {
             }
         }
         Text("${word.wrongCount}번 틀림", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+    }
+}
+
+/** Stars to spend on the rewards a parent set in 설정, and the coupons claimed so far. */
+@Composable
+private fun RewardPanel(vm: ReviewViewModel) {
+    var toClaim by remember { mutableStateOf<Reward?>(null) }
+    var toUse by remember { mutableIntStateOf(-1) }
+    Panel {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("보상 쿠폰", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text("⭐ ${vm.stars}", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+        }
+        if (vm.rewards.isEmpty()) {
+            Text(
+                "부모님이 설정 → 보상 쿠폰에서 보상을 정하면 여기서 별로 쿠폰을 받을 수 있어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
+        vm.rewards.forEach { r ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(r.name, style = MaterialTheme.typography.bodyLarge)
+                    Text("⭐ ${r.cost}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                }
+                TextButton(onClick = { toClaim = r }, enabled = vm.stars >= r.cost) {
+                    Text(if (vm.stars >= r.cost) "쿠폰 받기" else "⭐ ${r.cost - vm.stars} 더")
+                }
+            }
+        }
+        if (vm.coupons.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("받은 쿠폰", style = MaterialTheme.typography.titleSmall)
+            vm.coupons.take(10).forEachIndexed { i, c ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "🎟 ${c.name} · " + SimpleDateFormat("M/d", Locale.KOREA).format(Date(c.claimedAt)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (c.used) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (c.used) Text("사용함", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    else TextButton(onClick = { toUse = i }) { Text("사용 완료") }
+                }
+            }
+        }
+    }
+    toClaim?.let { r ->
+        ConfirmDialog(
+            text = "⭐ ${r.cost}개로 '${r.name}' 쿠폰을 받을까요?",
+            onDismiss = { toClaim = null },
+            onConfirm = { vm.claim(r); toClaim = null },
+            confirmText = "받기",
+        )
+    }
+    if (toUse >= 0) {
+        // Only a parent marks a coupon used, so it asks the settings password when there is one.
+        val name = vm.coupons.getOrNull(toUse)?.name ?: ""
+        if (vm.settings.hasPin) {
+            PinConfirmDialog(
+                text = "'$name' 쿠폰을 사용 완료로 바꿀까요? 부모님 비밀번호를 입력하세요.",
+                check = vm.settings::checkPin,
+                onDismiss = { toUse = -1 },
+                onConfirm = { vm.markUsed(toUse); toUse = -1 },
+                confirmText = "사용 완료",
+            )
+        } else {
+            ConfirmDialog(
+                text = "'$name' 쿠폰을 사용 완료로 바꿀까요?",
+                onDismiss = { toUse = -1 },
+                onConfirm = { vm.markUsed(toUse); toUse = -1 },
+                confirmText = "사용 완료",
+            )
+        }
     }
 }

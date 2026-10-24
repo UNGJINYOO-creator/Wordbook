@@ -3,6 +3,11 @@ package com.wordbook.app.ui
 import android.app.Application
 import android.speech.tts.TextToSpeech
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
@@ -91,6 +96,8 @@ import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.BlankLevel
 import com.wordbook.app.data.CollectionMix
 import com.wordbook.app.data.DailyStats
+import com.wordbook.app.data.Game
+import com.wordbook.app.data.Levels
 import com.wordbook.app.data.DictationPass
 import com.wordbook.app.net.Telegram
 import kotlinx.coroutines.delay
@@ -296,10 +303,60 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         paused = false
     }
 
+    // Game: combo, stars and the daily attendance stamp.
+    private val game = Game(app)
+    var combo by mutableStateOf(0)
+        private set
+    var bestCombo by mutableStateOf(0)
+        private set
+    var sessionStars by mutableStateOf(0)
+        private set
+    /** Short celebration over the card (combo, level up, stamp); [cheerId] changes each time. */
+    var cheer by mutableStateOf<String?>(null)
+        private set
+    var cheerId by mutableStateOf(0)
+        private set
+    private val tone = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60) }.getOrNull()
+
+    override fun onCleared() {
+        tone?.release()
+    }
+
+    private fun celebrate(text: String) {
+        cheer = text
+        cheerId++
+        tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
+    }
+
+    /** One star per right answer, two more every 5 in a row. */
+    private fun reward(correct: Boolean) {
+        if (!correct) {
+            combo = 0
+            return
+        }
+        combo++
+        bestCombo = maxOf(bestCombo, combo)
+        val stars = 1 + if (combo % 5 == 0) 2 else 0
+        sessionStars += stars
+        val levelUp = game.addStars(stars)
+        when {
+            levelUp != null -> celebrate("레벨 업! Lv.$levelUp ${Levels.title(levelUp)} 🎉")
+            combo >= 3 -> celebrate("${combo}콤보! 🔥" + if (combo % 5 == 0) " +2⭐" else "")
+        }
+        // Without a daily goal, the first right answer of the day earns the stamp.
+        if (goalMs <= 0) stamp()
+    }
+
+    private fun stamp() {
+        if (game.hasStamp()) return
+        if (game.stampToday()) celebrate("🏅 7일 연속 출석 배지! +20⭐") else celebrate("오늘 출석 도장 쾅! 📮")
+    }
+
     private fun checkGoal() {
         if (goalMs <= 0 || todayMs < goalMs || stats.goalNotified) return
         stats.goalNotified = true
         goalReached = true
+        stamp()
         if (telegramReady) sendTelegram()
     }
 
@@ -473,6 +530,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (undoStack.size > 30) undoStack.removeFirst()
         canUndo = true
         stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
+        reward(answer != Answer.UNKNOWN)
 
         val firstAnswer = word.id !in scheduled
         val updated = when {
@@ -652,6 +710,7 @@ fun StudyScreen(
                 }
             },
         ) {
+            CheerBanner(vm.cheer, vm.cheerId, Modifier.align(Alignment.TopCenter).zIndex(1f).padding(top = 40.dp))
             when {
                 vm.loading -> {}
                 vm.finished -> Summary(vm, onBack)
@@ -939,6 +998,14 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
             "${vm.sessionSize}개 중 처음에 바로 맞힌 카드 ${vm.firstTryKnown}개 (외웠어요 ${vm.masteredCount}개) · 틀린 카드 ${vm.everMissed.size}개",
             style = MaterialTheme.typography.bodyLarge,
         )
+        if (vm.sessionStars > 0) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "⭐ ${vm.sessionStars}개 받았어요 · 최고 ${vm.bestCombo}콤보",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
         Spacer(Modifier.height(16.dp))
         if (vm.everMissed.isNotEmpty()) {
             Text("틀렸던 단어", style = MaterialTheme.typography.titleMedium)
@@ -999,5 +1066,28 @@ private fun WordListStep(words: List<Word>, last: Boolean, onSpeak: (Word) -> Un
             }
         }
         PrimaryButton(if (last) "다 봤어요" else "다 봤어요 · 다음 단계", onDone, Modifier.padding(16.dp))
+    }
+}
+
+/** Pops up a short celebration (combo, level up, stamp) for a moment over the card. */
+@Composable
+private fun CheerBanner(text: String?, id: Int, modifier: Modifier = Modifier) {
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(id) {
+        if (id == 0 || text == null) return@LaunchedEffect
+        visible = true
+        delay(1300)
+        visible = false
+    }
+    AnimatedVisibility(visible, modifier, enter = scaleIn() + fadeIn(), exit = fadeOut()) {
+        Text(
+            text ?: "",
+            color = Color.White,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(24.dp))
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+        )
     }
 }
