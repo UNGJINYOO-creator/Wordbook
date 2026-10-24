@@ -80,8 +80,8 @@ interface WordDao {
     @Query("UPDATE decks SET lastStudiedAt = :time WHERE id IN (:ids)")
     suspend fun touchDecks(ids: List<Long>, time: Long)
 
-    /** Words never studied yet, for 오늘 학습. */
-    @Query("SELECT * FROM words WHERE box = 0 AND mastered = 0 AND excluded = 0 ORDER BY id LIMIT :limit")
+    /** Words never studied yet, for 오늘 학습: the most recently added first, built-in words last. */
+    @Query("SELECT * FROM words WHERE box = 0 AND mastered = 0 AND excluded = 0 ORDER BY addedAt DESC, id LIMIT :limit")
     suspend fun getNewWords(limit: Int): List<Word>
 
     @Query("SELECT COUNT(*) FROM words WHERE box = 0 AND mastered = 0 AND excluded = 0")

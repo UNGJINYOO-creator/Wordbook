@@ -108,6 +108,8 @@ import com.wordbook.app.data.StudySettings
 import com.wordbook.app.data.AnswerEntry
 import com.wordbook.app.data.AnswerLog
 import com.wordbook.app.data.Report
+import com.wordbook.app.data.Weakness
+import com.wordbook.app.data.WrongNote
 import com.wordbook.app.data.Word
 import kotlinx.coroutines.launch
 import java.util.Locale
@@ -136,6 +138,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val allDecks: Boolean = handle.get<Boolean>("all") ?: false
     /** 오늘 학습: today's reviews plus the day's word goal of new words, across all decks. */
     private val today: Boolean = handle.get<Boolean>("today") ?: false
+    /** 🔥 오답노트: the words missed twice in quizzes. */
+    private val wrongOnly: Boolean = handle.get<Boolean>("wrong") ?: false
+    private val wrongNote = WrongNote(app)
     /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
     private val modes: List<StudyMode> = decodeModes(handle.get<String>("mode")) ?: settings.modes
     private val staged: Boolean = handle.get<String>("staged")?.toBooleanStrictOrNull() ?: settings.staged
@@ -179,9 +184,12 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val stats = DailyStats(app)
     /** Quiz answers for the detailed Telegram report. */
     private val answerLog = AnswerLog(app)
+    private val weakness = Weakness.lastWeek(answerLog)
     private var questionAt = System.currentTimeMillis()
     /** What was picked or typed for the current question. */
     private var lastResponse = ""
+    /** Time from showing the question to picking or typing the answer. */
+    private var answerMs = 0L
     private val idleMs = settings.idleSeconds * 1000L
     val goalMs = settings.dailyGoalMinutes * 60_000L
     private var lastTouch = System.currentTimeMillis()
@@ -265,7 +273,16 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             pool = all
             sessionWords = when {
                 review -> dao.getDueWords(System.currentTimeMillis())
-                today -> dao.getDueWords(System.currentTimeMillis()) + dao.getNewWords(newPerDay(settings))
+                wrongOnly -> wrongNote.ids.let { ids -> all.filter { it.id in ids && !it.excluded } }
+                today -> {
+                    // 약점 맞춤: among the next new words, the weak part of speech comes first.
+                    val limit = newPerDay(settings)
+                    val fresh = dao.getNewWords(limit * 3)
+                    val weakPos = weakness.pos
+                    val picked = if (weakPos == null) fresh.take(limit)
+                    else (fresh.filter { it.pos == weakPos }.take(limit / 2) + fresh).distinctBy { it.id }.take(limit)
+                    dao.getDueWords(System.currentTimeMillis()) + picked
+                }
                 allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
                 else -> {
                     val words = dao.getWords(deckId).filter { !it.excluded }
@@ -332,10 +349,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         tone?.release()
     }
 
-    private fun celebrate(text: String) {
+    private fun celebrate(text: String, sound: Boolean = true) {
         cheer = text
         cheerId++
-        tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
+        if (sound) tone?.startTone(android.media.ToneGenerator.TONE_PROP_ACK, 150)
     }
 
     /** One star per right answer, two more every 5 in a row. */
@@ -437,6 +454,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         pickedId = null
         questionAt = System.currentTimeMillis()
         lastResponse = ""
+        answerMs = 0L
         turn++
         val word = hand.firstOrNull()
         current = word
@@ -444,7 +462,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             nextStep()
             return
         }
-        var m = steps[stepIndex].random()
+        // 약점 맞춤: when several question types are mixed, the weak one comes up twice as often.
+        val stepModes = steps[stepIndex]
+        var m = (stepModes + listOfNotNull(weakness.mode?.takeIf { it in stepModes })).random()
         modeNote = null
         if (m == StudyMode.DICTATION) {
             if (audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0) {
@@ -518,6 +538,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val word = current ?: return
         pickedId = choice.id
         lastResponse = choice.text
+        answerMs = System.currentTimeMillis() - questionAt
         answered = choice.id == word.id
     }
 
@@ -526,6 +547,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         val word = current ?: return
         answered = input.trim().equals(word.text.trim(), ignoreCase = true)
         lastResponse = input.trim()
+        answerMs = System.currentTimeMillis() - questionAt
     }
 
     /** After a quiz answer has been shown. */
@@ -543,6 +565,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (undoStack.size > 30) undoStack.removeFirst()
         canUndo = true
         // Card swipes are the child's own word, so only quiz answers count for stars and the right rate.
+        // A 객관식 answer picked in under a second is a guess: no stars, no goal, no right rate.
+        val guessed = mode == StudyMode.CHOICE && answerMs in 1 until GUESS_MS
+        if (guessed && answer != Answer.UNKNOWN) celebrate("너무 빨라요! 뜻을 읽고 골라요 🙂", sound = false)
         if (mode != StudyMode.CARD) {
             answerLog.add(
                 AnswerEntry(
@@ -554,9 +579,15 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     correct = answer != Answer.UNKNOWN,
                     isNew = word.id !in reviewedBefore,
                     response = if (answer == Answer.UNKNOWN) lastResponse else "",
-                    ms = System.currentTimeMillis() - questionAt,
+                    ms = answerMs.takeIf { it > 0 } ?: (System.currentTimeMillis() - questionAt),
                 ),
             )
+        }
+        if (mode != StudyMode.CARD && !guessed) {
+            when (wrongNote.record(word.id, answer != Answer.UNKNOWN)) {
+                1 -> celebrate("🔥 오답노트에 넣었어요", sound = false)
+                -1 -> celebrate("오답노트 졸업! 👏")
+            }
             stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
             reward(answer != Answer.UNKNOWN)
             if (answer != Answer.UNKNOWN && stats.addLearned(word.id)) {
@@ -656,6 +687,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     companion object {
         const val NEW_PER_DAY = 20
+        /** 객관식 answers faster than this count as guesses. */
+        const val GUESS_MS = 1000L
 
         /** New words in 오늘 학습: the daily word goal, or [NEW_PER_DAY] without one. */
         fun newPerDay(settings: StudySettings) = settings.dailyWords.takeIf { it > 0 } ?: NEW_PER_DAY

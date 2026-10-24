@@ -89,6 +89,7 @@ import com.wordbook.app.data.Deck
 import com.wordbook.app.data.DeckSummary
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Levels
+import com.wordbook.app.data.WrongNote
 import com.wordbook.app.data.StudySettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -147,6 +148,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var totalLearned by mutableIntStateOf(0)
         private set
+    var wrongCount by mutableIntStateOf(0)
+        private set
+    private val wrongNote = WrongNote(app)
     var goalWords by mutableIntStateOf(0)
         private set
     private val game = Game(app)
@@ -163,6 +167,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         learned = stats.learnedCount
         totalMs = stats.totalStudyMs
         totalLearned = stats.totalLearned
+        wrongCount = wrongNote.ids.size
         goalWords = settings.dailyWords
         stars = game.stars
         earned = game.earned
@@ -276,6 +281,7 @@ fun HomeScreen(
     onOpenDeck: (Long) -> Unit,
     onToday: () -> Unit,
     onStudyDeck: (Long) -> Unit,
+    onWrongNote: () -> Unit,
     vm: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -321,6 +327,29 @@ fun HomeScreen(
         ) {
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
                 TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
+            }
+            if (vm.wrongCount > 0) {
+                item(key = "wrong", span = { GridItemSpan(maxLineSpan) }) {
+                    Card(
+                        onClick = onWrongNote,
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE0D6)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔥", fontSize = 28.sp)
+                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                                Text("오답노트 ${vm.wrongCount}개", style = MaterialTheme.typography.titleMedium, color = Color(0xFF8A2A0A))
+                                Text(
+                                    "2번 틀린 단어가 모여요 · 3번 연속 맞히면 빠져요",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF8A2A0A),
+                                )
+                            }
+                            Text("학습 ›", style = MaterialTheme.typography.labelLarge, color = Color(0xFF8A2A0A), fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
             if (decks.isEmpty()) {
                 item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
