@@ -330,7 +330,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     private fun report(caught: Boolean) {
         if (settings.telegramToken.isBlank() || settings.telegramChatId.isBlank()) return
         val text = buildString {
-            append("🎣 단어 낚시 도전!\n\n")
+            append("🎣 오늘의 단어 낚시 도전!\n\n")
             if (caught) append("${fish.emoji} ${fish.name} ${Fishing.formatKg(kg)}을(를) 낚았어요!" + (if (newRecord) " 🏆 최고 기록" else "") + "\n")
             else append("😢 ${fish.name}이(가) 도망갔어요${fishing.triesNote}\n")
             append("정답 $right/$total · ${durationMs / 60_000}분 ${durationMs / 1000 % 60}초\n")
@@ -366,7 +366,7 @@ fun FishingScreen(onBack: () -> Unit, vm: FishingViewModel = viewModel()) {
     Scaffold(
         topBar = {
             AppTopBar(
-                title = { Text("🎣 단어 낚시 도전!") },
+                title = { Text("🎣 오늘의 단어 낚시 도전!") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로") }
                 },

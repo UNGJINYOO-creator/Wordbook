@@ -373,7 +373,7 @@ fun HomeScreen(
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("🐋", fontSize = 28.sp)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text("🎣 단어 낚시 도전!", style = MaterialTheme.typography.titleMedium, color = ink)
+                            Text("🎣 오늘의 단어 낚시 도전!", style = MaterialTheme.typography.titleMedium, color = ink)
                             Text(vm.fishLine, style = MaterialTheme.typography.bodySmall, color = ink)
                         }
                         Text("›", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)
