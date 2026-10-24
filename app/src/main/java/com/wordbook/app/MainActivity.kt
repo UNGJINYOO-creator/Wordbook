@@ -32,6 +32,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.lifecycle.lifecycleScope
+import com.wordbook.app.data.DefaultDecks
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.ui.DeckScreen
 import com.wordbook.app.ui.HomeScreen
@@ -58,6 +62,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val settings = StudySettings(this)
+        lifecycleScope.launch(Dispatchers.IO) { DefaultDecks.seed(applicationContext) }
         setContent {
             WordBookTheme {
                 var onboarding by remember { mutableStateOf(!settings.onboarded) }
