@@ -53,13 +53,7 @@ private val WrongRed = Color(0xFFC62828)
 /** Meaning with its part of speech, used as the question for choice/spelling quizzes. */
 @Composable
 private fun MeaningPrompt(word: Word) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        if (word.pos.isNotEmpty()) {
-            PosBadge(word.pos, fontSize = 14.sp)
-            Spacer(Modifier.height(4.dp))
-        }
-        Text(word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 20.sp, textAlign = TextAlign.Center)
-    }
+    PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 20.sp, badgeSize = 14.sp)
 }
 
 /** Correct answers move on by themselves; wrong ones wait so the right answer can be read. */

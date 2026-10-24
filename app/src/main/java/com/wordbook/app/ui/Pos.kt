@@ -23,6 +23,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 
 val PosOptions = listOf(
     "명" to "명사", "동" to "동사", "형" to "형용사", "부" to "부사",
@@ -55,6 +61,27 @@ fun PosBadge(pos: String, modifier: Modifier = Modifier, fontSize: TextUnit = 12
             .background(posColor(pos), RoundedCornerShape(4.dp))
             .padding(horizontal = 5.dp, vertical = 1.dp),
     )
+}
+
+/** Badge and meaning on one line, e.g. [명사] 군대, 육군; long meanings wrap after the badge. */
+@Composable
+fun PosMeaning(pos: String, meaning: String, fontSize: TextUnit, badgeSize: TextUnit, modifier: Modifier = Modifier) {
+    val label = PosOptions.firstOrNull { it.first == pos }?.second
+    if (label == null) {
+        Text(meaning, fontSize = fontSize, textAlign = TextAlign.Center, modifier = modifier)
+        return
+    }
+    val text = buildAnnotatedString {
+        appendInlineContent("pos", label)
+        append(" ")
+        append(meaning)
+    }
+    val inline = mapOf(
+        "pos" to InlineTextContent(
+            Placeholder((label.length * badgeSize.value + 12).sp, (badgeSize.value * 1.6f).sp, PlaceholderVerticalAlign.TextCenter),
+        ) { PosBadge(pos, fontSize = badgeSize) },
+    )
+    Text(text, inlineContent = inline, fontSize = fontSize, textAlign = TextAlign.Center, modifier = modifier)
 }
 
 /** Part-of-speech badge that opens a menu to correct it. */

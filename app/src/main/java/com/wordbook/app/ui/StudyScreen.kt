@@ -1080,17 +1080,7 @@ private fun SwipeCard(
                         }
                     }
                 } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (word.pos.isNotEmpty()) {
-                            PosBadge(word.pos, fontSize = 18.sp)
-                            Spacer(Modifier.height(12.dp))
-                        }
-                        Text(
-                            word.meaning.ifBlank { "(뜻 없음)" },
-                            fontSize = 30.sp,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
+                    PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = 30.sp, badgeSize = 18.sp)
                 }
             }
         }
