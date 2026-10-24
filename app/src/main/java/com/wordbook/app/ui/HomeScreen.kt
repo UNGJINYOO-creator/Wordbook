@@ -383,7 +383,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // The header scrolls with the cards, so the first card can ride over its bottom without a cut edge.
-            item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "top", span = { GridItemSpan(maxLineSpan) }) {
                 HomeHeader(
                     vm.learned, vm.goalWords, vm.todayMs, vm.goalMs, onToday,
                     Modifier.layout { measurable, constraints ->
