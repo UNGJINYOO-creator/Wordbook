@@ -1,6 +1,11 @@
 package com.wordbook.app.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import com.wordbook.app.R
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,12 +35,13 @@ import kotlinx.coroutines.launch
 private class Page(val emoji: String, val title: String, val body: String)
 
 private val Pages = listOf(
+    Page("", "낚아보카에 어서 와요!", "사진 찍고, 밀어서 외우고,\n단어 낚시로 마무리!\n오늘도 한 마리 낚아 볼까요?"),
     Page("📷", "사진 한 장으로 단어장", "단어책이나 스크린샷을 찍으면\n영어 단어와 뜻을 찾아 줘요.\n뜻이 이상하면 노란색으로 알려 드려요."),
     Page("👆", "밀어서 외우기", "카드를 탭하면 뜻이 보여요.\n↓ 몰라요 · ← 헷갈려요 · ↑ 외웠어요\n→ 오른쪽으로 밀면 이전 카드로 돌아가요."),
     Page("📅", "잊기 전에 복습", "맞힌 단어는 점점 긴 간격으로\n다시 나와요. 복습·통계 탭에서\n오늘 복습과 내 기록을 볼 수 있어요."),
 )
 
-/** Three-page guide shown on first launch. */
+/** Four-page guide shown on first launch. */
 @Composable
 fun OnboardingScreen(onDone: () -> Unit) {
     val pager = rememberPagerState { Pages.size }
@@ -53,7 +59,16 @@ fun OnboardingScreen(onDone: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(p.emoji, fontSize = 72.sp)
+                // The first page shows the app picture instead of an emoji.
+                if (p.emoji.isEmpty()) {
+                    Image(
+                        painterResource(R.drawable.hero),
+                        contentDescription = null,
+                        modifier = Modifier.size(220.dp).clip(RoundedCornerShape(44.dp)),
+                    )
+                } else {
+                    Text(p.emoji, fontSize = 72.sp)
+                }
                 Spacer(Modifier.height(24.dp))
                 Text(p.title, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(12.dp))

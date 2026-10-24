@@ -6,6 +6,15 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.wordbook.app.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,7 +37,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -436,22 +444,18 @@ private fun ColumnScope.Playing(vm: FishingViewModel, tts: TextToSpeech?) {
     LaunchedEffect(w.id, vm.mode) {
         if (vm.mode == StudyMode.DICTATION) tts?.speak(w.text, TextToSpeech.QUEUE_FLUSH, null, "f${w.id}")
     }
-    SeaScene(vm)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        LinearProgressIndicator(
-            progress = { (vm.seconds / vm.goal).toFloat().coerceIn(0f, 1f) },
-            modifier = Modifier.weight(1f).height(10.dp),
-            color = if (vm.seconds < 20) Color(0xFFC62828) else MaterialTheme.colorScheme.primary,
-            gapSize = 0.dp,
-            drawStopIndicator = {},
-        )
-        Text(
-            "  ${vm.seconds.toInt()}초 / ${vm.goal.toInt()}초" + if (vm.combo >= 2) " 🔥${vm.combo}" else "",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-    Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)) {
+    SeaBand(vm)
+    // The question card rides up over the bottom of the blue band.
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .offset(y = (-26).dp)
+            .padding(horizontal = 14.dp)
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(22.dp))
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
         if (vm.mode == StudyMode.CHOICE) {
             ChoiceQuiz(
                 word = w,
@@ -478,47 +482,91 @@ private fun ColumnScope.Playing(vm: FishingViewModel, tts: TextToSpeech?) {
     }
 }
 
-/** The sea: the rod on the left, the fish coming closer as the line fills, a jerk on wrong answers. */
+/**
+ * The blue band on top: time left to a tenth of a second, the angler on the left and the fish coming
+ * closer along the line as it fills, with a jerk on wrong answers.
+ */
 @Composable
-private fun SeaScene(vm: FishingViewModel) {
+private fun SeaBand(vm: FishingViewModel) {
     val closeness by animateFloatAsState((vm.seconds / vm.goal).toFloat().coerceIn(0f, 1f), tween(300), label = "fish")
     val jerk = remember { Animatable(0f) }
     LaunchedEffect(vm.pullId) {
         if (vm.pullId == 0) return@LaunchedEffect
         repeat(3) {
-            jerk.animateTo(14f, tween(50))
-            jerk.animateTo(-14f, tween(50))
+            jerk.animateTo(10f, tween(50))
+            jerk.animateTo(-10f, tween(50))
         }
         jerk.animateTo(0f, tween(50))
     }
-    BoxWithConstraints(
+    val left = vm.seconds.coerceAtLeast(0.0)
+    Box(
         Modifier
             .fillMaxWidth()
-            .height(150.dp)
-            .background(Brush.verticalGradient(listOf(Color(0xFF7FC8F8), Color(0xFF1E5AA8), Color(0xFF0B2A5B)))),
+            .background(
+                Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
+                RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
+            )
+            .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 38.dp),
     ) {
-        val width = maxWidth
-        // The fish swims from the far right towards the boat as the line fills.
-        val fishX = 64.dp + (width - 120.dp) * (1f - closeness)
-        val fishSize = (34 + 30 * closeness).sp
-        Canvas(Modifier.fillMaxSize()) {
-            val rodTip = Offset(58.dp.toPx(), 26.dp.toPx())
-            val fishAt = Offset((fishX + 20.dp).toPx() + jerk.value, 95.dp.toPx())
-            drawLine(Color.White.copy(alpha = 0.85f), rodTip, fishAt, strokeWidth = 2.dp.toPx())
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "⏱ ${"%.1f".format(left)}초",
+                    color = if (left < 20) Color(0xFFFFD54F) else Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    " / ${vm.goal.toInt()}초",
+                    color = Color.White.copy(alpha = 0.8f),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(1f),
+                )
+                if (vm.combo >= 2) Text("🔥 콤보 ${vm.combo}", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painterResource(R.drawable.angler),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(16.dp)),
+                )
+                BoxWithConstraints(Modifier.weight(1f).height(56.dp)) {
+                    val fishSize = 34.dp
+                    // The fish starts at the far right and swims to the angler as the line fills.
+                    val fishX = 6.dp + (maxWidth - fishSize - 6.dp) * (1f - closeness)
+                    Canvas(Modifier.fillMaxSize()) {
+                        val y = size.height / 2
+                        val end = (fishX + 4.dp).toPx() + jerk.value
+                        drawLine(
+                            Color.White.copy(alpha = 0.6f), Offset(0f, y), Offset(size.width, y),
+                            strokeWidth = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f)),
+                        )
+                        drawLine(Color(0xFF9FE3FF), Offset(0f, y), Offset(end, y), strokeWidth = 6.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                    Text(
+                        vm.fish.emoji,
+                        fontSize = 30.sp,
+                        modifier = Modifier.align(Alignment.CenterStart).offset(x = fishX + jerk.value.dp),
+                    )
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row {
+                Text(
+                    "🎣 끌어올리기 ${(closeness * 100).roundToInt()}%",
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Text("${vm.fish.name} 낚는 중", color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.labelMedium)
+            }
         }
-        Text("🚣", fontSize = 34.sp, modifier = Modifier.offset(x = 10.dp, y = 6.dp))
-        Text(
-            vm.fish.emoji,
-            fontSize = fishSize,
-            modifier = Modifier.offset(x = fishX + jerk.value.dp, y = 72.dp),
-        )
-        PopText(vm.pop, vm.popId, Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
-        Text(
-            "${vm.fish.name} 낚는 중",
-            color = Color.White,
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
-        )
+        PopText(vm.pop, vm.popId, Modifier.align(Alignment.TopCenter).padding(top = 34.dp))
     }
 }
 

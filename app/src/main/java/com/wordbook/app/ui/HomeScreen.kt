@@ -8,6 +8,18 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import com.wordbook.app.R
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
@@ -344,17 +356,13 @@ fun HomeScreen(
         if (uris.isNotEmpty()) onPhoto(uris)
     }
 
-    Scaffold(
-        topBar = {
-            AppTopBar(
-                title = { Text("내 단어장", style = MaterialTheme.typography.headlineMedium) },
-                actions = { TextButton(onClick = { guard { showAdd = true } }) { Text("＋ 단어 추가") } },
-            )
-        },
-    ) { padding ->
+    Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
+        Column(Modifier.fillMaxSize().padding(padding)) {
+        HomeHeader(onAdd = { guard { showAdd = true } })
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            modifier = Modifier.fillMaxSize().padding(padding),
+            // The first card rides up over the bottom of the blue header.
+            modifier = Modifier.fillMaxSize().offset(y = (-30).dp),
             contentPadding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -463,6 +471,7 @@ fun HomeScreen(
                     )
                 }
             }
+        }
         }
     }
 
@@ -596,6 +605,56 @@ fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Uni
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.clickable(onClick = onClick),
     )
+}
+
+/** Blue sea header: the app name, a greeting, the add button and the picture in a frame on the right. */
+@Composable
+private fun HomeHeader(onAdd: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
+                RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+            )
+            .statusBarsPadding()
+            .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 44.dp),
+    ) {
+        Column(Modifier.align(Alignment.TopStart).padding(top = 6.dp)) {
+            Text(
+                buildAnnotatedString {
+                    append("낚아")
+                    withStyle(SpanStyle(color = Color(0xFF9FE3FF))) { append("보카") }
+                },
+                color = Color.White,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Black,
+            )
+            Text("오늘도 단어\n낚으러 가볼까? 🐟", color = Color.White.copy(alpha = 0.92f), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "＋ 단어 추가",
+                color = Color(0xFF0B3C9E),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.White)
+                    .clickable(onClick = onAdd)
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+            )
+        }
+        Image(
+            painterResource(R.drawable.hero),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .size(132.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .border(3.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(28.dp)),
+        )
+    }
 }
 
 @Composable

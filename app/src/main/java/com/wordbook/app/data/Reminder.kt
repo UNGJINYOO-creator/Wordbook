@@ -60,7 +60,7 @@ object Reminder {
             context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_notify)
             .setContentTitle("오늘 단어 공부 잊지 않았죠? 📚")
             .setContentText(text)
             .setContentIntent(open)

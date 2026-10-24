@@ -20,21 +20,23 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.wordbook.app.R
 
-// Simple, toss-like palette: light grey page, white cards, one blue accent, grey secondary text.
-val Blue = Color(0xFF3182F6)
-private val Ink = Color(0xFF191F28)
-private val Grey700 = Color(0xFF4E5968)
-private val Grey500 = Color(0xFF8B95A1)
-private val Grey200 = Color(0xFFE5E8EB)
-private val Grey100 = Color(0xFFF2F4F6)
+// Sea palette from the app picture: pale sky page, white cards, ocean blue accent, navy text.
+val Blue = Color(0xFF1E6BFF)
+private val Ink = Color(0xFF0B1F4B)
+private val Grey700 = Color(0xFF4A5B78)
+private val Grey500 = Color(0xFF8394AE)
+private val Grey200 = Color(0xFFDCE6F3)
+private val Grey100 = Color(0xFFEEF5FF)
 
 private val Light = lightColorScheme(
     primary = Blue,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE8F3FF),
-    onPrimaryContainer = Color(0xFF1B64DA),
+    primaryContainer = Color(0xFFE3EEFF),
+    onPrimaryContainer = Color(0xFF0B3C9E),
     secondary = Grey700,
-    tertiary = Color(0xFF1B64DA),
+    secondaryContainer = Color(0xFFE3EEFF),
+    onSecondaryContainer = Color(0xFF0B1F4B),
+    tertiary = Color(0xFF0B3C9E),
     background = Grey100,
     onBackground = Ink,
     surface = Color.White,
@@ -44,7 +46,7 @@ private val Light = lightColorScheme(
     surfaceContainer = Color.White,
     surfaceContainerLow = Color.White,
     surfaceContainerHigh = Color.White,
-    surfaceContainerHighest = Grey100,
+    surfaceContainerHighest = Color(0xFFE6EFFB),
     outline = Grey500,
     outlineVariant = Grey200,
     error = Color(0xFFF04452),
