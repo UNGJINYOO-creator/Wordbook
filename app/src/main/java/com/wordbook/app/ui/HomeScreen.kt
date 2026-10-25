@@ -768,13 +768,34 @@ private fun TodayCard(
 ) {
     var showLevels by remember { mutableStateOf(false) }
     if (showLevels) LevelDialog(level, known, total, stars, totalMs) { showLevels = false }
+    // Tapping a number explains it in a small popup.
+    var info by remember { mutableStateOf<Pair<String, String>?>(null) }
+    info?.let { (title, body) ->
+        AlertDialog(
+            onDismissRequest = { info = null },
+            title = { Text(title) },
+            text = { Text(body, style = MaterialTheme.typography.bodyLarge) },
+            confirmButton = { TextButton(onClick = { info = null }) { Text("알겠어요") } },
+        )
+    }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
+                    info = "⏱ 오늘 공부" to (
+                        "오늘 공부한 시간이에요" + (if (goalMs > 0) ". 동그라미는 하루 최소 학습 시간 ${minutesText(goalMs)} 중 얼마나 했는지예요" else "") +
+                            ". 화면을 한동안 안 건드리면 시간이 멈춰요.\n\n" +
+                            "📚 복습 ${dueCount}개: 잊을 때쯤 다시 보는 단어예요.\n" +
+                            "🆕 새 단어 ${newCount}개: 오늘 처음 배울 단어예요.\n" +
+                            "🔥 ${streak}일 연속: 하루도 안 빠지고 공부한 날이에요. 7일마다 배지와 선물 물고기를 받아요."
+                        )
+                },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                     val progress = if (goalMs > 0) (todayMs / goalMs.toFloat()).coerceAtMost(1f) else 0f
                     CircularProgressIndicator(
@@ -805,7 +826,16 @@ private fun TodayCard(
             }
             if (goalWords > 0) {
                 Spacer(Modifier.height(12.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
+                        info = "🧠 오늘 외운 단어" to (
+                            "오늘 객관식·빈칸·듣고 쓰기 문제에서 맞힌 서로 다른 단어 수예요. 뜻 카드 넘기기는 세지 않아요.\n\n" +
+                                "하루 목표는 ${goalWords}개예요. 목표를 채우면 🎣 오늘의 낚시가 열리고, " +
+                                "외운 한 단어마다 물고기 한 마리를 낚아요."
+                            )
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text("🧠 오늘 외운 단어", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.weight(1f))
                     Text(
@@ -834,17 +864,23 @@ private fun TodayCard(
                 ThickProgress(Levels.progress(known, total, level), Modifier.fillMaxWidth())
                 Text(
                     "전체 단어 ${total}개 중 ${known}개 외움 ($percent%) · " +
-                        (if (top) "최고 등급!" else "다음 레벨은 $to%") + " · 누르면 설명",
+                        (if (top) "최고 등급!" else "다음 레벨은 $to%"),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-                Text(
-                    "📊 지금까지 ${hoursText(totalMs)} 공부했어요",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
             }
+            Text(
+                "📊 지금까지 ${hoursText(totalMs)} 공부했어요",
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable {
+                    info = "📊 지금까지" to (
+                        "앱을 깐 뒤로 공부한 시간을 모두 더하면 ${hoursText(totalMs)}이에요.\n\n" +
+                            "문제에서 한 번이라도 맞힌 단어는 ${totalLearned}개예요. " +
+                            "등급에 들어가는 '외운 단어'(${known}개)는 서로 다른 두 날에 맞힌 단어만 세요."
+                        )
+                },
+            )
             Spacer(Modifier.height(12.dp))
             if (dueCount + newCount > 0) {
                 PrimaryButton("오늘 학습 시작", onToday)
