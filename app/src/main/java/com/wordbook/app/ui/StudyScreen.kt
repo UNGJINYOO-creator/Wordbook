@@ -904,11 +904,12 @@ fun StudyScreen(
                                     right -> "🎤 발음 정확해요! 👍"
                                     sayMisses >= 3 -> "🎤 3번 해 봤어요! 정답 발음을 들어 보고 카드를 넘겨요"
                                     error != null -> "🎤 $error (${sayMisses}/3)"
-                                    heard.isNotEmpty() -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 다시 해 볼까요? (${sayMisses}/3)"
+                                    heard.isNotEmpty() -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 정답 발음을 듣고 따라 해 봐요 (${sayMisses}/3)"
                                     else -> null
                                 }
                                 if (right || sayMisses >= 3) sayDone = true
-                                if (!right && sayMisses >= 3) speak()
+                                // Every miss plays the right pronunciation, so the child copies it instead of repeating the mistake.
+                                if (!right) speak()
                             }
                         }
                         val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -979,6 +980,9 @@ fun StudyScreen(
                                     )
                                     sayFeedback?.let {
                                         Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                    if (sayMisses > 0 && !speech.listening) {
+                                        TextButton(onClick = { vm.touch(); speak() }) { Text("🔊 정답 발음 다시 듣기") }
                                     }
                                     if (speech.listening || (sayMisses > 0 && !sayDone)) {
                                         TextButton(onClick = {
