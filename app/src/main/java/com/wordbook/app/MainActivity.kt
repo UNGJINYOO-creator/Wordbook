@@ -7,6 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -142,11 +146,16 @@ private fun AppContent() {
                         }
                     },
                 ) { padding ->
+                    // On a wide tablet screen the pages keep a readable width in the middle instead of stretching.
+                    androidx.compose.foundation.layout.Box(
+                        Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
+                        contentAlignment = androidx.compose.ui.Alignment.TopCenter,
+                    ) {
                     NavHost(
                         navController = nav,
                         startDestination = "home",
                         // imePadding: every screen shrinks above the keyboard instead of being covered by it.
-                        modifier = Modifier.padding(padding).consumeWindowInsets(padding).imePadding(),
+                        modifier = Modifier.widthIn(max = 840.dp).fillMaxWidth().imePadding(),
                     ) {
                         composable("home") {
                             HomeScreen(
@@ -239,6 +248,7 @@ private fun AppContent() {
                         ) {
                             StudyScreen(onBack = { nav.popBackStack() }, onSettings = { nav.navigate("settings") })
                         }
+                    }
                     }
                 }
 }
