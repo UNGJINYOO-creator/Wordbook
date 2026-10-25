@@ -15,13 +15,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * In-app updates: after each CI build the APK and a version.json ({"build": N}) are pushed to a public repo
+ * In-app updates: after each CI build the APK and a version.json ({"build": N, "notes": "..."}) are pushed to a public repo
  * that holds only those two files (the code repo is private); the app compares N with its own build number.
  */
 object Updater {
     private const val BASE = "https://raw.githubusercontent.com/UNGJINYOO-creator/nakabocab/main/"
 
-    data class Update(val build: Int, val url: String)
+    data class Update(val build: Int, val url: String, val notes: String = "")
+
+    /** A newer build found by the quiet check at launch; shown only as a dot on the 설정 tab. */
+    val available = androidx.compose.runtime.mutableStateOf<Update?>(null)
 
     suspend fun check(): Update? = withContext(Dispatchers.IO) {
         runCatching {
@@ -29,9 +32,10 @@ object Updater {
             conn.connectTimeout = 8_000
             conn.readTimeout = 8_000
             if (conn.responseCode != 200) return@runCatching null
-            val build = JSONObject(conn.inputStream.bufferedReader().readText()).getInt("build")
-            if (build > BuildConfig.VERSION_CODE) Update(build, BASE + "WordBook.apk?b=$build") else null
-        }.getOrNull()
+            val json = JSONObject(conn.inputStream.bufferedReader().readText())
+            val build = json.getInt("build")
+            if (build > BuildConfig.VERSION_CODE) Update(build, BASE + "WordBook.apk?b=$build", json.optString("notes")) else null
+        }.getOrNull().also { available.value = it }
     }
 
     /** Downloads the APK into the cache, reporting progress from 0 to 1. */

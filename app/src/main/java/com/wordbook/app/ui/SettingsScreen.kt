@@ -38,6 +38,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -220,6 +222,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 var recentDays by remember { mutableIntStateOf(settings.recentDays) }
                 var idle by remember { mutableIntStateOf(settings.idleSeconds) }
 
+                UpdateCard()
                 Group(
                     "🎯 하루 목표",
                     listOf(
@@ -668,4 +671,51 @@ private fun SyncEditor() {
     (status ?: com.wordbook.app.sync.FamilySync.lastError(context)?.let { "지난번 동기화 오류: $it" })?.let {
         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
     }
+}
+
+/** 앱 업데이트: the current build, a check button, and the update offer when a newer one is there. */
+@Composable
+private fun UpdateCard() {
+    val scope = rememberCoroutineScope()
+    val available = com.wordbook.app.net.Updater.available.value
+    var checking by remember { mutableStateOf(false) }
+    var status by remember { mutableStateOf<String?>(null) }
+    var offer by remember { mutableStateOf<com.wordbook.app.net.Updater.Update?>(null) }
+    Card(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = if (available != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                if (available != null) "🆕 새 버전 build-${available.build}이 있어요" else "📲 앱 업데이트",
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                "지금 쓰는 버전: build-${com.wordbook.app.BuildConfig.VERSION_CODE}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+            SecondaryButton(
+                when {
+                    checking -> "확인하는 중…"
+                    available != null -> "바뀐 점 보고 업데이트"
+                    else -> "업데이트 확인"
+                },
+                {
+                    if (available != null) offer = available
+                    else scope.launch {
+                        checking = true
+                        status = null
+                        val u = com.wordbook.app.net.Updater.check()
+                        checking = false
+                        if (u != null) offer = u else status = "지금이 최신 버전이에요 👍"
+                    }
+                },
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                enabled = !checking,
+            )
+            status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 4.dp)) }
+        }
+    }
+    offer?.let { UpdateDialog(it) { offer = null } }
 }

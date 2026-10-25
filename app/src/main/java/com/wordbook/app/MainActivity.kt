@@ -96,7 +96,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     AppContent()
                 }
-                com.wordbook.app.ui.UpdateDialog()
+                com.wordbook.app.ui.QuietUpdateCheck()
             }
         }
     }
@@ -138,7 +138,14 @@ private fun AppContent() {
                                                 restoreState = true
                                             }
                                         },
-                                        icon = { Icon(tab.icon, contentDescription = null) },
+                                        icon = {
+                                            // A new build waits in 설정: just a small dot, no window.
+                                            if (tab.route == "settings" && com.wordbook.app.net.Updater.available.value != null) {
+                                                androidx.compose.material3.BadgedBox(badge = { androidx.compose.material3.Badge() }) { Icon(tab.icon, contentDescription = null) }
+                                            } else {
+                                                Icon(tab.icon, contentDescription = null)
+                                            }
+                                        },
                                         label = { Text(tab.label) },
                                         colors = NavigationBarItemDefaults.colors(
                                             indicatorColor = MaterialTheme.colorScheme.primaryContainer,

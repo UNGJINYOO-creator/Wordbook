@@ -23,17 +23,20 @@ import com.wordbook.app.net.Updater
 import kotlinx.coroutines.launch
 import java.io.File
 
-/** Checks for a newer build when the app opens and offers a one-tap update. */
+/** Quietly checks for a newer build at launch: no window, only a dot on the 설정 tab. */
 @Composable
-fun UpdateDialog() {
+fun QuietUpdateCheck() {
+    LaunchedEffect(Unit) { Updater.check() }
+}
+
+/** The update offer opened from 설정: what changed, then a one-tap download and install. */
+@Composable
+fun UpdateDialog(u: Updater.Update, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var update by remember { mutableStateOf<Updater.Update?>(null) }
     var progress by remember { mutableStateOf<Float?>(null) }
     var file by remember { mutableStateOf<File?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) { update = Updater.check() }
-    val u = update ?: return
 
     fun installNow(f: File) {
         if (Updater.canInstall(context)) Updater.install(context, f)
@@ -44,11 +47,16 @@ fun UpdateDialog() {
     }
 
     AlertDialog(
-        onDismissRequest = { if (progress == null) update = null },
+        onDismissRequest = { if (progress == null) onDismiss() },
         title = { Text("🎣 새 버전이 나왔어요") },
         text = {
             Column {
                 Text("build-${u.build}로 업데이트할 수 있어요. 단어와 기록은 그대로 남아요.")
+                if (u.notes.isNotBlank()) {
+                    Spacer(Modifier.height(12.dp))
+                    Text("이번에 바뀐 점", style = MaterialTheme.typography.titleSmall)
+                    Text(u.notes, style = MaterialTheme.typography.bodyMedium)
+                }
                 progress?.let {
                     Spacer(Modifier.height(12.dp))
                     LinearProgressIndicator(progress = { it }, modifier = Modifier.fillMaxWidth())
@@ -76,6 +84,6 @@ fun UpdateDialog() {
                 },
             ) { Text(if (f != null) "설치" else "업데이트") }
         },
-        dismissButton = { if (progress == null) TextButton(onClick = { update = null }) { Text("나중에") } },
+        dismissButton = { if (progress == null) TextButton(onClick = onDismiss) { Text("나중에") } },
     )
 }
