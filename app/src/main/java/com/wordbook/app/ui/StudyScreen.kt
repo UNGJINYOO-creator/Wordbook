@@ -392,9 +392,13 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         bestCombo = maxOf(bestCombo, combo)
         val fish = if (caught) 1 else 0
         sessionStars += fish
-        val levelUp = if (fish > 0) game.addStars(fish) else null
+        if (fish > 0) {
+            game.addStars(fish)
+            viewModelScope.launch {
+                game.recount(dao, stats.everIds)?.let { celebrate("레벨 업! Lv.$it ${Levels.title(it)} 🎉") }
+            }
+        }
         when {
-            levelUp != null -> celebrate("레벨 업! Lv.$levelUp ${Levels.title(levelUp)} 🎉")
             combo >= 3 -> {
                 celebrate("${combo}콤보! 🔥" + if (caught) " 🐟+1" else "", sound = false)
                 if (settings.soundEffects) sfx.combo(settings.comboSound, combo)

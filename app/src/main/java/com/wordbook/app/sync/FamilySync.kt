@@ -227,7 +227,7 @@ object FamilySync {
 /** SharedPreferences ⇄ JSON for the sync, translating the word-id lists into word keys and back. */
 object PrefCodec {
     /** Keys whose value is a set of word ids. */
-    private val ID_SETS = setOf("giant/confirmed", "masterCheck/ids", "fishing/seen")
+    private val ID_SETS = setOf("giant/confirmed", "masterCheck/ids", "fishing/seen", "history/ever")
 
     fun export(context: Context, file: String, keyOf: Map<Long, String>): JSONObject {
         val sp = context.applicationContext.getSharedPreferences(file, Context.MODE_PRIVATE)

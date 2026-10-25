@@ -782,7 +782,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
         // Riding the good mood after a catch: straight into the next new words.
         PrimaryButton("📚 새 단어 ${vm.newWords}개 더 배우기", onMoreWords)
         Text(
-            "아직 안 배운 단어가 나와요. 맞힌 만큼 레벨이 올라가요!",
+            "아직 안 배운 단어가 나와요. 외운 단어가 늘수록 레벨이 올라가요!",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 4.dp),
@@ -808,7 +808,7 @@ fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "레벨이 오를수록 더 큰 물고기가 나와요. 잘 맞히고 빨리 낚을수록 무거워요.",
+                    "잘 맞히고 빨리 낚을수록 무거운 물고기를 낚아요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
@@ -818,7 +818,7 @@ fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
                         Text(if (count > 0) f.emoji else "❓", fontSize = 30.sp)
                         Column(Modifier.padding(start = 12.dp)) {
                             Text(
-                                if (count > 0) f.name else "Lv.${f.level}부터 나와요",
+                                if (count > 0) f.name else "???",
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(

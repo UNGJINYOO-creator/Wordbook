@@ -80,6 +80,7 @@ class DailyStats(context: Context) {
 
     /** Different words ever answered right in a quiz. */
     val totalLearned: Int get() = history.getStringSet("ever", emptySet())!!.size
+    val everIds: Set<Long> get() = history.getStringSet("ever", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
 
     /** Answers and right answers over all days. */
     val totalAnswered: Int get() = history.getInt("answered", 0)

@@ -13,7 +13,7 @@ data class Reward(val name: String, val cost: Int)
 /** A reward the child has claimed; the parent marks it used. */
 data class Coupon(val name: String, val claimedAt: Long, val used: Boolean)
 
-/** Levels and their titles; the stars needed grow with each level. */
+/** Levels and their titles, set by the share of all words the child knows: 0% is Lv.1, 100% is Lv.7. */
 object Levels {
     val titles = listOf("초보 단어꾼", "손맛 아는 단어꾼", "베테랑 단어꾼", "영웅 단어꾼", "전설의 강태공", "신화 속 단어신", "심해의 은둔 고수")
     val grades = listOf("일반", "고급", "희귀", "영웅", "전설", "신화", "비밀")
@@ -27,14 +27,15 @@ object Levels {
         "깊은 바다에 숨은 단어까지 낚는, 아무도 정체를 모르는 고수",
     )
 
-    /** Fish (the app's points, once called stars) needed to reach [level] (1-based): 0, 20, 60, 120, 200, … */
-    fun starsFor(level: Int): Int = 10 * (level - 1) * level
+    /** Percent of all words known to reach each level (1-based); only every word known reaches the last. */
+    val percents = listOf(0, 10, 25, 40, 60, 80, 100)
 
-    fun levelOf(stars: Int): Int {
-        var level = 1
-        while (stars >= starsFor(level + 1)) level++
-        return level
-    }
+    fun percentFor(level: Int): Int = percents[(level - 1).coerceIn(0, percents.lastIndex)]
+
+    fun levelOf(percent: Int): Int = percents.indexOfLast { percent >= it } + 1
+
+    /** Whole percent of [total] that [known] is, rounded down so 100 means every word. */
+    fun percent(known: Int, total: Int): Int = if (total <= 0) 0 else (known * 100L / total).toInt()
 
     private fun index(level: Int) = (level - 1).coerceIn(0, titles.lastIndex)
     fun title(level: Int): String = titles[index(level)]
@@ -65,13 +66,26 @@ class Game(context: Context) {
     val earned: Int get() = prefs.getInt("earned", 0)
     val spent: Int get() = prefs.getInt("spent", 0)
     val stars: Int get() = earned - spent
-    val level: Int get() = Levels.levelOf(earned)
+    /** Words known (each different word answered right at least once) and all words, kept from the last count. */
+    val known: Int get() = prefs.getInt("known", 0)
+    val total: Int get() = prefs.getInt("total", 0)
+    val percent: Int get() = Levels.percent(known, total)
+    val level: Int get() = Levels.levelOf(percent)
     val badges: Int get() = prefs.getInt("badges", 0)
 
-    /** Adds stars; returns the new level if this crossed into one, else null. */
-    fun addStars(n: Int): Int? {
-        val before = level
+    fun addStars(n: Int) {
         prefs.edit().putInt("earned", earned + n).apply()
+    }
+
+    /**
+     * Recounts known words against all words (the same spelling in two decks counts once);
+     * returns the new level if this crossed into one, else null.
+     */
+    suspend fun recount(dao: WordDao, ever: Set<Long>): Int? {
+        val before = level
+        val byText = dao.getAllWords().groupBy { it.text.trim().lowercase() }
+        val known = byText.count { (_, words) -> words.any { it.id in ever } }
+        prefs.edit().putInt("known", known).putInt("total", byText.size).apply()
         return level.takeIf { it > before }
     }
 

@@ -179,6 +179,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var earned by mutableIntStateOf(0)
         private set
+    /** Words known and all words, for the level. */
+    var known by mutableIntStateOf(0)
+        private set
+    var total by mutableIntStateOf(0)
+        private set
     private val giantStore = com.wordbook.app.data.Giant(app)
     var giant by mutableStateOf<com.wordbook.app.data.GiantState?>(null)
         private set
@@ -204,6 +209,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         goalWords = settings.dailyWords
         stars = game.stars
         earned = game.earned
+        known = game.known
+        total = game.total
+        viewModelScope.launch {
+            game.recount(dao, stats.everIds)
+            known = game.known
+            total = game.total
+        }
         viewModelScope.launch { giant = giantStore.state(dao.getAllWords(), stats.learnedToday) }
     }
 
@@ -253,8 +265,9 @@ internal fun hoursText(ms: Long): String {
 
 /** Explains levels, what they unlock and what stars are for. */
 @Composable
-private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: Int, onDismiss: () -> Unit) {
-    val level = Levels.levelOf(earned)
+private fun LevelDialog(known: Int, total: Int, stars: Int, totalMs: Long, onDismiss: () -> Unit) {
+    val percent = Levels.percent(known, total)
+    val level = Levels.levelOf(percent)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -269,7 +282,7 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("📊 지금까지 ${hoursText(totalMs)} 공부했고, 단어 ${totalLearned}개를 외웠어요.", style = MaterialTheme.typography.bodyMedium)
+                Text("📊 지금까지 ${hoursText(totalMs)} 공부했고, 전체 단어 ${total}개 중 ${known}개($percent%)를 외웠어요.", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
                 Text("🐟 낚은 물고기는 뭐예요?", style = MaterialTheme.typography.titleSmall)
                 Text(
@@ -281,7 +294,8 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
                 Spacer(Modifier.height(4.dp))
                 Text("🏆 레벨", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "지금까지 낚은 물고기가 쌓이면 레벨이 올라가요. 물고기를 쿠폰으로 써도 레벨은 내려가지 않아요. " +
+                    "앱에 있는 전체 단어 중 몇 %를 외웠는지로 등급이 정해져요. 0%면 Lv.1, 모든 단어를 외워 100%가 되면 최고 등급 Lv.7이에요. " +
+                        "단어를 새로 추가하면 전체가 늘어나서 %가 조금 내려갈 수 있어요. " +
                         "레벨이 오르면 칭호가 바뀌고 단어장 표지에 쓸 새 이모지가 열려요.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -303,16 +317,13 @@ private fun LevelDialog(earned: Int, stars: Int, totalMs: Long, totalLearned: In
                             Text(Levels.description(n), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                         }
                         Text(
-                            (Levels.unlocks[n]?.joinToString("") ?: "") + "  🐟${Levels.starsFor(n)}",
+                            (Levels.unlocks[n]?.joinToString("") ?: "") + "  ${Levels.percentFor(n)}%",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                         )
                     }
                 }
-                Text(
-                    "Lv.${Levels.titles.size} 다음부터는 심해의 은둔 고수로 레벨 숫자가 계속 올라가요. 오늘도 화이팅! 🎣",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text("오늘도 화이팅! 🎣", style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("좋아요") } },
@@ -401,7 +412,7 @@ fun HomeScreen(
                 )
             }
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
-                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.earned, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
+                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
             }
             item(key = "fishing", span = { GridItemSpan(maxLineSpan) }) {
                 Card(
@@ -630,7 +641,7 @@ fun HomeScreen(
     deckToStyle?.let { deck ->
         CoverDialog(
             deck = deck,
-            level = Levels.levelOf(vm.earned),
+            level = Levels.levelOf(Levels.percent(vm.known, vm.total)),
             onDismiss = { deckToStyle = null },
             onSave = { color, emoji ->
                 vm.updateDeck(deck.id) { it.copy(color = color, emoji = emoji) }
@@ -745,7 +756,8 @@ private fun TodayCard(
     goalMs: Long,
     streak: Int,
     stars: Int,
-    earned: Int,
+    known: Int,
+    total: Int,
     learned: Int,
     goalWords: Int,
     totalMs: Long,
@@ -753,7 +765,7 @@ private fun TodayCard(
     onToday: () -> Unit,
 ) {
     var showLevels by remember { mutableStateOf(false) }
-    if (showLevels) LevelDialog(earned, stars, totalMs, totalLearned) { showLevels = false }
+    if (showLevels) LevelDialog(known, total, stars, totalMs) { showLevels = false }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -804,10 +816,12 @@ private fun TodayCard(
                 ThickProgress((learned / goalWords.toFloat()).coerceAtMost(1f), Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(12.dp))
-            // Level bar: stars earned toward the next level.
-            val level = Levels.levelOf(earned)
-            val from = Levels.starsFor(level)
-            val to = Levels.starsFor(level + 1)
+            // Level bar: the share of all words known, toward the next level's percent.
+            val percent = Levels.percent(known, total)
+            val level = Levels.levelOf(percent)
+            val top = level >= Levels.percents.size
+            val from = Levels.percentFor(level)
+            val to = Levels.percentFor(level + 1)
             // Tapping the level part explains levels and fish.
             Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { showLevels = true }.padding(vertical = 2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -817,15 +831,16 @@ private fun TodayCard(
                     Text("🐟 ${stars}마리", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.height(6.dp))
-                ThickProgress((earned - from) / (to - from).toFloat(), Modifier.fillMaxWidth())
+                ThickProgress(if (top) 1f else (known * 100f / total.coerceAtLeast(1) - from) / (to - from), Modifier.fillMaxWidth())
                 Text(
-                    "다음 레벨까지 물고기 ${to - earned}마리 · 누르면 레벨 설명",
+                    "전체 단어 ${total}개 중 ${known}개 외움 ($percent%) · " +
+                        (if (top) "최고 등급!" else "다음 레벨은 $to%") + " · 누르면 설명",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 Text(
-                    "📊 지금까지 ${hoursText(totalMs)} 공부 · 외운 단어 ${totalLearned}개",
+                    "📊 지금까지 ${hoursText(totalMs)} 공부했어요",
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.padding(top = 8.dp),
                 )
