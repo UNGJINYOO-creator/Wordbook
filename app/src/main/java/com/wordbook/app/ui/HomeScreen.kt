@@ -721,7 +721,7 @@ private fun HomeHeader(level: Int, known: Int, total: Int, stars: Int, totalMs: 
             // Who the child is: the level badge (today's numbers live in the card below). Tap for the level popup.
             Column(
                 Modifier
-                    .padding(end = 158.dp)
+                    .padding(end = 174.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color.White.copy(alpha = 0.14f))
                     .border(1.5.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
@@ -747,7 +747,7 @@ private fun HomeHeader(level: Int, known: Int, total: Int, stars: Int, totalMs: 
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .size(150.dp)
+                .size(166.dp)
                 .clip(RoundedCornerShape(28.dp))
                 .border(3.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(28.dp)),
         )
