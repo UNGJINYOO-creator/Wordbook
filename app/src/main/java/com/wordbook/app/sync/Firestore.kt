@@ -8,8 +8,8 @@ import java.net.URL
 
 /** The family's Firebase project; filled in once it exists. Sync stays off while these are blank. */
 object FirebaseConfig {
-    const val PROJECT_ID = ""
-    const val API_KEY = ""
+    const val PROJECT_ID = "nakabocab"
+    const val API_KEY = "AIzaSyDChZaflfeKcGBrxmrq4ILejJlhEp2Jvwk"
     val ready: Boolean get() = PROJECT_ID.isNotBlank() && API_KEY.isNotBlank()
 }
 
