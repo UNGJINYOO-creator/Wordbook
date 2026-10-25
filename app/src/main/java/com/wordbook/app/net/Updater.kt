@@ -15,28 +15,22 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * In-app updates: each CI build is copied as a release to a public repo that holds only the APK
- * (the code repo is private), and the app compares that release's build number with its own.
+ * In-app updates: after each CI build the APK and a version.json ({"build": N}) are pushed to a public repo
+ * that holds only those two files (the code repo is private); the app compares N with its own build number.
  */
 object Updater {
-    private const val REPO = "UNGJINYOO-creator/nakabocab"
+    private const val BASE = "https://raw.githubusercontent.com/UNGJINYOO-creator/nakabocab/main/"
 
     data class Update(val build: Int, val url: String)
 
     suspend fun check(): Update? = withContext(Dispatchers.IO) {
         runCatching {
-            val conn = URL("https://api.github.com/repos/$REPO/releases/latest").openConnection() as HttpURLConnection
-            conn.setRequestProperty("Accept", "application/vnd.github+json")
+            val conn = URL(BASE + "version.json?t=${System.currentTimeMillis() / 60_000}").openConnection() as HttpURLConnection
             conn.connectTimeout = 8_000
             conn.readTimeout = 8_000
             if (conn.responseCode != 200) return@runCatching null
-            val json = JSONObject(conn.inputStream.bufferedReader().readText())
-            val build = json.getString("tag_name").removePrefix("build-").toIntOrNull() ?: return@runCatching null
-            val assets = json.getJSONArray("assets")
-            val url = (0 until assets.length()).map { assets.getJSONObject(it) }
-                .firstOrNull { it.getString("name").endsWith(".apk") }?.getString("browser_download_url")
-                ?: return@runCatching null
-            if (build > BuildConfig.VERSION_CODE) Update(build, url) else null
+            val build = JSONObject(conn.inputStream.bufferedReader().readText()).getInt("build")
+            if (build > BuildConfig.VERSION_CODE) Update(build, BASE + "WordBook.apk?b=$build") else null
         }.getOrNull()
     }
 
