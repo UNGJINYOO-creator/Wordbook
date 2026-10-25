@@ -284,11 +284,15 @@ object PrefCodec {
         e.apply()
     }
 
-    /** Key by key: a newer "date" wins the whole file; otherwise bigger numbers, either flag, both sets. */
+    /** Key by key: a newer "date" or "resetAt" wins the whole file; otherwise bigger numbers, either flag, both sets. */
     fun merge(local: JSONObject, remote: JSONObject): JSONObject {
         val ld = local.optJSONArray("date")?.optString(1)
         val rd = remote.optJSONArray("date")?.optString(1)
         if (ld != null && rd != null && ld != rd) return if (rd > ld) remote else local
+        // A 진도 초기화 (or undoing one) on either device replaces the whole file, so it isn't merged back in.
+        val lr = local.optJSONArray("resetAt")?.optLong(1) ?: 0L
+        val rr = remote.optJSONArray("resetAt")?.optLong(1) ?: 0L
+        if (lr != rr) return if (rr > lr) remote else local
         val out = JSONObject(local.toString())
         remote.keys().forEach { k ->
             val r = remote.getJSONArray(k)

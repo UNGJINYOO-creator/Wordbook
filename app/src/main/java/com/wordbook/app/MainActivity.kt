@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val settings = StudySettings(this)
         lifecycleScope.launch(Dispatchers.IO) {
+            com.wordbook.app.data.ProgressReset.finishUndo(applicationContext)
             DefaultDecks.seed(applicationContext)
             // After seeding, so built-in words are matched rather than added twice.
             com.wordbook.app.sync.FamilySync.run(applicationContext)

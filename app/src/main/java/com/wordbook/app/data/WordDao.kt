@@ -53,6 +53,9 @@ interface WordDao {
     suspend fun updateWord(word: Word)
 
     @Update
+    suspend fun updateWords(words: List<Word>)
+
+    @Update
     suspend fun updateDeck(deck: Deck)
 
     @Query("SELECT * FROM words WHERE id = :id")

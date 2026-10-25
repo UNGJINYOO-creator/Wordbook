@@ -421,6 +421,9 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                         }
                     }
                 }
+                Group("🧹 진도 초기화", "처음부터 다시 하고 싶을 때", open == "reset", { toggle("reset") }) {
+                    Body { ResetEditor() }
+                }
                 Group(
                     "⚙️ 고급",
                     "카드 ${hand}장씩 돌리기 · 최근 단어 ${recentShare}% · ${idle}초 멈춤",

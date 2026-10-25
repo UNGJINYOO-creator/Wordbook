@@ -325,3 +325,138 @@ object Opt {
         else -> "저녁 ${h - 12}시"
     }
 }
+
+/** 진도 초기화: what to clear (every word or chosen decks, fish, records), typed confirmation, and undo. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun ResetEditor() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var decks by remember { mutableStateOf<List<com.wordbook.app.data.Deck>>(emptyList()) }
+    LaunchedEffect(Unit) { decks = com.wordbook.app.data.AppDatabase.get(context).wordDao().getAllDecks().sortedBy { it.name } }
+    var all by remember { mutableStateOf(true) }
+    var picked by remember { mutableStateOf(setOf<Long>()) }
+    var words by remember { mutableStateOf(true) }
+    var fish by remember { mutableStateOf(false) }
+    var records by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf(false) }
+    var undoAsk by remember { mutableStateOf(false) }
+    var working by remember { mutableStateOf(false) }
+    var done by remember { mutableStateOf<String?>(null) }
+    val undoSince = remember { com.wordbook.app.data.ProgressReset.undoableSince(context) }
+    val canRun = (words && (all || picked.isNotEmpty())) || (all && (fish || records))
+
+    Column {
+        Text(
+            "단어장과 단어는 그대로 두고, 외운 기록만 지워서 처음부터 다시 해요. 실행 직전 상태를 저장해 두니 실수해도 되돌릴 수 있어요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        Text("어떤 단어를?", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(all, { all = true }, label = { Text("전체 단어") })
+            FilterChip(!all, { all = false }, label = { Text("단어장 고르기") })
+        }
+        if (!all) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                decks.forEach { d ->
+                    val on = d.id in picked
+                    FilterChip(on, { picked = if (on) picked - d.id else picked + d.id }, label = {
+                        Text((if (d.isCollection) "📚 " else "") + d.name)
+                    })
+                }
+            }
+        }
+        Text("무엇을 지울까요?", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        SwitchRow("📘 단어 진도", "외운 기록, 복습 일정, 오답노트", words) { words = it }
+        SwitchRow(
+            "🐟 물고기 · 도감 · 쿠폰",
+            if (all) "모은 물고기, 낚은 물고기 도감, 원정 기록, 받은 쿠폰" else "전체 단어를 고를 때만 지울 수 있어요",
+            fish && all,
+        ) { if (all) fish = it }
+        SwitchRow(
+            "🏆 등급 · 공부 시간 · 통계",
+            if (all) "레벨, 출석 도장, 공부한 시간, 정답률 기록 (끄면 레벨은 그대로 유지돼요)" else "전체 단어를 고를 때만 지울 수 있어요",
+            records && all,
+        ) { if (all) records = it }
+        SecondaryButton(if (working) "초기화하는 중…" else "🧹 초기화하기", { confirm = true }, Modifier.fillMaxWidth().padding(top = 8.dp), enabled = canRun && !working)
+        undoSince?.let {
+            TextButton(onClick = { undoAsk = true }, enabled = !working) {
+                Text("↩️ 초기화 전으로 되돌리기 (${java.text.SimpleDateFormat("M월 d일 HH:mm", java.util.Locale.KOREA).format(java.util.Date(it))})")
+            }
+        }
+    }
+
+    if (confirm) {
+        var typed by remember { mutableStateOf("") }
+        val what = listOfNotNull(
+            if (words) (if (all) "전체 단어" else "고른 단어장 ${picked.size}개") + "의 외운 기록" else null,
+            if (fish && all) "물고기 · 도감 · 쿠폰" else null,
+            if (records && all) "등급 · 공부 시간 · 통계" else null,
+        )
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("정말 초기화할까요?") },
+            text = {
+                Column {
+                    Text("지워지는 것: ${what.joinToString(", ")}", style = MaterialTheme.typography.bodyMedium)
+                    if (com.wordbook.app.sync.FamilySync.code(context) != null) {
+                        Text("기기 동기화로 연결된 다른 기기도 같이 초기화돼요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    Text("계속하려면 아래에 초기화 라고 써 주세요.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    OutlinedTextField(typed, { typed = it }, singleLine = true, placeholder = { Text("초기화") }, modifier = Modifier.padding(top = 4.dp))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    working = true
+                    val choice = com.wordbook.app.data.ProgressReset.Choice(if (all) null else picked, words, fish && all, records && all)
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        val error = runCatching { com.wordbook.app.data.ProgressReset.run(context, choice) }.exceptionOrNull()
+                        working = false
+                        done = error?.let { "초기화하지 못했어요: ${it.message}" } ?: "초기화했어요. 앱을 다시 시작하면 처음 상태로 보여요."
+                    }
+                }, enabled = typed.trim() == "초기화") { Text("초기화", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("취소") } },
+        )
+    }
+    if (undoAsk) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { undoAsk = false },
+            title = { Text("초기화 전으로 되돌릴까요?") },
+            text = { Text("마지막 초기화 바로 전 상태로 돌아가요. 그 뒤에 공부한 기록은 사라져요.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    undoAsk = false
+                    working = true
+                    scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                        val error = runCatching { com.wordbook.app.data.ProgressReset.undo(context) }.exceptionOrNull()
+                        working = false
+                        done = error?.let { "되돌리지 못했어요: ${it.message}" } ?: "되돌렸어요. 앱을 다시 시작하면 예전 기록으로 보여요."
+                    }
+                }) { Text("되돌리기") }
+            },
+            dismissButton = { TextButton(onClick = { undoAsk = false }) { Text("취소") } },
+        )
+    }
+    done?.let { message ->
+        val ok = !message.contains("못했어요")
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { if (!ok) done = null },
+            title = { Text(if (ok) "✅ 완료" else "앗") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (!ok) { done = null; return@TextButton }
+                    // Restart so every screen reads the new state.
+                    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK or android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    Runtime.getRuntime().exit(0)
+                }) { Text(if (ok) "다시 시작" else "닫기") }
+            },
+        )
+    }
+}
