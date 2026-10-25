@@ -153,7 +153,7 @@ private fun AppContent() {
                                 onToday = { nav.navigate("study/-1?today=true") },
                                 onStudyDeck = { id -> nav.navigate("study/$id") },
                                 onWrongNote = { nav.navigate("study/-1?wrong=true") },
-                                onFishing = { nav.navigate("fishing") },
+                                onFishing = { giant -> nav.navigate(if (giant) "fishing?giant=true" else "fishing") },
                             )
                         }
                         composable("review") {
@@ -188,8 +188,12 @@ private fun AppContent() {
                                 onHome = { nav.popBackStack("home", inclusive = false) },
                             )
                         }
-                        composable("fishing") {
+                        composable(
+                            "fishing?giant={giant}",
+                            arguments = listOf(navArgument("giant") { type = NavType.BoolType; defaultValue = false }),
+                        ) { entry ->
                             FishingScreen(
+                                giantOnly = entry.arguments?.getBoolean("giant") == true,
                                 onBack = { nav.popBackStack() },
                                 // 오늘 학습 again: the reviews are done, so it brings the next new words.
                                 onMoreWords = { nav.navigate("study/-1?today=true") { popUpTo("home") } },

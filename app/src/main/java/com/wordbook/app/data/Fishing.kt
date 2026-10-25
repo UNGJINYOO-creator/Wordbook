@@ -17,7 +17,7 @@ enum class Sea(val emoji: String, val title: String, val note: String) {
  * A fish of the 단어 낚시 도전 game, living in [sea] (null for a giant). [rarity] 0..3 is 흔함·보통·희귀·전설:
  * a better game makes the rarer ones bite more often. [key] keeps the saved catches of a renamed fish.
  */
-data class Fish(val sea: Sea?, val rarity: Int, val emoji: String, val name: String, val minKg: Double, val maxKg: Double, val key: String = name)
+data class Fish(val sea: Sea?, val rarity: Int, val emoji: String, val name: String, val minKg: Double, val maxKg: Double, val key: String = name, val fact: String = "")
 
 /**
  * 단어 낚시 도전: the day's final boss. Opens once today's goal is met, tries a day as set (0 = no limit),
@@ -123,29 +123,29 @@ class Fishing(context: Context) {
         val rarityNames = listOf("흔함", "보통", "희귀", "전설")
 
         val species = listOf(
-            Fish(Sea.WEST, 0, "🦀", "꽃게", 0.2, 0.5),
-            Fish(Sea.WEST, 0, "🐙", "주꾸미", 0.05, 0.2),
-            Fish(Sea.WEST, 1, "🐟", "우럭", 0.5, 2.0),
-            Fish(Sea.WEST, 1, "🐟", "광어", 1.0, 5.0),
-            Fish(Sea.WEST, 2, "🦑", "갑오징어", 0.3, 1.5),
-            Fish(Sea.WEST, 3, "🐟", "민어", 5.0, 20.0),
-            Fish(Sea.SOUTH, 0, "🐟", "고등어", 0.3, 1.0),
-            Fish(Sea.SOUTH, 0, "🐟", "볼락", 0.1, 0.5),
-            Fish(Sea.SOUTH, 1, "🐟", "갈치", 0.5, 3.0),
-            Fish(Sea.SOUTH, 1, "🐡", "참복", 0.5, 2.0),
-            Fish(Sea.SOUTH, 2, "🐟", "참돔", 1.0, 8.0),
-            Fish(Sea.SOUTH, 3, "🐟", "감성돔", 2.0, 6.0),
-            Fish(Sea.EAST, 0, "🦑", "오징어", 0.3, 1.0, key = "대왕 복어"),
-            Fish(Sea.EAST, 0, "🐟", "도루묵", 0.1, 0.3),
-            Fish(Sea.EAST, 1, "🦀", "대게", 0.5, 2.0),
-            Fish(Sea.EAST, 1, "🐟", "임연수어", 0.3, 1.5),
-            Fish(Sea.EAST, 2, "🐟", "방어", 5.0, 15.0, key = "참치"),
-            Fish(Sea.EAST, 3, "🐟", "대구", 5.0, 20.0),
-            Fish(Sea.JEJU, 0, "🐟", "자리돔", 0.05, 0.2),
-            Fish(Sea.JEJU, 1, "🐟", "옥돔", 0.5, 2.0),
-            Fish(Sea.JEJU, 1, "🐙", "문어", 1.0, 5.0),
-            Fish(Sea.JEJU, 2, "🐟", "부시리", 5.0, 20.0),
-            Fish(Sea.JEJU, 3, "🐟", "다금바리", 10.0, 50.0),
+            Fish(Sea.WEST, 0, "🦀", "꽃게", 0.2, 0.5, fact = "옆으로 걷고, 뒷다리가 노처럼 넓적해서 헤엄도 잘 쳐요."),
+            Fish(Sea.WEST, 0, "🐙", "주꾸미", 0.05, 0.2, fact = "빈 소라 껍데기에 들어가 사는 걸 좋아해요."),
+            Fish(Sea.WEST, 1, "🐟", "우럭", 0.5, 2.0, fact = "알이 아니라 새끼를 낳는 물고기예요."),
+            Fish(Sea.WEST, 1, "🐟", "광어", 1.0, 5.0, fact = "어릴 땐 눈이 양쪽에 있다가 자라면서 한쪽으로 모여요."),
+            Fish(Sea.WEST, 2, "🦑", "갑오징어", 0.3, 1.5, fact = "몸속에 배 모양의 단단한 뼈가 있어요."),
+            Fish(Sea.WEST, 3, "🐟", "민어", 5.0, 20.0, fact = "부레로 '부욱부욱' 소리를 내요."),
+            Fish(Sea.SOUTH, 0, "🐟", "고등어", 0.3, 1.0, fact = "등에 물결무늬가 있고 떼 지어 빠르게 헤엄쳐요."),
+            Fish(Sea.SOUTH, 0, "🐟", "볼락", 0.1, 0.5, fact = "눈이 커서 밤에도 먹이를 잘 찾아요."),
+            Fish(Sea.SOUTH, 1, "🐟", "갈치", 0.5, 3.0, fact = "꼬리를 아래로 하고 서서 헤엄쳐요."),
+            Fish(Sea.SOUTH, 1, "🐡", "참복", 0.5, 2.0, fact = "몸에 독이 있어서 요리사 자격증이 있어야 다룰 수 있어요."),
+            Fish(Sea.SOUTH, 2, "🐟", "참돔", 1.0, 8.0, fact = "분홍빛 몸에 파란 점이 반짝여서 바다의 여왕이라고 불려요."),
+            Fish(Sea.SOUTH, 3, "🐟", "감성돔", 2.0, 6.0, fact = "아주 조심성이 많아서 낚시꾼들의 꿈의 물고기예요."),
+            Fish(Sea.EAST, 0, "🦑", "오징어", 0.3, 1.0, key = "대왕 복어", fact = "다리가 10개이고, 위험하면 먹물을 뿜고 도망가요."),
+            Fish(Sea.EAST, 0, "🐟", "도루묵", 0.1, 0.3, fact = "피난 가던 임금님이 먹고 이름을 붙였다는 이야기가 있어요."),
+            Fish(Sea.EAST, 1, "🦀", "대게", 0.5, 2.0, fact = "다리가 대나무 마디처럼 곧게 뻗어서 대게예요."),
+            Fish(Sea.EAST, 1, "🐟", "임연수어", 0.3, 1.5, fact = "옛날 임연수라는 사람이 잘 잡아서 생긴 이름이래요."),
+            Fish(Sea.EAST, 2, "🐟", "방어", 5.0, 15.0, key = "참치", fact = "자랄수록 이름이 바뀌는 출세어예요."),
+            Fish(Sea.EAST, 3, "🐟", "대구", 5.0, 20.0, fact = "입이 커서 대구(大口)라는 이름이 붙었어요."),
+            Fish(Sea.JEJU, 0, "🐟", "자리돔", 0.05, 0.2, fact = "한자리에 머물러 살아서 자리돔이에요."),
+            Fish(Sea.JEJU, 1, "🐟", "옥돔", 0.5, 2.0, fact = "제주에서 귀한 손님상에 오르던 물고기예요."),
+            Fish(Sea.JEJU, 1, "🐙", "문어", 1.0, 5.0, fact = "똑똑해서 병뚜껑도 열 수 있어요."),
+            Fish(Sea.JEJU, 2, "🐟", "부시리", 5.0, 20.0, fact = "방어와 꼭 닮았지만 더 길고 힘이 세요."),
+            Fish(Sea.JEJU, 3, "🐟", "다금바리", 10.0, 50.0, fact = "아주 드물어서 제주에서도 보기 힘든 전설의 물고기예요."),
         )
 
         /**

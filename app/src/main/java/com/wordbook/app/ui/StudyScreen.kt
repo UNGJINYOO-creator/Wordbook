@@ -1,5 +1,11 @@
 package com.wordbook.app.ui
 
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animate
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import android.app.Application
 import android.speech.tts.TextToSpeech
 import androidx.activity.compose.BackHandler
@@ -1042,59 +1048,105 @@ private fun SwipeCard(
 ) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    // A short drag or a quick flick is enough to answer.
-    val threshold = with(density) { 48.dp.toPx() }
-    val flingVelocity = with(density) { 600.dp.toPx() }
+    val haptic = LocalHapticFeedback.current
+    // A drag past the line, or a quick flick that has clearly picked a direction, answers; a tap never does.
+    val threshold = with(density) { 72.dp.toPx() }
+    val flingVelocity = with(density) { 500.dp.toPx() }
+    val flingMinDistance = with(density) { 16.dp.toPx() }
     val velocity = remember { VelocityTracker() }
-    val offsetX = remember { Animatable(0f) }
-    val offsetY = remember { Animatable(0f) }
-    val rotation by animateFloatAsState(if (flipped) 180f else 0f, tween(350), label = "flip")
+    // Plain state while the finger moves (no coroutine per move), animated only after release.
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+    var leaving by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(
+        if (flipped) 180f else 0f,
+        spring(dampingRatio = 0.72f, stiffness = 380f),
+        label = "flip",
+    )
+    // Each new card rises from the stack behind.
+    val appear = remember { Animatable(0.94f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, spring(dampingRatio = 0.7f, stiffness = 500f)) }
 
-    // Swipe feedback: green check (left, 헷갈려요), blue double check (up, 외웠어요), red X (down, 몰라요).
-    val leftProgress = (-offsetX.value / threshold).coerceIn(0f, 1f)
-    val upProgress = (-offsetY.value / threshold).coerceIn(0f, 1f)
-    val downProgress = (offsetY.value / threshold).coerceIn(0f, 1f)
+    val horizontal = abs(offsetX) >= abs(offsetY)
+    val leftProgress = if (horizontal) (-offsetX / threshold).coerceIn(0f, 1f) else 0f
+    val rightProgress = if (horizontal && canUndo) (offsetX / threshold).coerceIn(0f, 1f) else 0f
+    val upProgress = if (!horizontal) (-offsetY / threshold).coerceIn(0f, 1f) else 0f
+    val downProgress = if (!horizontal) (offsetY / threshold).coerceIn(0f, 1f) else 0f
+    // A light tick when the drag crosses the line, so the child feels that letting go now counts.
+    val past = maxOf(leftProgress, rightProgress, upProgress, downProgress) >= 1f
+    LaunchedEffect(past) { if (past && !leaving) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
 
+    fun fly(toX: Float, toY: Float, vx: Float, vy: Float, done: () -> Unit) {
+        leaving = true
+        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        scope.launch {
+            launch { animate(offsetX, toX, vx, tween(180, easing = FastOutLinearInEasing)) { v, _ -> offsetX = v } }
+            animate(offsetY, toY, vy, tween(180, easing = FastOutLinearInEasing)) { v, _ -> offsetY = v }
+            done()
+        }
+    }
+
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // The next card waiting underneath, so a card flying away never leaves an empty hole.
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.75f, matchHeightConstraintsFirst = true)
+                .graphicsLayer {
+                    scaleX = 0.92f
+                    scaleY = 0.92f
+                    translationY = 14.dp.toPx()
+                },
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
+        ) {}
     Box(
-        modifier
+        Modifier
             .fillMaxWidth()
-            .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
-            .graphicsLayer { rotationZ = offsetX.value / 40f }
+            .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
+            .graphicsLayer {
+                rotationZ = offsetX / 30f
+                scaleX = appear.value
+                scaleY = appear.value
+            }
             .pointerInput(word.id, canUndo) {
                 detectDragGestures(
                     onDragStart = { velocity.resetTracking() },
                     onDrag = { change, drag ->
+                        if (leaving) return@detectDragGestures
                         velocity.addPointerInputChange(change)
                         change.consume()
+                        offsetX += drag.x
+                        offsetY += drag.y
+                    },
+                    onDragCancel = {
                         scope.launch {
-                            offsetX.snapTo(offsetX.value + drag.x)
-                            offsetY.snapTo(offsetY.value + drag.y)
+                            launch { animate(offsetX, 0f, animationSpec = spring(0.6f, 500f)) { v, _ -> offsetX = v } }
+                            animate(offsetY, 0f, animationSpec = spring(0.6f, 500f)) { v, _ -> offsetY = v }
                         }
                     },
                     onDragEnd = {
+                        if (leaving) return@detectDragGestures
                         val v = velocity.calculateVelocity()
-                        scope.launch {
-                            val x = offsetX.value
-                            val y = offsetY.value
-                            val horizontal = abs(x) >= abs(y)
-                            when {
-                                horizontal && (x < -threshold || v.x < -flingVelocity) -> {
-                                    offsetX.animateTo(-size.width * 1.5f, tween(200)); onResult(Answer.KNOWN)
-                                }
-                                // Swipe right brings back the previous card.
-                                horizontal && canUndo && (x > threshold || v.x > flingVelocity) -> {
-                                    offsetX.animateTo(size.width * 1.5f, tween(150)); onUndo()
-                                }
-                                !horizontal && (y < -threshold || v.y < -flingVelocity) -> {
-                                    offsetY.animateTo(-size.height * 1.5f, tween(200)); onResult(Answer.MASTERED)
-                                }
-                                !horizontal && (y > threshold || v.y > flingVelocity) -> {
-                                    offsetY.animateTo(size.height * 1.5f, tween(200)); onResult(Answer.UNKNOWN)
-                                }
-                                else -> {
-                                    launch { offsetX.animateTo(0f) }
-                                    offsetY.animateTo(0f)
-                                }
+                        val x = offsetX
+                        val y = offsetY
+                        val sideways = abs(x) >= abs(y)
+                        val w = size.width * 1.5f
+                        val h = size.height * 1.5f
+                        when {
+                            sideways && (x < -threshold || (v.x < -flingVelocity && x < -flingMinDistance)) ->
+                                fly(-w, y, v.x, v.y) { onResult(Answer.KNOWN) }
+                            // Swipe right brings back the previous card.
+                            sideways && canUndo && (x > threshold || (v.x > flingVelocity && x > flingMinDistance)) ->
+                                fly(w, y, v.x, v.y) { onUndo() }
+                            !sideways && (y < -threshold || (v.y < -flingVelocity && y < -flingMinDistance)) ->
+                                fly(x, -h, v.x, v.y) { onResult(Answer.MASTERED) }
+                            !sideways && (y > threshold || (v.y > flingVelocity && y > flingMinDistance)) ->
+                                fly(x, h, v.x, v.y) { onResult(Answer.UNKNOWN) }
+                            // Not far enough: spring back with the hand's speed.
+                            else -> scope.launch {
+                                launch { animate(offsetX, 0f, v.x, spring(0.6f, 500f)) { a, _ -> offsetX = a } }
+                                animate(offsetY, 0f, v.y, spring(0.6f, 500f)) { a, _ -> offsetY = a }
                             }
                         }
                     },
@@ -1130,12 +1182,12 @@ private fun SwipeCard(
                         color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
-                    // Scrolls, and stays clear of the buttons below, when a long word and example don't fit.
+                    // No inner scrolling: it would fight the up/down swipes. Long words get a smaller size instead.
                     Column(
-                        Modifier.padding(top = 20.dp, bottom = 52.dp).verticalScroll(rememberScrollState()),
+                        Modifier.padding(top = 20.dp, bottom = 52.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Text(word.text, fontSize = 40.sp * textScale, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                        Text(word.text, fontSize = (if (word.text.length > 11) 32.sp else 40.sp) * textScale, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                         if (word.example.isNotBlank() && backFirst) {
                             Spacer(Modifier.height(12.dp))
                             ExampleText(word.example, 16.sp * textScale)
@@ -1163,7 +1215,7 @@ private fun SwipeCard(
                         word.meaning.length > 18 -> 26.sp
                         else -> 30.sp
                     }
-                    Column(Modifier.verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         PosMeaning(word.pos, word.meaning.ifBlank { "(뜻 없음)" }, fontSize = meaningSize * textScale, badgeSize = 18.sp * textScale)
                         // The example names the word, so it goes on whichever side is seen second.
                         if (word.example.isNotBlank() && !backFirst) {
@@ -1174,19 +1226,32 @@ private fun SwipeCard(
                 }
             }
         }
-        if (leftProgress > 0f) SwipeBadge(Icons.Default.Check, KnownGreen, leftProgress)
-        if (upProgress > 0f) SwipeBadge(Icons.Default.DoneAll, MasteredBlue, upProgress)
-        if (downProgress > 0f) SwipeBadge(Icons.Default.Close, UnknownRed, downProgress)
+        // Stamps that grow with the drag and show what letting go will do.
+        if (leftProgress > 0f) SwipeBadge(Icons.Default.Check, KnownGreen, leftProgress, "헷갈려요")
+        if (rightProgress > 0f) SwipeBadge(Icons.AutoMirrored.Filled.ArrowBack, Color(0xFF757575), rightProgress, "이전 카드")
+        if (upProgress > 0f) SwipeBadge(Icons.Default.DoneAll, MasteredBlue, upProgress, "외웠어요")
+        if (downProgress > 0f) SwipeBadge(Icons.Default.Close, UnknownRed, downProgress, "몰라요")
+    }
     }
 }
 
 @Composable
-private fun SwipeBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, alpha: Float) {
-    Box(
-        Modifier.size(96.dp).graphicsLayer { this.alpha = alpha }
-            .background(color, RoundedCornerShape(48.dp)),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, null, tint = Color.White, modifier = Modifier.size(64.dp)) }
+private fun SwipeBadge(icon: androidx.compose.ui.graphics.vector.ImageVector, color: Color, progress: Float, label: String) {
+    // Faint and small at first, full and slightly bigger once past the line.
+    val scale = 0.7f + 0.3f * progress + if (progress >= 1f) 0.08f else 0f
+    Column(
+        Modifier.graphicsLayer {
+            alpha = 0.35f + 0.65f * progress
+            scaleX = scale
+            scaleY = scale
+        }
+            .background(color, RoundedCornerShape(28.dp))
+            .padding(horizontal = 22.dp, vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, tint = Color.White, modifier = Modifier.size(52.dp))
+        Text(label, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp, maxLines = 1, softWrap = false)
+    }
 }
 
 private fun formatTime(ms: Long): String {

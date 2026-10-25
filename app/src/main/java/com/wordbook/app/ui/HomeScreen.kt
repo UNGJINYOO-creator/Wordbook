@@ -30,6 +30,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -344,7 +347,7 @@ fun HomeScreen(
     onToday: () -> Unit,
     onStudyDeck: (Long) -> Unit,
     onWrongNote: () -> Unit,
-    onFishing: () -> Unit,
+    onFishing: (giant: Boolean) -> Unit,
     vm: HomeViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -420,51 +423,43 @@ fun HomeScreen(
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
                 TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.level, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
             }
+            // The day's fishing and the giant hunt side by side; each opens its own screen.
             item(key = "fishing", span = { GridItemSpan(maxLineSpan) }) {
-                Card(
-                    onClick = onFishing,
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.cardColors(containerColor = if (vm.fishOpen) Color(0xFF1E5AA8) else Color(0xFFDCEBFA)),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    val ink = if (vm.fishOpen) Color.White else Color(0xFF0B2A5B)
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("🐋", fontSize = 28.sp)
-                        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text("🎣 오늘의 단어 낚시 도전!", style = MaterialTheme.typography.titleMedium, color = ink)
-                            Text(vm.fishLine, style = MaterialTheme.typography.bodySmall, color = ink)
-                        }
-                        Text("›", style = MaterialTheme.typography.titleLarge, color = ink, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-            vm.giant?.let { g ->
-                val f = g.fish
-                item(key = "giant", span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Card(
-                        onClick = onFishing,
+                        onClick = { onFishing(false) },
                         shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2A5B)),
-                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = if (vm.fishOpen) Color(0xFF1E5AA8) else Color(0xFFDCEBFA)),
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(f?.emoji ?: "🏆", fontSize = 28.sp)
-                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        val ink = if (vm.fishOpen) Color.White else Color(0xFF0B2A5B)
+                        Column(Modifier.padding(14.dp)) {
+                            Text("🎣", fontSize = 26.sp)
+                            FitText("오늘의 단어 낚시", MaterialTheme.typography.titleMedium.copy(color = ink, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                            Text(vm.fishLine, style = MaterialTheme.typography.bodySmall, color = ink, modifier = Modifier.padding(top = 4.dp))
+                        }
+                    }
+                    vm.giant?.let { g ->
+                        val f = g.fish
+                        Card(
+                            onClick = { onFishing(true) },
+                            shape = MaterialTheme.shapes.large,
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2A5B)),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        ) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text(f?.emoji ?: "🏆", fontSize = 26.sp)
                                 if (f == null) {
-                                    Text("🏆 거대 물고기 18마리 완성!", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                                    FitText("18마리 완성!", MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
                                 } else {
-                                    Text(
-                                        "🏆 ${f.ocean.title} · ${f.name} (${g.index + 1}/${com.wordbook.app.data.Giant.species.size})",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = Color.White,
-                                    )
+                                    FitText("${f.ocean.title} ${f.name}", MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
                                     Spacer(Modifier.height(6.dp))
                                     ThickProgress(g.hp / g.total.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth())
                                     Text(
                                         when {
-                                            g.ready -> "체력 0! 최종전이 열렸어요 🎣"
-                                            g.pending > 0 -> "체력 ${g.hp}/${g.total} · 오늘 낚시 성공하면 -${g.pending}"
-                                            else -> "체력 ${g.hp}/${g.total} · 단어를 외울수록 줄어요"
+                                            g.ready -> "체력 0! 최종전 열림 🎣"
+                                            g.pending > 0 -> "체력 ${g.hp} · 오늘 -${g.pending}"
+                                            else -> "체력 ${g.hp}/${g.total}"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (g.ready || g.pending > 0) Color(0xFFFFE08A) else Color.White,
@@ -472,7 +467,6 @@ fun HomeScreen(
                                     )
                                 }
                             }
-                            Text("›", style = MaterialTheme.typography.titleLarge, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
