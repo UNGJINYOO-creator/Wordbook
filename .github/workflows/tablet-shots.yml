@@ -4,6 +4,9 @@ name: Tablet screenshots
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   shots:
     runs-on: ubuntu-latest
@@ -44,3 +47,13 @@ jobs:
         with:
           name: tablet-shots
           path: shots
+
+      # Also as a pre-release asset, so the pictures can be fetched without the artifact storage.
+      - name: Publish screenshots
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd shots && zip -q ../tablet-shots.zip *.png && cd ..
+          gh release create tablet-shots-${{ github.run_number }} tablet-shots.zip -R ${{ github.repository }} \
+            --prerelease --latest=false --title "태블릿 화면 점검 ${{ github.run_number }}" --notes "개발용 스크린샷"
