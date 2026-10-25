@@ -76,9 +76,13 @@ object Backup {
         }
     }
 
-    /** Sends a backup to the parents' Telegram once a week (checked when the app opens). */
+    /**
+     * Sends a backup to the parents' Telegram once a week (checked when the app opens).
+     * Not needed with 기기 동기화: the family's progress is already kept on the server.
+     */
     suspend fun weeklyToTelegram(context: Context) {
         val settings = StudySettings(context)
+        if (com.wordbook.app.sync.FamilySync.code(context) != null) return
         if (!settings.telegramBackup || settings.telegramToken.isBlank() || settings.telegramChatId.isBlank()) return
         val prefs = context.applicationContext.getSharedPreferences("alerts", Context.MODE_PRIVATE)
         if (System.currentTimeMillis() - prefs.getLong("lastBackup", 0) < 7 * 86_400_000L) return

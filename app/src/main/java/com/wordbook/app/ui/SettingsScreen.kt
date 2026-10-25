@@ -411,7 +411,8 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             enabled = settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank(),
                         ) { Text("지금 텔레그램으로 백업 보내기") }
                         Text(
-                            "매주 자동 백업은 📨 텔레그램 알림에서 켜고 끌 수 있어요.",
+                            "🔄 기기 동기화를 켜 두면 진도가 서버에 저장돼서 따로 백업할 필요가 없어요. " +
+                                "휴대폰을 바꿔도 가족 코드만 넣으면 그대로 이어져요. 동기화를 안 쓸 때만 매주 자동 백업(📨 텔레그램 알림)을 켜 두세요.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.outline,
                         )

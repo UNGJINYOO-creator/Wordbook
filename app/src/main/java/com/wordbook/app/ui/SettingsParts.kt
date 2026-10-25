@@ -280,7 +280,17 @@ fun ParentAlerts(settings: StudySettings) {
         SwitchRow("쿠폰을 받으면 알림", "아이가 물고기로 보상 쿠폰을 받는 순간", coupon) { coupon = it; settings.alertCoupon = it }
         SwitchRow("연속 학습이 끊기면 알림", "이어지던 공부를 하루 쉬면 다음 날", streak) { streak = it; settings.alertStreak = it }
         SwitchRow("저녁에 목표를 못 채웠으면 알림", "저녁 알림 시간에 남은 양을", evening) { evening = it; settings.alertEvening = it }
-        SwitchRow("매주 자동 백업", "일주일에 한 번 백업 파일을 보내요", backup) { backup = it; settings.telegramBackup = it }
+        val context = androidx.compose.ui.platform.LocalContext.current
+        if (com.wordbook.app.sync.FamilySync.code(context) == null) {
+            SwitchRow("매주 자동 백업", "기기 동기화를 안 쓸 때만, 일주일에 한 번 백업 파일을 보내요", backup) { backup = it; settings.telegramBackup = it }
+        } else {
+            Text(
+                "🔄 기기 동기화를 쓰고 있어서 매주 자동 백업은 보내지 않아요. 진도가 서버에 저장돼 있어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
     }
 }
 
