@@ -64,6 +64,15 @@ class Fishing(context: Context) {
         get() = Sea.entries.firstOrNull { it.name == prefs.getString("sea", null) } ?: Sea.WEST
         set(v) { prefs.edit().putString("sea", v.name).apply() }
 
+    /** 낚시 일지: the rarest fish of each day, as "emoji name", keyed yyyy-MM-dd. */
+    fun logOf(day: String): String? = prefs.getString("log_$day", null)
+
+    private fun log(fish: Fish) {
+        val key = "log_${today()}"
+        val old = prefs.getString("logRarity_${today()}", null)?.toIntOrNull() ?: -1
+        if (fish.rarity >= old) prefs.edit().putString(key, "${fish.emoji} ${fish.name}").putString("logRarity_${today()}", fish.rarity.toString()).apply()
+    }
+
     /** Kinds of fish of [sea] caught at least once. */
     fun collected(sea: Sea): Int = species.count { it.sea == sea && count(it) > 0 }
 
@@ -89,6 +98,7 @@ class Fishing(context: Context) {
             .putInt("count_${fish.key}", count(fish) + 1)
             .putFloat("best_${fish.key}", maxOf(best, kg.toFloat()))
             .apply()
+        log(fish)
         return kg > best
     }
 
@@ -152,9 +162,10 @@ class Fishing(context: Context) {
          * The fish that bites in [sea] after a game of [quality] 0..1: common ones get rarer and
          * rare ones likelier the better the game, but any fish can come at any level.
          */
-        fun pick(sea: Sea, quality: Double, random: Double = Math.random()): Fish {
+        fun pick(sea: Sea, quality: Double, random: Double = Math.random(), boosted: Boolean = false): Fish {
             val q = quality.coerceIn(0.0, 1.0)
-            val rarityWeight = doubleArrayOf(50 - 35 * q, 30.0, 15 + 20 * q, 5 + 25 * q * q)
+            val boost = if (boosted) 2.0 else 1.0
+            val rarityWeight = doubleArrayOf(50 - 35 * q, 30.0, (15 + 20 * q) * boost, (5 + 25 * q * q) * boost)
             val fish = species.filter { it.sea == sea }
             val weights = fish.map { f -> rarityWeight[f.rarity] / fish.count { it.rarity == f.rarity } }
             var x = random * weights.sum()
@@ -168,6 +179,17 @@ class Fishing(context: Context) {
         /** Weight from how well the game went: [quality] 0..1. */
         fun weight(fish: Fish, quality: Double): Double =
             fish.minKg + (fish.maxKg - fish.minKg) * quality.coerceIn(0.0, 1.0)
+
+        /** 오늘의 바다 소식: one sea a day (the same on every device) where rare fish bite twice as often. */
+        fun eventSea(day: java.time.LocalDate = java.time.LocalDate.now()): Sea =
+            Sea.entries[Math.floorMod(day.toEpochDay() * 7 + 3, Sea.entries.size.toLong()).toInt()]
+
+        fun eventNews(day: java.time.LocalDate = java.time.LocalDate.now()): String {
+            val sea = eventSea(day)
+            val rare = species.filter { it.sea == sea && it.rarity == 2 }
+            val fish = rare[Math.floorMod(day.toEpochDay(), rare.size.toLong()).toInt()]
+            return "${sea.emoji} ${sea.title}에 ${fish.name} 떼가 왔어요! 오늘 ${sea.title}에서는 희귀·전설 물고기가 2배로 잘 걸려요"
+        }
 
         fun formatKg(kg: Double): String = when {
             kg >= 1000 -> "%.1f톤".format(kg / 1000)

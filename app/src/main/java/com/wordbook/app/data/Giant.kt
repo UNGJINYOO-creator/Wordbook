@@ -23,6 +23,9 @@ data class GiantState(
     val pending: Int,
     val caught: Int,
     val extraLearned: Int,
+    /** Words of the block already landed on the giant, and today's that land with the next catch. */
+    val hitIds: Set<Long> = emptySet(),
+    val pendingIds: Set<Long> = emptySet(),
 ) {
     val fish: GiantFish? get() = Giant.species.getOrNull(index)
     val total: Int get() = words.size
@@ -81,11 +84,24 @@ class Giant(private val context: Context) {
             pending = words.count { it.id in learnedToday && it.id !in done },
             caught = (0 until species.size).count { caughtAt(it) > 0 },
             extraLearned = all.count { it.id !in builtInIds && it.id in done },
+            hitIds = words.filter { it.id in done }.map { it.id }.toSet(),
+            pendingIds = words.filter { it.id in learnedToday && it.id !in done }.map { it.id }.toSet(),
         )
     }
 
     companion object {
         const val BLOCK = 100
+
+        /** "거대 복어가" / "왕게가" / "대왕 문어가": the subject particle that fits the last syllable. */
+        fun subject(name: String): String {
+            val c = name.lastOrNull() ?: return name
+            val batchim = c in '가'..'힣' && (c - '가') % 28 != 0
+            return name + if (batchim) "이" else "가"
+        }
+
+        /** The one-line story of the current hunt. */
+        fun story(f: GiantFish): String =
+            "${subject(f.name)} ${f.ocean.title}에서 영단어 100개를 지키고 있어요. 단어를 하나 외울 때마다 작살 한 방!"
         /** The final battle starts this far out (the line snaps at the usual distance). */
         const val FINAL_START = 120
         const val CATCH_GIFT = 50

@@ -208,7 +208,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         fishLine = when {
             timeLeft || wordsLeft -> "🔒 오늘 목표를 채우면 열려요"
             fishing.caughtToday -> "오늘 ${fishing.caughtFishToday} 낚았어요! 🎣"
-            fishing.triesLeft <= 0 -> "오늘 도전 끝! 내일 다시 도전해요"
+            fishing.triesLeft <= 0 -> "내일 또 낚으러 와요 🎣"
             else -> "열렸어요! 도전해 보세요" + fishing.triesNote
         }
         goalWords = settings.dailyWords
@@ -435,7 +435,7 @@ fun HomeScreen(
                         val ink = if (vm.fishOpen) Color.White else Color(0xFF0B2A5B)
                         Column(Modifier.padding(14.dp)) {
                             Text("🎣", fontSize = 26.sp)
-                            FitText("오늘의 단어 낚시", MaterialTheme.typography.titleMedium.copy(color = ink, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                            FitText("오늘의 낚시", MaterialTheme.typography.titleMedium.copy(color = ink, fontWeight = FontWeight.Bold), align = TextAlign.Start)
                             Text(vm.fishLine, style = MaterialTheme.typography.bodySmall, color = ink, modifier = Modifier.padding(top = 4.dp))
                         }
                     }
@@ -448,18 +448,19 @@ fun HomeScreen(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                         ) {
                             Column(Modifier.padding(14.dp)) {
-                                Text(f?.emoji ?: "🏆", fontSize = 26.sp)
+                                Text("⛵", fontSize = 26.sp)
+                                FitText("대양 원정", MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
                                 if (f == null) {
-                                    FitText("18마리 완성!", MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                                    Text("18마리 완성! 🏆", style = MaterialTheme.typography.bodySmall, color = Color.White)
                                 } else {
-                                    FitText("${f.ocean.title} ${f.name}", MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                                    FitText("${f.ocean.title} · ${f.emoji} ${f.name}", MaterialTheme.typography.bodySmall.copy(color = Color.White), align = TextAlign.Start)
                                     Spacer(Modifier.height(6.dp))
-                                    ThickProgress(g.hp / g.total.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth())
+                                    ThickProgress(g.hit / g.total.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth())
                                     Text(
                                         when {
-                                            g.ready -> "체력 0! 최종전 열림 🎣"
-                                            g.pending > 0 -> "체력 ${g.hp} · 오늘 -${g.pending}"
-                                            else -> "체력 ${g.hp}/${g.total}"
+                                            g.ready -> "100칸 완성! 최종전 🏆"
+                                            g.pending > 0 -> "${g.hit}/${g.total}칸 · 오늘 +${g.pending}"
+                                            else -> "${g.hit}/${g.total}칸"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (g.ready || g.pending > 0) Color(0xFFFFE08A) else Color.White,
