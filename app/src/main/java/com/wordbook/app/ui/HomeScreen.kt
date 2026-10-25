@@ -454,7 +454,7 @@ fun HomeScreen(
                                     Text("🏆 거대 물고기 18마리 완성!", style = MaterialTheme.typography.titleMedium, color = Color.White)
                                 } else {
                                     Text(
-                                        "🏆 거대 물고기 ${g.index + 1}/${com.wordbook.app.data.Giant.species.size} · ${f.name}",
+                                        "🏆 ${f.ocean.title} · ${f.name} (${g.index + 1}/${com.wordbook.app.data.Giant.species.size})",
                                         style = MaterialTheme.typography.titleMedium,
                                         color = Color.White,
                                     )

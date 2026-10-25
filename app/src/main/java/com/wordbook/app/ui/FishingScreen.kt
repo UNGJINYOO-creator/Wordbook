@@ -76,6 +76,8 @@ import com.wordbook.app.data.AnswerLog
 import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.Fish
+import com.wordbook.app.data.Ocean
+import com.wordbook.app.data.Sea
 import com.wordbook.app.data.Fishing
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.StudyMode
@@ -106,11 +108,11 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     private val tone = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60) }.getOrNull()
 
     private var pool = listOf<Word>()
-    /** Words the questions are about: [pool] in 오늘의 바다, only the newly learned words in 새 바다. */
+    /** Words the questions are about: [pool] usually, only the newly learned words in the 새 단어 game. */
     private var questions = listOf<Word>()
     private var newSeaWords = listOf<Word>()
     val newSeaCount: Int get() = newSeaWords.size
-    /** true while playing (or just finished) in the 🌊 새 바다. */
+    /** true while playing (or just finished) with only the words just learned. */
     var newSea by mutableStateOf(false)
         private set
     val catchStars: Int get() = if (giantMode) Giant.CATCH_GIFT else Fishing.CATCH_STARS + if (newSea) Fishing.NEW_SEA_BONUS else 0
@@ -139,7 +141,19 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var triesLeft by mutableIntStateOf(fishing.triesLeft)
         private set
-    var fish by mutableStateOf(Fishing.species.first())
+    /** The sea the child picked; which fish bites there is decided by how the game goes. */
+    var sea by mutableStateOf(fishing.sea)
+        private set
+    fun chooseSea(s: Sea) {
+        sea = s
+        fishing.sea = s
+    }
+    /** Until the catch only the sea is known; a giant is known from the start. */
+    var fish by mutableStateOf(unknownFish())
+        private set
+    private fun unknownFish() = Fish(sea, 0, "🐟", "${sea.title} 물고기", 0.0, 0.0)
+    /** Set when this catch filled the sea's book for the first time. */
+    var seaCompleted by mutableStateOf(false)
         private set
     var seconds by mutableDoubleStateOf(fishing.start)
         private set
@@ -237,7 +251,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         questions = if (newSea) newSeaWords else pool
         fishing.useTry()
         triesLeft = fishing.triesLeft
-        fish = Fishing.fishFor(game.level)
+        fish = unknownFish()
         seconds = fishing.start
         begin()
     }
@@ -250,7 +264,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         giantMode = true
         newSea = false
         questions = g.words.filter { !it.excluded && it.meaning.isNotBlank() }.ifEmpty { g.words }
-        fish = Fish(0, f.emoji, f.name, f.minKg, f.maxKg)
+        fish = Fish(null, 3, f.emoji, f.name, f.minKg, f.maxKg)
         seconds = maxOf(1.0, goal - Giant.FINAL_START)
         begin()
     }
@@ -413,7 +427,10 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         finishGame()
         val accuracy = if (total == 0) 0.0 else right / total.toDouble()
         val speed = ((240_000.0 - durationMs) / 180_000.0).coerceIn(0.0, 1.0)
-        kg = Fishing.weight(fish, accuracy * 0.7 + speed * 0.3)
+        val quality = accuracy * 0.7 + speed * 0.3
+        if (!giantMode) fish = Fishing.pick(sea, quality)
+        kg = Fishing.weight(fish, quality)
+        seaCompleted = false
         val g = giant
         if (giantMode && g != null) {
             giantStore.recordCatch(g.index, kg)
@@ -421,6 +438,10 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             newRecord = false
         } else {
             newRecord = fishing.recordCatch(fish, kg)
+            if (fishing.completeSea(sea)) {
+                seaCompleted = true
+                game.addStars(Fishing.SEA_GIFT)
+            }
             fishing.markSeen(stats.learnedToday)
             // Today's words land their hit on the giant once the day's fish is in.
             giantStore.confirm(stats.learnedToday)
@@ -530,8 +551,11 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             Text("❌ 틀리면 ${f.wrong.toInt()}m 멀어져요, 너무 빨리 찍으면 0m")
             Text("🐋 0m가 되면 낚아요! ${f.goal.toInt()}m까지 멀어지면 줄이 끊어져요")
             Text("📈 가까워질수록 물고기가 세게 버텨서 더 빨리 도망가요")
-            Text("🎯 낚으면 선물 물고기 ${Fishing.CATCH_STARS}마리! (🌊 새 바다는 ${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS}마리)" + vm.fishing.triesNote)
+            Text("🎯 낚으면 선물 물고기 ${Fishing.CATCH_STARS}마리! (방금 배운 단어로 하면 ${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS}마리)" + vm.fishing.triesNote)
+            Text("✨ 많이 맞히고 빨리 낚을수록 희귀한 물고기가 잘 걸려요")
         }
+        Spacer(Modifier.height(16.dp))
+        SeaPicker(vm)
         Spacer(Modifier.height(16.dp))
         val reason = vm.lockReason
         if (reason != null) {
@@ -544,11 +568,11 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit) {
             )
         } else if (vm.newSeaCount > 0) {
             // After 새 단어 더 배우기: fish the words just learned, or the usual mix.
-            Text("어느 바다에서 낚을까요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("어떤 단어로 낚을까요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            PrimaryButton("🌊 새 바다 · 방금 배운 ${vm.newSeaCount}단어 (🐟${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS})", { vm.start(true) })
+            PrimaryButton("🆕 방금 배운 ${vm.newSeaCount}단어로 (🐟${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS})", { vm.start(true) })
             Spacer(Modifier.height(8.dp))
-            SecondaryButton("🏝 오늘의 바다 · 오늘 + 예전 단어 (🐟${Fishing.CATCH_STARS})", { vm.start(false) })
+            SecondaryButton("📚 오늘 + 예전 단어로 (🐟${Fishing.CATCH_STARS})", { vm.start(false) })
             if (vm.fishing.triesNote.isNotEmpty()) {
                 Text(vm.fishing.triesNote.trim(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
             }
@@ -755,8 +779,21 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
             Text("선물 물고기 ${vm.catchStars}마리를 받았어요 🐟 · 도감에 올렸어요", style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
         } else if (won) {
             Text("${vm.fish.name} ${Fishing.formatKg(vm.kg)}!", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "${vm.sea.emoji} ${vm.sea.title} · ${Fishing.rarityNames[vm.fish.rarity]}" + if (vm.fish.rarity >= 2) " ✨" else "",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
             if (vm.newRecord) Text("🏆 최고 기록이에요!", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-            Text("선물 물고기 ${vm.catchStars}마리를 받았어요 🐟" + if (vm.newSea) " (🌊 새 바다 보너스!)" else "", style = MaterialTheme.typography.bodyLarge)
+            Text("선물 물고기 ${vm.catchStars}마리를 받았어요 🐟" + if (vm.newSea) " (새 단어 보너스!)" else "", style = MaterialTheme.typography.bodyLarge)
+            if (vm.seaCompleted) {
+                Text(
+                    "🎉 ${vm.sea.title} 도감 완성! 선물 물고기 ${Fishing.SEA_GIFT}마리 더",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                )
+            }
             Spacer(Modifier.height(8.dp))
             Text("🎣 물고기를 낚았어요! 정말 잘했어요", style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         } else {
@@ -798,7 +835,33 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
     }
 }
 
-/** 물고기 도감: every fish, how many were caught and the heaviest; locked ones show the level they need. */
+/** Our four seas in a 2×2 grid, each with how much of its book is filled. */
+@Composable
+private fun SeaPicker(vm: FishingViewModel) {
+    Text("어느 바다로 갈까요?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(8.dp))
+    Sea.entries.chunked(2).forEach { row ->
+        Row(Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            row.forEach { s ->
+                val chosen = s == vm.sea
+                val kinds = Fishing.species.count { it.sea == s }
+                Column(
+                    Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                        .background(if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { vm.chooseSea(s) }
+                        .padding(12.dp),
+                ) {
+                    val color = if (chosen) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                    FitText("${s.emoji} ${s.title}", MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = color), align = TextAlign.Start)
+                    FitText(s.note, MaterialTheme.typography.labelSmall.copy(color = color), align = TextAlign.Start)
+                    Text("도감 ${vm.fishing.collected(s)}/$kinds", style = MaterialTheme.typography.labelMedium, color = color)
+                }
+            }
+        }
+    }
+}
+
+/** 물고기 도감: our four seas' fish (how many, the heaviest), the giants on their world voyage, and the 열대 바다. */
 @Composable
 fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
     val store = Giant(LocalContext.current)
@@ -808,34 +871,60 @@ fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    "잘 맞히고 빨리 낚을수록 무거운 물고기를 낚아요.",
+                    "우리 바다 네 곳의 물고기를 모아요. 많이 맞히고 빨리 낚을수록 희귀하고 무거운 물고기가 걸려요. " +
+                        "한 바다를 다 모으면 선물 물고기 ${Fishing.SEA_GIFT}마리!",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
-                Fishing.species.forEach { f: Fish ->
-                    val count = fishing.count(f)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (count > 0) f.emoji else "❓", fontSize = 30.sp)
-                        Column(Modifier.padding(start = 12.dp)) {
-                            Text(
-                                if (count > 0) f.name else "???",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                if (count > 0) "${count}마리 · 최고 ${Fishing.formatKg(fishing.best(f))}" else "아직 못 낚았어요",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                Sea.entries.forEach { sea ->
+                    val kinds = Fishing.species.filter { it.sea == sea }
+                    val got = fishing.collected(sea)
+                    Text(
+                        "${sea.emoji} ${sea.title} $got/${kinds.size}" + if (got == kinds.size) " ✅ 완성!" else "",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    kinds.forEach { f ->
+                        val count = fishing.count(f)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (count > 0) f.emoji else "❓", fontSize = 26.sp)
+                            Column(Modifier.padding(start = 12.dp)) {
+                                Text(
+                                    (if (count > 0) f.name else "???") + " · ${Fishing.rarityNames[f.rarity]}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    if (count > 0) "${count}마리 · 최고 ${Fishing.formatKg(fishing.best(f))}" else "아직 못 낚았어요",
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
                         }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 Text("🏆 거대 물고기 ${giant?.caught ?: 0}/${Giant.species.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "중학 영단어 100개를 외울 때마다 한 마리씩 사냥할 수 있어요.",
+                    "중학 영단어 100개를 외울 때마다 배가 세계 바다를 항해하며 한 마리씩 사냥해요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                 )
+                val here = giant?.fish?.ocean
+                // The voyage: oceans in order, the ship where the hunt is now.
+                Text(
+                    Ocean.entries.joinToString(" → ") { (if (it == here) "⛵" else it.emoji) + it.title },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
                 Giant.species.forEachIndexed { i, g ->
+                    if (i == 0 || Giant.species[i - 1].ocean != g.ocean) {
+                        Text(
+                            "${g.ocean.emoji} ${g.ocean.title}" + if (g.ocean == here) " · ⛵ 지금 여기" else "",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                     val at = store.caughtAt(i)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(if (at > 0) g.emoji else "❓", fontSize = 30.sp)
@@ -893,7 +982,7 @@ private fun GiantPanel(g: GiantState, vm: FishingViewModel) {
             Text("🏆 거대 물고기 18마리를 모두 낚았어요!", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             return@Column
         }
-        Text("🏆 거대 물고기 사냥 ${g.index + 1}/${Giant.species.size}", color = Color(0xFF9FE3FF), style = MaterialTheme.typography.labelLarge)
+        Text("🏆 거대 물고기 사냥 ${g.index + 1}/${Giant.species.size} · ⛵ ${f.ocean.emoji} ${f.ocean.title}", color = Color(0xFF9FE3FF), style = MaterialTheme.typography.labelLarge)
         Text("${f.emoji} ${f.name}", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         ThickProgress(g.hp / g.total.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth())

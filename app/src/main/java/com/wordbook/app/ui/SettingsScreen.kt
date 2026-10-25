@@ -14,6 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -134,6 +137,18 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 title = { Text("설정", style = MaterialTheme.typography.headlineMedium) },
             )
         },
+        // Every change is kept the moment it is made; 저장 confirms it, folds the groups and sends it to the family's other device.
+        bottomBar = {
+            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+                Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    PrimaryButton("💾 설정 저장", {
+                        open = null
+                        Toast.makeText(context, "설정을 모두 저장했어요 👍", Toast.LENGTH_SHORT).show()
+                        scope.launch(Dispatchers.IO) { com.wordbook.app.sync.FamilySync.run(context.applicationContext) }
+                    })
+                }
+            }
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
             Column(
@@ -172,7 +187,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 }
             }
             Text(
-                "아래 항목을 누르면 펼쳐져요. 바꾸면 바로 저장돼요.",
+                "아래 항목을 누르면 펼쳐져요. 바꾸면 바로 반영돼요. 다 고친 뒤 아래 💾 설정 저장을 누르면 연결된 다른 기기에도 보내요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),

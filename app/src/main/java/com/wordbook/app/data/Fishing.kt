@@ -5,9 +5,19 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** A fish of the 단어 낚시 도전 game. Bigger fish come with higher levels. */
-/** [key] keeps the saved catches of a fish that was renamed. */
-data class Fish(val level: Int, val emoji: String, val name: String, val minKg: Double, val maxKg: Double, val key: String = name)
+/** One of our seas for the daily 단어 낚시 도전; the child picks one before each game. */
+enum class Sea(val emoji: String, val title: String, val note: String) {
+    WEST("🌅", "서해", "갯벌이 넓고 얕은 바다"),
+    SOUTH("🏝", "남해", "섬이 많고 따뜻한 바다"),
+    EAST("🌊", "동해", "깊고 차가운 바다"),
+    JEJU("🌺", "제주 바다", "맑고 푸른 남쪽 바다"),
+}
+
+/**
+ * A fish of the 단어 낚시 도전 game, living in [sea] (null for a giant). [rarity] 0..3 is 흔함·보통·희귀·전설:
+ * a better game makes the rarer ones bite more often. [key] keeps the saved catches of a renamed fish.
+ */
+data class Fish(val sea: Sea?, val rarity: Int, val emoji: String, val name: String, val minKg: Double, val maxKg: Double, val key: String = name)
 
 /**
  * 단어 낚시 도전: the day's final boss. Opens once today's goal is met, tries a day as set (0 = no limit),
@@ -47,6 +57,21 @@ class Fishing(context: Context) {
     /** After a catch, today's words so far no longer count as new for the 새 바다. */
     fun markSeen(learnedToday: Set<Long>) {
         prefs.edit().putStringSet("seen", learnedToday.map { it.toString() }.toSet()).apply()
+    }
+
+    /** The sea picked last time, offered again. */
+    var sea: Sea
+        get() = Sea.entries.firstOrNull { it.name == prefs.getString("sea", null) } ?: Sea.WEST
+        set(v) { prefs.edit().putString("sea", v.name).apply() }
+
+    /** Kinds of fish of [sea] caught at least once. */
+    fun collected(sea: Sea): Int = species.count { it.sea == sea && count(it) > 0 }
+
+    /** Marks [sea]'s book complete; true only the first time it is full. */
+    fun completeSea(sea: Sea): Boolean {
+        if (collected(sea) < species.count { it.sea == sea } || prefs.getBoolean("seaDone_${sea.name}", false)) return false
+        prefs.edit().putBoolean("seaDone_${sea.name}", true).apply()
+        return true
     }
 
     fun useTry() {
@@ -93,20 +118,51 @@ class Fishing(context: Context) {
         /** The 새 바다 opens once this many words were learned after the last catch. */
         const val NEW_SEA_MIN = 4
 
+        /** Gift fish the first time a sea's whole book is filled. */
+        const val SEA_GIFT = 30
+        val rarityNames = listOf("흔함", "보통", "희귀", "전설")
+
         val species = listOf(
-            Fish(1, "🐟", "붕어", 0.3, 1.2),
-            Fish(2, "🎏", "잉어", 2.0, 9.0),
-            Fish(3, "🦑", "오징어", 0.5, 2.5, key = "대왕 복어"),
-            Fish(4, "🐟", "방어", 5.0, 15.0, key = "참치"),
-            Fish(5, "🦈", "청새리상어", 50.0, 200.0, key = "백상아리"),
-            Fish(6, "🐋", "혹등고래", 9000.0, 30000.0),
-            Fish(7, "🐳", "북극고래", 50000.0, 100000.0, key = "심해 대왕오징어"),
+            Fish(Sea.WEST, 0, "🦀", "꽃게", 0.2, 0.5),
+            Fish(Sea.WEST, 0, "🐙", "주꾸미", 0.05, 0.2),
+            Fish(Sea.WEST, 1, "🐟", "우럭", 0.5, 2.0),
+            Fish(Sea.WEST, 1, "🐟", "광어", 1.0, 5.0),
+            Fish(Sea.WEST, 2, "🦑", "갑오징어", 0.3, 1.5),
+            Fish(Sea.WEST, 3, "🐟", "민어", 5.0, 20.0),
+            Fish(Sea.SOUTH, 0, "🐟", "고등어", 0.3, 1.0),
+            Fish(Sea.SOUTH, 0, "🐟", "볼락", 0.1, 0.5),
+            Fish(Sea.SOUTH, 1, "🐟", "갈치", 0.5, 3.0),
+            Fish(Sea.SOUTH, 1, "🐡", "참복", 0.5, 2.0),
+            Fish(Sea.SOUTH, 2, "🐟", "참돔", 1.0, 8.0),
+            Fish(Sea.SOUTH, 3, "🐟", "감성돔", 2.0, 6.0),
+            Fish(Sea.EAST, 0, "🦑", "오징어", 0.3, 1.0, key = "대왕 복어"),
+            Fish(Sea.EAST, 0, "🐟", "도루묵", 0.1, 0.3),
+            Fish(Sea.EAST, 1, "🦀", "대게", 0.5, 2.0),
+            Fish(Sea.EAST, 1, "🐟", "임연수어", 0.3, 1.5),
+            Fish(Sea.EAST, 2, "🐟", "방어", 5.0, 15.0, key = "참치"),
+            Fish(Sea.EAST, 3, "🐟", "대구", 5.0, 20.0),
+            Fish(Sea.JEJU, 0, "🐟", "자리돔", 0.05, 0.2),
+            Fish(Sea.JEJU, 1, "🐟", "옥돔", 0.5, 2.0),
+            Fish(Sea.JEJU, 1, "🐙", "문어", 1.0, 5.0),
+            Fish(Sea.JEJU, 2, "🐟", "부시리", 5.0, 20.0),
+            Fish(Sea.JEJU, 3, "🐟", "다금바리", 10.0, 50.0),
         )
 
-        /** The fish for a level: the biggest one unlocked, sometimes a smaller one for variety. */
-        fun fishFor(level: Int): Fish {
-            val open = species.filter { it.level <= level }
-            return if (open.size > 1 && Math.random() < 0.25) open.dropLast(1).random() else open.last()
+        /**
+         * The fish that bites in [sea] after a game of [quality] 0..1: common ones get rarer and
+         * rare ones likelier the better the game, but any fish can come at any level.
+         */
+        fun pick(sea: Sea, quality: Double, random: Double = Math.random()): Fish {
+            val q = quality.coerceIn(0.0, 1.0)
+            val rarityWeight = doubleArrayOf(50 - 35 * q, 30.0, 15 + 20 * q, 5 + 25 * q * q)
+            val fish = species.filter { it.sea == sea }
+            val weights = fish.map { f -> rarityWeight[f.rarity] / fish.count { it.rarity == f.rarity } }
+            var x = random * weights.sum()
+            fish.forEachIndexed { i, f ->
+                x -= weights[i]
+                if (x < 0) return f
+            }
+            return fish.last()
         }
 
         /** Weight from how well the game went: [quality] 0..1. */

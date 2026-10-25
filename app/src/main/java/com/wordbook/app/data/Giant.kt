@@ -2,8 +2,18 @@ package com.wordbook.app.data
 
 import android.content.Context
 
-/** One of the 18 거대 물고기; each guards 100 of the built-in words. */
-data class GiantFish(val emoji: String, val name: String, val english: String, val fact: String, val minKg: Double, val maxKg: Double)
+/** The world voyage of the 거대 물고기 hunt, from the sea near Korea to the far south. */
+enum class Ocean(val emoji: String, val title: String) {
+    PACIFIC("🌏", "태평양"),
+    INDIAN("🌍", "인도양"),
+    ATLANTIC("🌎", "대서양"),
+    ARCTIC("🧊", "북극해"),
+    DEEP("🌑", "심해"),
+    SOUTHERN("🐧", "남극해"),
+}
+
+/** One of the 18 거대 물고기, living in [ocean]; each guards 100 of the built-in words. */
+data class GiantFish(val ocean: Ocean, val emoji: String, val name: String, val english: String, val fact: String, val minKg: Double, val maxKg: Double)
 
 /** Where the hunt stands: the current giant's block, how much health it has left, and what today's words would take off. */
 data class GiantState(
@@ -81,24 +91,24 @@ class Giant(private val context: Context) {
         const val CATCH_GIFT = 50
 
         val species = listOf(
-            GiantFish("🐡", "거대 복어", "Giant Pufferfish", "위험하면 몸을 공처럼 빵빵하게 부풀려요.", 8.0, 20.0),
-            GiantFish("🦑", "대왕 오징어", "Giant Squid", "눈이 축구공만 해요. 동물 중에서 가장 큰 눈이에요.", 150.0, 280.0),
-            GiantFish("🐙", "대왕 문어", "Giant Pacific Octopus", "심장이 3개이고 피가 파란색이에요.", 30.0, 70.0),
-            GiantFish("🦀", "왕게", "King Crab", "다리를 쭉 펴면 1.8m나 돼요.", 6.0, 12.0),
-            GiantFish("🐢", "장수거북", "Leatherback Turtle", "등딱지가 딱딱하지 않고 가죽 같아요.", 300.0, 700.0),
-            GiantFish("🐟", "황새치", "Swordfish", "칼 같은 주둥이를 휘둘러 먹이를 잡아요.", 200.0, 600.0),
-            GiantFish("🐟", "개복치", "Ocean Sunfish", "알을 한 번에 3억 개나 낳아요.", 500.0, 2300.0),
-            GiantFish("🦈", "귀상어", "Hammerhead Shark", "망치 같은 머리로 모래 속 먹이를 찾아요.", 200.0, 450.0),
-            GiantFish("🐟", "참다랑어", "Bluefin Tuna", "바다를 가로질러 수천 km를 헤엄쳐요.", 250.0, 680.0),
-            GiantFish("🐬", "범고래", "Orca", "사실은 고래가 아니라 가장 큰 돌고래예요.", 3600.0, 6000.0),
-            GiantFish("🦭", "바다코끼리", "Walrus", "긴 엄니를 얼음에 꽂고 몸을 끌어올려요.", 800.0, 1700.0),
-            GiantFish("🐟", "실러캔스", "Coelacanth", "공룡 시대부터 살아 온 '살아 있는 화석'이에요.", 60.0, 90.0),
-            GiantFish("🦈", "백상아리", "Great White Shark", "피 한 방울 냄새도 멀리서 알아채요.", 700.0, 2000.0),
-            GiantFish("🐋", "일각고래", "Narwhal", "머리의 긴 뿔은 사실 이빨이에요.", 800.0, 1600.0),
-            GiantFish("🐟", "산갈치", "Giant Oarfish", "8m가 넘는, 뼈 있는 물고기 중 가장 긴 물고기예요.", 150.0, 270.0),
-            GiantFish("🦈", "고래상어", "Whale Shark", "가장 큰 물고기인데 작은 플랑크톤만 먹어요.", 9000.0, 20000.0),
-            GiantFish("🐳", "향유고래", "Sperm Whale", "대왕 오징어를 잡으러 2000m 아래까지 잠수해요.", 35000.0, 57000.0),
-            GiantFish("🐋", "흰수염고래", "Blue Whale", "지구에서 가장 큰 동물이에요. 심장이 자동차만 해요.", 100000.0, 190000.0),
+            GiantFish(Ocean.PACIFIC, "🐡", "거대 복어", "Giant Pufferfish", "위험하면 몸을 공처럼 빵빵하게 부풀려요.", 8.0, 20.0),
+            GiantFish(Ocean.PACIFIC, "🐙", "대왕 문어", "Giant Pacific Octopus", "심장이 3개이고 피가 파란색이에요.", 30.0, 70.0),
+            GiantFish(Ocean.PACIFIC, "🦀", "왕게", "King Crab", "다리를 쭉 펴면 1.8m나 돼요.", 6.0, 12.0),
+            GiantFish(Ocean.PACIFIC, "🐟", "참다랑어", "Bluefin Tuna", "바다를 가로질러 수천 km를 헤엄쳐요.", 250.0, 680.0),
+            GiantFish(Ocean.INDIAN, "🐢", "장수거북", "Leatherback Turtle", "등딱지가 딱딱하지 않고 가죽 같아요.", 300.0, 700.0),
+            GiantFish(Ocean.INDIAN, "🐟", "실러캔스", "Coelacanth", "공룡 시대부터 살아 온 '살아 있는 화석'이에요.", 60.0, 90.0),
+            GiantFish(Ocean.INDIAN, "🦈", "고래상어", "Whale Shark", "가장 큰 물고기인데 작은 플랑크톤만 먹어요.", 9000.0, 20000.0),
+            GiantFish(Ocean.ATLANTIC, "🐟", "황새치", "Swordfish", "칼 같은 주둥이를 휘둘러 먹이를 잡아요.", 200.0, 600.0),
+            GiantFish(Ocean.ATLANTIC, "🐟", "개복치", "Ocean Sunfish", "알을 한 번에 3억 개나 낳아요.", 500.0, 2300.0),
+            GiantFish(Ocean.ATLANTIC, "🦈", "귀상어", "Hammerhead Shark", "망치 같은 머리로 모래 속 먹이를 찾아요.", 200.0, 450.0),
+            GiantFish(Ocean.ATLANTIC, "🦈", "백상아리", "Great White Shark", "피 한 방울 냄새도 멀리서 알아채요.", 700.0, 2000.0),
+            GiantFish(Ocean.ARCTIC, "🦭", "바다코끼리", "Walrus", "긴 엄니를 얼음에 꽂고 몸을 끌어올려요.", 800.0, 1700.0),
+            GiantFish(Ocean.ARCTIC, "🐋", "일각고래", "Narwhal", "머리의 긴 뿔은 사실 이빨이에요.", 800.0, 1600.0),
+            GiantFish(Ocean.DEEP, "🦑", "대왕 오징어", "Giant Squid", "눈이 축구공만 해요. 동물 중에서 가장 큰 눈이에요.", 150.0, 280.0),
+            GiantFish(Ocean.DEEP, "🐟", "산갈치", "Giant Oarfish", "8m가 넘는, 뼈 있는 물고기 중 가장 긴 물고기예요.", 150.0, 270.0),
+            GiantFish(Ocean.DEEP, "🐳", "향유고래", "Sperm Whale", "대왕 오징어를 잡으러 2000m 아래까지 잠수해요.", 35000.0, 57000.0),
+            GiantFish(Ocean.SOUTHERN, "🐬", "범고래", "Orca", "사실은 고래가 아니라 가장 큰 돌고래예요.", 3600.0, 6000.0),
+            GiantFish(Ocean.SOUTHERN, "🐋", "흰수염고래", "Blue Whale", "지구에서 가장 큰 동물이에요. 심장이 자동차만 해요.", 100000.0, 190000.0),
         )
 
         /** 열대 바다: one more for every 100 learned words of the child's own decks, round and round. */
