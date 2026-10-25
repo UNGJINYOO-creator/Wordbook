@@ -117,7 +117,7 @@ fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
                     }
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
                     }
                 },

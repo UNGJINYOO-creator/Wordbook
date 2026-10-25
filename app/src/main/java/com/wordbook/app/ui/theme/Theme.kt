@@ -83,6 +83,7 @@ val Pretendard = FontFamily(
     pretendard(FontWeight.Bold),
 )
 
+// Body text gets about 1.6× line height so Korean explanations do not feel cramped.
 // Line height in em, so text drawn bigger than its style (card words, meanings) gets taller lines too
 // instead of a second line running into the first.
 private fun style(size: Int, weight: FontWeight, line: Int) =
@@ -102,14 +103,14 @@ private val AppTypography = Typography(
     headlineMedium = style(24, FontWeight.Bold, 32),
     headlineSmall = style(22, FontWeight.Bold, 30),
     titleLarge = style(22, FontWeight.Bold, 30),
-    titleMedium = style(17, FontWeight.SemiBold, 24),
-    titleSmall = style(15, FontWeight.SemiBold, 22),
-    bodyLarge = style(16, FontWeight.Normal, 24),
-    bodyMedium = style(15, FontWeight.Normal, 22),
-    bodySmall = style(13, FontWeight.Normal, 19),
+    titleMedium = style(17, FontWeight.SemiBold, 25),
+    titleSmall = style(15, FontWeight.SemiBold, 23),
+    bodyLarge = style(16, FontWeight.Normal, 26),
+    bodyMedium = style(15, FontWeight.Normal, 24),
+    bodySmall = style(13, FontWeight.Normal, 21),
     labelLarge = style(15, FontWeight.SemiBold, 20),
-    labelMedium = style(13, FontWeight.Medium, 18),
-    labelSmall = style(12, FontWeight.Medium, 16),
+    labelMedium = style(13, FontWeight.Medium, 19),
+    labelSmall = style(12, FontWeight.Medium, 17),
 )
 
 private val AppShapes = Shapes(

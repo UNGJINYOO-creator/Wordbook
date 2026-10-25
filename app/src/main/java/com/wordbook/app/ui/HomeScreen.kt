@@ -288,7 +288,7 @@ private fun LevelDialog(level: Int, known: Int, total: Int, stars: Int, totalMs:
             }
         },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("📊 지금까지 ${hoursText(totalMs)} 공부했고, 전체 단어 ${total}개 중 ${known}개($percent%)를 외웠어요.", style = MaterialTheme.typography.bodyMedium)
                 Spacer(Modifier.height(4.dp))
                 Text("🐟 낚은 물고기는 뭐예요?", style = MaterialTheme.typography.titleSmall)

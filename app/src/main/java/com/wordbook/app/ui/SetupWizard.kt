@@ -97,7 +97,7 @@ fun SetupWizard(settings: StudySettings, hasPin: Boolean, onSetPin: () -> Unit, 
             var modes by remember { mutableStateOf(settings.modes) }
             var pass by remember { mutableStateOf(settings.dictationPass) }
             var blank by remember { mutableStateOf(settings.blankLevel) }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ModePresets.forEach { (name, preset) ->
                     FilterChip(
                         selected = modes == preset,

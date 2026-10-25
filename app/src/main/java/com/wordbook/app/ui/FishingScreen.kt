@@ -584,7 +584,7 @@ private fun GameFrame(emoji: String, title: String, story: String, steps: List<S
         Spacer(Modifier.height(16.dp))
         Column(
             Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(16.dp)).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("이렇게 해요", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             steps.forEachIndexed { i, step ->
