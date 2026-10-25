@@ -30,6 +30,7 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
@@ -1142,15 +1143,17 @@ private fun SwipeCard(
                     }
                     // Labelled buttons at the bottom of the card, away from the tap-to-flip middle.
                     Row(Modifier.align(Alignment.BottomCenter), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = onSpeak) {
-                            Icon(Icons.AutoMirrored.Filled.VolumeUp, null, Modifier.size(20.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("발음 듣기")
+                        // Tighter padding and no wrapping keep both labels on one line on narrow phones.
+                        val pad = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        FilledTonalButton(onClick = onSpeak, contentPadding = pad) {
+                            Icon(Icons.AutoMirrored.Filled.VolumeUp, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("발음 듣기", maxLines = 1, softWrap = false)
                         }
-                        if (canSay) FilledTonalButton(onClick = onSay) {
-                            Icon(Icons.Default.Mic, null, Modifier.size(20.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("말해 보기")
+                        if (canSay) FilledTonalButton(onClick = onSay, contentPadding = pad) {
+                            Icon(Icons.Default.Mic, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("말해 보기", maxLines = 1, softWrap = false)
                         }
                     }
                 } else {
