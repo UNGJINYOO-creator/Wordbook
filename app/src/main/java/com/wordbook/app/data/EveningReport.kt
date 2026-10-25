@@ -56,9 +56,15 @@ object EveningReport {
         val settings = StudySettings(context)
         if (settings.telegramToken.isBlank() || settings.telegramChatId.isBlank()) return "텔레그램이 아직 연결되지 않았어요"
         val p = prefs(context)
-        if (!force && p.getString("sent", null) == today()) return null
+        if (force) return Telegram.send(settings.telegramToken, settings.telegramChatId, build(context))
+        // With 기기 동기화 both devices wake up for the report: whichever comes first marks the day and
+        // syncs that mark before sending, and brings in the other device's games and tests too.
+        com.wordbook.app.sync.FamilySync.run(context)
+        if (p.getString("sent", null) == today()) return null
+        p.edit().putString("sent", today()).commit()
+        com.wordbook.app.sync.FamilySync.run(context)
         val error = Telegram.send(settings.telegramToken, settings.telegramChatId, build(context))
-        if (error == null && !force) p.edit().putString("sent", today()).apply()
+        if (error != null) p.edit().remove("sent").commit()
         return error
     }
 

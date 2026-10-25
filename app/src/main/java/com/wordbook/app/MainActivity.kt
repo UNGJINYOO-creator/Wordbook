@@ -77,6 +77,9 @@ class MainActivity : ComponentActivity() {
             DefaultDecks.seed(applicationContext)
             // After seeding, so built-in words are matched rather than added twice.
             com.wordbook.app.sync.FamilySync.run(applicationContext)
+            // Times set on the other device (reminder, evening report) take effect here too.
+            Reminder.schedule(applicationContext)
+            com.wordbook.app.data.EveningReport.schedule(applicationContext)
             ParentAlerts.checkStreak(applicationContext)
             Backup.weeklyToTelegram(applicationContext)
         }

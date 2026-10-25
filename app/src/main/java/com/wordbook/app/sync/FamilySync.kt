@@ -17,14 +17,19 @@ import java.security.MessageDigest
  *
  * Words and decks are matched across devices by a key made from their text (local ids differ), and only
  * what changed since the last sync is sent. When both sides changed a word, the one answered more often wins.
- * Game and stats preferences are merged key by key (bigger numbers, either flag, both sets); settings go
- * whole, the side changed most recently winning.
+ * Game and stats preferences are merged key by key (bigger numbers, either flag, both sets); in settings
+ * each key goes to the device that changed it since the last sync.
  */
 object FamilySync {
     private val lock = Mutex()
     private val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    /** Preference files that follow the child; "study" is the settings. Device-only files stay out. */
-    private val PREF_FILES = listOf("game", "giant", "fishing", "daily", "history", "wrongNote", "masterCheck", "study")
+    /**
+     * Preference files that follow the child; "study" is the settings (텔레그램 too), "alerts" and "digest"
+     * keep the parents' messages from going out twice. Device-only files (deck sort, seeding) stay out.
+     */
+    private val PREF_FILES = listOf("game", "giant", "fishing", "daily", "history", "wrongNote", "masterCheck", "study", "alerts", "digest", "guides")
+    /** Files merged key by key against the last synced copy: whichever device changed a key wins it. */
+    private val BY_CHANGE = setOf("study", "alerts", "guides")
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
 
@@ -206,7 +211,7 @@ object FamilySync {
                 val localChanged = stored(hk) != localHash
                 result = when {
                     !localChanged -> remote
-                    file == "study" -> local
+                    file in BY_CHANGE -> PrefCodec.byChange(hashes.optJSONObject("b$file"), local, remote)
                     else -> PrefCodec.merge(local, remote)
                 }
                 if (result.toString() != local.toString()) PrefCodec.import(context, file, result, idOf)
@@ -216,6 +221,7 @@ object FamilySync {
                 out += Triple("prefs", file, mapOf("data" to result.toString(), "updatedAt" to now))
             }
             hashes.put(hk, h)
+            if (file in BY_CHANGE) hashes.put("b$file", JSONObject(result.toString()))
         }
 
         store.write(code, out)
@@ -226,6 +232,8 @@ object FamilySync {
 
 /** SharedPreferences ⇄ JSON for the sync, translating the word-id lists into word keys and back. */
 object PrefCodec {
+    private val DAY = Regex("\\d{4}-\\d{2}-\\d{2}")
+
     /** Keys whose value is a set of word ids. */
     private val ID_SETS = setOf("giant/confirmed", "masterCheck/ids", "fishing/seen", "history/ever", "history/proven")
 
@@ -284,6 +292,27 @@ object PrefCodec {
         e.apply()
     }
 
+    /**
+     * Three-way: the other device's copy, with every key this device changed since [base] (the last synced
+     * copy) put on top. Without a base, keys this device has and the other doesn't are kept, and an
+     * empty text never replaces a filled one (a 텔레그램 token set on the other device survives).
+     */
+    fun byChange(base: JSONObject?, local: JSONObject, remote: JSONObject): JSONObject {
+        val out = JSONObject(remote.toString())
+        local.keys().forEach { k ->
+            val l = local.getJSONArray(k)
+            val r = remote.optJSONArray(k)
+            val changedHere = if (base != null) base.optJSONArray(k)?.toString() != l.toString()
+                else r == null || !(l.optString(0) == "s" && l.optString(1).isEmpty())
+            if (changedHere) out.put(k, l)
+        }
+        // Keys this device removed (and the other left alone) stay removed.
+        base?.keys()?.forEach { k ->
+            if (!local.has(k) && remote.optJSONArray(k)?.toString() == base.getJSONArray(k).toString()) out.remove(k)
+        }
+        return out
+    }
+
     /** Key by key: a newer "date" or "resetAt" wins the whole file; otherwise bigger numbers, either flag, both sets. */
     fun merge(local: JSONObject, remote: JSONObject): JSONObject {
         val ld = local.optJSONArray("date")?.optString(1)
@@ -311,6 +340,10 @@ object PrefCodec {
                     // Comma lists (learned words, 오답노트) are joined; other text keeps the longer, else ours.
                     val a = l.getString(1); val b = r.getString(1)
                     if (k == "learned") JSONArray().put("s").put((a.split(',') + b.split(',')).filter { it.isNotBlank() }.toSortedSet().joinToString(","))
+                    // The evening report's collected results: both devices' games and tests.
+                    else if (k.startsWith("d_")) JSONArray().put("s").put((a.split("\n\n") + b.split("\n\n")).filter { it.isNotBlank() }.distinct().joinToString("\n\n"))
+                    // Dates (the report's "sent" day): the later one.
+                    else if (DAY.matches(a) && DAY.matches(b)) JSONArray().put("s").put(maxOf(a, b))
                     else JSONArray().put("s").put(if (b.length > a.length) b else a)
                 }
             }

@@ -73,7 +73,7 @@ object ProgressReset {
             prefs(context, "daily").edit().clear().apply()
             prefs(context, "digest").edit().clear().apply()
             File(context.applicationContext.filesDir, "answers").deleteRecursively()
-            touched += listOf("game", "history", "daily")
+            touched += listOf("game", "history", "daily", "digest")
         }
         touched.forEach { prefs(context, it).edit().putLong("resetAt", now).commit() }
         Game(context).recount(dao, DailyStats(context))
