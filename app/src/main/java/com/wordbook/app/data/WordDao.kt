@@ -61,6 +61,9 @@ interface WordDao {
     @Query("SELECT * FROM words")
     suspend fun getAllWords(): List<Word>
 
+    @Query("SELECT * FROM decks")
+    suspend fun getAllDecks(): List<Deck>
+
     @Query("SELECT * FROM words")
     fun observeAllWords(): Flow<List<Word>>
 

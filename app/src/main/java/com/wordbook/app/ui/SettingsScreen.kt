@@ -365,6 +365,16 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                         ParentAlerts(settings)
                     }
                 }
+                if (com.wordbook.app.sync.FirebaseConfig.ready) {
+                    val familyCode = com.wordbook.app.sync.FamilySync.code(context)
+                    Group(
+                        "🔄 기기 동기화",
+                        if (familyCode != null) "연결됨 · 가족 코드 ${com.wordbook.app.sync.FamilySync.shown(familyCode)}" else "태블릿·폰 진도 맞추기",
+                        open == "sync", { toggle("sync") },
+                    ) {
+                        Body { SyncEditor() }
+                    }
+                }
                 Group("💾 백업", "휴대폰을 바꿀 때를 대비해 저장해 둬요", open == "backup", { toggle("backup") }) {
                     Body {
                         Text(
@@ -575,4 +585,68 @@ private fun NewPinDialog(onDismiss: () -> Unit, onDone: (String) -> Unit) {
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
     )
+}
+
+/** 가족 코드: start a family on the first device, type the code on the others; then they sync by themselves. */
+@Composable
+private fun SyncEditor() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var code by remember { mutableStateOf(com.wordbook.app.sync.FamilySync.code(context)) }
+    var typed by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val sync = {
+        busy = true
+        status = "맞추는 중…"
+        scope.launch(Dispatchers.IO) {
+            val error = com.wordbook.app.sync.FamilySync.run(context)
+            status = error?.let { "동기화하지 못했어요: $it" } ?: "다 맞췄어요 ✅"
+            busy = false
+        }
+    }
+    Text(
+        "태블릿과 폰에서 같은 가족 코드를 쓰면 단어 진도, 물고기, 거대 물고기, 설정이 저절로 맞춰져요. 앱을 닫을 때와 열 때마다 맞춰요.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+    )
+    val c = code
+    if (c == null) {
+        TextButton(onClick = {
+            val new = com.wordbook.app.sync.FamilySync.newCode()
+            com.wordbook.app.sync.FamilySync.connect(context, new)
+            code = new
+            sync()
+        }) { Text("➕ 새 가족 코드 만들기 (이 기기가 처음)") }
+        OutlinedTextField(
+            value = typed,
+            onValueChange = { typed = it.uppercase().filter { ch -> ch.isLetterOrDigit() }.take(10) },
+            label = { Text("다른 기기에 나온 가족 코드 10자리") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        TextButton(enabled = typed.length == 10, onClick = {
+            com.wordbook.app.sync.FamilySync.connect(context, typed)
+            code = typed
+            sync()
+        }) { Text("🔗 이 코드로 연결") }
+    } else {
+        Text("가족 코드", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+        Text(com.wordbook.app.sync.FamilySync.shown(c), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text("다른 기기의 설정 > 🔄 기기 동기화에 이 코드를 넣으세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        val last = com.wordbook.app.sync.FamilySync.lastSync(context)
+        if (last > 0) {
+            Text(
+                "마지막으로 맞춘 때: " + java.text.SimpleDateFormat("M월 d일 a h:mm", java.util.Locale.KOREA).format(java.util.Date(last)),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Row {
+            TextButton(enabled = !busy, onClick = { sync() }) { Text("🔄 지금 맞추기") }
+            TextButton(onClick = { com.wordbook.app.sync.FamilySync.disconnect(context); code = null; status = null }) { Text("연결 끊기") }
+        }
+    }
+    (status ?: com.wordbook.app.sync.FamilySync.lastError(context)?.let { "지난번 동기화 오류: $it" })?.let {
+        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+    }
 }

@@ -70,6 +70,8 @@ class MainActivity : ComponentActivity() {
         val settings = StudySettings(this)
         lifecycleScope.launch(Dispatchers.IO) {
             DefaultDecks.seed(applicationContext)
+            // After seeding, so built-in words are matched rather than added twice.
+            com.wordbook.app.sync.FamilySync.run(applicationContext)
             ParentAlerts.checkStreak(applicationContext)
             Backup.weeklyToTelegram(applicationContext)
         }
@@ -93,6 +95,21 @@ class MainActivity : ComponentActivity() {
 
 @androidx.compose.runtime.Composable
 private fun AppContent() {
+    // 가족 동기화 whenever the app goes to the background, so the other device sees today's progress.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        var started = false
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            // The first ON_START is the launch itself, already synced after seeding in onCreate.
+            val coming = event == androidx.lifecycle.Lifecycle.Event.ON_START && started.also { started = true }
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP || coming) {
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch { com.wordbook.app.sync.FamilySync.run(context.applicationContext) }
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
                 val nav = rememberNavController()
                 val entry by nav.currentBackStackEntryAsState()
                 val route = entry?.destination?.route
