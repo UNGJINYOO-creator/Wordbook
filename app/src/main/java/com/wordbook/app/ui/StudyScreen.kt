@@ -395,7 +395,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (fish > 0) {
             game.addStars(fish)
             viewModelScope.launch {
-                game.recount(dao, stats.everIds)?.let { celebrate("레벨 업! Lv.$it ${Levels.title(it)} 🎉") }
+                game.recount(dao, stats)?.let { celebrate("레벨 업! Lv.$it ${Levels.title(it)} 🎉 선물 물고기 ${Levels.gift(it)}마리") }
             }
         }
         when {

@@ -37,6 +37,24 @@ object Levels {
     /** Whole percent of [total] that [known] is, rounded down so 100 means every word. */
     fun percent(known: Int, total: Int): Int = if (total <= 0) 0 else (known * 100L / total).toInt()
 
+    /** How far [known] is from [level]'s percent to the next one, 0..1 (1 at the top level). */
+    fun progress(known: Int, total: Int, level: Int): Float {
+        if (level >= percents.size) return 1f
+        val from = percentFor(level)
+        val to = percentFor(level + 1)
+        val now = if (total <= 0) 0f else known * 100f / total
+        return ((now - from) / (to - from)).coerceIn(0f, 1f)
+    }
+
+    /** Stars inside a level, 0..3: a little step about every third of the way to the next level. */
+    fun stars(known: Int, total: Int, level: Int): Int =
+        if (level >= percents.size) 3 else (progress(known, total, level) * 3).toInt().coerceIn(0, 2)
+
+    fun starText(stars: Int): String = "★".repeat(stars) + "☆".repeat(3 - stars)
+
+    /** Gift fish for reaching [level]. */
+    fun gift(level: Int): Int = level * 10
+
     private fun index(level: Int) = (level - 1).coerceIn(0, titles.lastIndex)
     fun title(level: Int): String = titles[index(level)]
     fun grade(level: Int): String = grades[index(level)]
@@ -66,11 +84,12 @@ class Game(context: Context) {
     val earned: Int get() = prefs.getInt("earned", 0)
     val spent: Int get() = prefs.getInt("spent", 0)
     val stars: Int get() = earned - spent
-    /** Words known (each different word answered right at least once) and all words, kept from the last count. */
+    /** Words known (right on two different days) and all words, kept from the last count. */
     val known: Int get() = prefs.getInt("known", 0)
     val total: Int get() = prefs.getInt("total", 0)
     val percent: Int get() = Levels.percent(known, total)
-    val level: Int get() = Levels.levelOf(percent)
+    /** The highest level reached: adding words can lower the percent, but never the level. */
+    val level: Int get() = maxOf(prefs.getInt("bestLevel", 0), Levels.levelOf(percent))
     val badges: Int get() = prefs.getInt("badges", 0)
 
     fun addStars(n: Int) {
@@ -78,15 +97,24 @@ class Game(context: Context) {
     }
 
     /**
-     * Recounts known words against all words (the same spelling in two decks counts once);
-     * returns the new level if this crossed into one, else null.
+     * Recounts known words against all words (the same spelling in two decks counts once).
+     * Reaching a new level adds its gift fish and returns the level, else null.
      */
-    suspend fun recount(dao: WordDao, ever: Set<Long>): Int? {
-        val before = level
-        val byText = dao.getAllWords().groupBy { it.text.trim().lowercase() }
-        val known = byText.count { (_, words) -> words.any { it.id in ever } }
+    suspend fun recount(dao: WordDao, stats: DailyStats): Int? {
+        val all = dao.getAllWords()
+        stats.seedProven { all.filter { it.box >= 3 }.map { it.id } }
+        val proven = stats.provenIds
+        val byText = all.groupBy { it.text.trim().lowercase() }
+        val known = byText.count { (_, words) -> words.any { it.id in proven } }
         prefs.edit().putInt("known", known).putInt("total", byText.size).apply()
-        return level.takeIf { it > before }
+        val best = prefs.getInt("bestLevel", 0)
+        val now = Levels.levelOf(percent)
+        if (now <= best) return null
+        prefs.edit().putInt("bestLevel", now).apply()
+        // The very first count only records where the child already is.
+        if (best == 0) return null
+        addStars(Levels.gift(now))
+        return now
     }
 
     fun hasStamp(daysAgo: Int = 0): Boolean = prefs.getBoolean("stamp_${day(daysAgo)}", false)

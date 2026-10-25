@@ -184,6 +184,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var total by mutableIntStateOf(0)
         private set
+    var level by mutableIntStateOf(1)
+        private set
     private val giantStore = com.wordbook.app.data.Giant(app)
     var giant by mutableStateOf<com.wordbook.app.data.GiantState?>(null)
         private set
@@ -211,10 +213,13 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         earned = game.earned
         known = game.known
         total = game.total
+        level = game.level
         viewModelScope.launch {
-            game.recount(dao, stats.everIds)
+            game.recount(dao, stats)
             known = game.known
             total = game.total
+            level = game.level
+            stars = game.stars
         }
         viewModelScope.launch { giant = giantStore.state(dao.getAllWords(), stats.learnedToday) }
     }
@@ -265,9 +270,8 @@ internal fun hoursText(ms: Long): String {
 
 /** Explains levels, what they unlock and what stars are for. */
 @Composable
-private fun LevelDialog(known: Int, total: Int, stars: Int, totalMs: Long, onDismiss: () -> Unit) {
+private fun LevelDialog(level: Int, known: Int, total: Int, stars: Int, totalMs: Long, onDismiss: () -> Unit) {
     val percent = Levels.percent(known, total)
-    val level = Levels.levelOf(percent)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -295,7 +299,9 @@ private fun LevelDialog(known: Int, total: Int, stars: Int, totalMs: Long, onDis
                 Text("🏆 레벨", style = MaterialTheme.typography.titleSmall)
                 Text(
                     "앱에 있는 전체 단어 중 몇 %를 외웠는지로 등급이 정해져요. 0%면 Lv.1, 모든 단어를 외워 100%가 되면 최고 등급 Lv.7이에요. " +
-                        "단어를 새로 추가하면 전체가 늘어나서 %가 조금 내려갈 수 있어요. " +
+                        "외운 단어는 서로 다른 두 날에 문제를 맞힌 단어예요. 하루 반짝 맞힌 건 아직 안 쳐요. " +
+                        "등급 안에서는 ★ 세 칸이 차오르고, 레벨이 오르면 선물 물고기(레벨×10마리)를 받아요. " +
+                        "단어를 새로 추가해 %가 내려가도 한 번 오른 등급은 내려가지 않아요. " +
                         "레벨이 오르면 칭호가 바뀌고 단어장 표지에 쓸 새 이모지가 열려요.",
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -412,7 +418,7 @@ fun HomeScreen(
                 )
             }
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
-                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
+                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.level, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
             }
             item(key = "fishing", span = { GridItemSpan(maxLineSpan) }) {
                 Card(
@@ -641,7 +647,7 @@ fun HomeScreen(
     deckToStyle?.let { deck ->
         CoverDialog(
             deck = deck,
-            level = Levels.levelOf(Levels.percent(vm.known, vm.total)),
+            level = vm.level,
             onDismiss = { deckToStyle = null },
             onSave = { color, emoji ->
                 vm.updateDeck(deck.id) { it.copy(color = color, emoji = emoji) }
@@ -756,6 +762,7 @@ private fun TodayCard(
     goalMs: Long,
     streak: Int,
     stars: Int,
+    level: Int,
     known: Int,
     total: Int,
     learned: Int,
@@ -765,7 +772,7 @@ private fun TodayCard(
     onToday: () -> Unit,
 ) {
     var showLevels by remember { mutableStateOf(false) }
-    if (showLevels) LevelDialog(known, total, stars, totalMs) { showLevels = false }
+    if (showLevels) LevelDialog(level, known, total, stars, totalMs) { showLevels = false }
     Card(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -818,20 +825,18 @@ private fun TodayCard(
             Spacer(Modifier.height(12.dp))
             // Level bar: the share of all words known, toward the next level's percent.
             val percent = Levels.percent(known, total)
-            val level = Levels.levelOf(percent)
             val top = level >= Levels.percents.size
-            val from = Levels.percentFor(level)
             val to = Levels.percentFor(level + 1)
             // Tapping the level part explains levels and fish.
             Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { showLevels = true }.padding(vertical = 2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Lv.$level ${Levels.title(level)}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text("Lv.$level ${Levels.title(level)} ${Levels.starText(Levels.stars(known, total, level))}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Text(" ⓘ", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
                     Spacer(Modifier.weight(1f))
                     Text("🐟 ${stars}마리", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 }
                 Spacer(Modifier.height(6.dp))
-                ThickProgress(if (top) 1f else (known * 100f / total.coerceAtLeast(1) - from) / (to - from), Modifier.fillMaxWidth())
+                ThickProgress(Levels.progress(known, total, level), Modifier.fillMaxWidth())
                 Text(
                     "전체 단어 ${total}개 중 ${known}개 외움 ($percent%) · " +
                         (if (top) "최고 등급!" else "다음 레벨은 $to%") + " · 누르면 설명",

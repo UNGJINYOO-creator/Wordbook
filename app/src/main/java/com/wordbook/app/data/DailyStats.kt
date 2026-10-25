@@ -45,10 +45,12 @@ class DailyStats(context: Context) {
         prefs.edit().putString("learned", (ids + wordId.toString()).joinToString(",")).apply()
         val key = "words_${today()}"
         val ever = history.getStringSet("ever", emptySet())!!
-        history.edit()
+        val edit = history.edit()
             .putInt(key, history.getInt(key, 0) + 1)
             .putStringSet("ever", ever + wordId.toString())
-            .apply()
+        // Right again on a later day: the word counts as really known.
+        if (wordId.toString() in ever) edit.putStringSet("proven", provenStrings() + wordId.toString())
+        edit.apply()
         return true
     }
 
@@ -80,7 +82,20 @@ class DailyStats(context: Context) {
 
     /** Different words ever answered right in a quiz. */
     val totalLearned: Int get() = history.getStringSet("ever", emptySet())!!.size
-    val everIds: Set<Long> get() = history.getStringSet("ever", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()
+
+    /** Words answered right in a quiz on two different days: these count as known for the level. */
+    val provenIds: Set<Long> get() = provenStrings().mapNotNull { it.toLongOrNull() }.toSet()
+
+    private fun provenStrings(): Set<String> = history.getStringSet("proven", emptySet())!!
+
+    /** Once, for progress from before this was kept: words already a few review steps in count as known. */
+    fun seedProven(ids: () -> List<Long>) {
+        if (history.getBoolean("provenSeeded", false)) return
+        history.edit()
+            .putStringSet("proven", provenStrings() + ids().map { it.toString() })
+            .putBoolean("provenSeeded", true)
+            .apply()
+    }
 
     /** Answers and right answers over all days. */
     val totalAnswered: Int get() = history.getInt("answered", 0)
