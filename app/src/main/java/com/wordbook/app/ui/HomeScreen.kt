@@ -409,7 +409,7 @@ fun HomeScreen(
             // The header scrolls with the cards, so the first card can ride over its bottom without a cut edge.
             item(key = "top", span = { GridItemSpan(maxLineSpan) }) {
                 HomeHeader(
-                    vm.learned, vm.goalWords, vm.todayMs, vm.goalMs, onToday,
+                    vm.level, vm.known, vm.total, vm.stars, vm.totalMs,
                     Modifier.layout { measurable, constraints ->
                         val side = 16.dp.roundToPx()
                         val overlap = (30 + 10).dp.roundToPx()
@@ -693,7 +693,9 @@ fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Uni
 
 /** Blue sea header: the app name, a greeting, today's progress pill (starts 오늘 학습) and the picture in a frame on the right. */
 @Composable
-private fun HomeHeader(learned: Int, goalWords: Int, todayMs: Long, goalMs: Long, onToday: () -> Unit, modifier: Modifier = Modifier) {
+private fun HomeHeader(level: Int, known: Int, total: Int, stars: Int, totalMs: Long, modifier: Modifier = Modifier) {
+    var showLevels by remember { mutableStateOf(false) }
+    if (showLevels) LevelDialog(level, known, total, stars, totalMs) { showLevels = false }
     Box(
         modifier
             .fillMaxWidth()
@@ -716,25 +718,28 @@ private fun HomeHeader(learned: Int, goalWords: Int, todayMs: Long, goalMs: Long
             )
             Text("오늘도 단어\n낚으러 가볼까? 🐟", color = Color.White.copy(alpha = 0.92f), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(10.dp))
-            val parts = listOfNotNull(
-                if (goalWords > 0) "$learned/${goalWords}개" else null,
-                if (goalMs > 0) "${todayMs / 60_000}/${goalMs / 60_000}분" else null,
-            )
-            val done = (goalWords == 0 || learned >= goalWords) && (goalMs == 0L || todayMs >= goalMs)
-            FitText(
-                when {
-                    parts.isEmpty() -> "▶ 오늘 학습 시작"
-                    done -> "✅ 오늘 목표 달성!"
-                    else -> "▶ 오늘 " + parts.joinToString(" · ")
-                },
-                MaterialTheme.typography.labelLarge.copy(color = Color(0xFF0B3C9E), fontWeight = FontWeight.Bold),
-                modifier = Modifier
+            // Who the child is: the level badge (today's numbers live in the card below). Tap for the level popup.
+            Column(
+                Modifier
                     .padding(end = 140.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White)
-                    .clickable(onClick = onToday)
-                    .padding(horizontal = 14.dp, vertical = 7.dp),
-            )
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.14f))
+                    .border(1.5.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                    .clickable { showLevels = true }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            ) {
+                FitText(
+                    "🏅 Lv.$level ${Levels.starText(Levels.stars(known, total, level))}",
+                    MaterialTheme.typography.titleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold),
+                    align = TextAlign.Start,
+                )
+                FitText(Levels.title(level), MaterialTheme.typography.titleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                FitText(
+                    "🐟 ${stars}마리 · 전체 ${Levels.percent(known, total)}% 외움",
+                    MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.92f)),
+                    align = TextAlign.Start,
+                )
+            }
         }
         Image(
             painterResource(R.drawable.hero),
@@ -766,8 +771,6 @@ private fun TodayCard(
     totalLearned: Int,
     onToday: () -> Unit,
 ) {
-    var showLevels by remember { mutableStateOf(false) }
-    if (showLevels) LevelDialog(level, known, total, stars, totalMs) { showLevels = false }
     // Tapping a number explains it in a small popup.
     var info by remember { mutableStateOf<Pair<String, String>?>(null) }
     info?.let { (title, body) ->
@@ -784,6 +787,17 @@ private fun TodayCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(18.dp)) {
+            val goalsDone = (goalWords > 0 || goalMs > 0) &&
+                (goalWords == 0 || learned >= goalWords) && (goalMs == 0L || todayMs >= goalMs)
+            if (goalsDone) {
+                Text(
+                    "✅ 오늘 목표 달성!",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1B7A3A),
+                    modifier = Modifier.padding(bottom = 10.dp).background(Color(0xFFE7F6EC), RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
             Row(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
                     info = "⏱ 오늘 공부" to (
@@ -848,41 +862,10 @@ private fun TodayCard(
                 ThickProgress((learned / goalWords.toFloat()).coerceAtMost(1f), Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(12.dp))
-            // Level bar: the share of all words known, toward the next level's percent.
-            val percent = Levels.percent(known, total)
-            val top = level >= Levels.percents.size
-            val to = Levels.percentFor(level + 1)
-            // Tapping the level part explains levels and fish.
-            Column(Modifier.clip(RoundedCornerShape(10.dp)).clickable { showLevels = true }.padding(vertical = 2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Lv.$level ${Levels.title(level)} ${Levels.starText(Levels.stars(known, total, level))}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    Text(" ⓘ", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
-                    Spacer(Modifier.weight(1f))
-                    Text("🐟 ${stars}마리", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                }
-                Spacer(Modifier.height(6.dp))
-                ThickProgress(Levels.progress(known, total, level), Modifier.fillMaxWidth())
-                Text(
-                    "전체 단어 ${total}개 중 ${known}개 외움 ($percent%) · " +
-                        (if (top) "최고 등급!" else "다음 레벨은 $to%"),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            Text(
-                "📊 지금까지 ${hoursText(totalMs)} 공부했어요",
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable {
-                    info = "📊 지금까지" to (
-                        "앱을 깐 뒤로 공부한 시간을 모두 더하면 ${hoursText(totalMs)}이에요.\n\n" +
-                            "문제에서 한 번이라도 맞힌 단어는 ${totalLearned}개예요. " +
-                            "등급에 들어가는 '외운 단어'(${known}개)는 서로 다른 두 날에 맞힌 단어만 세요."
-                        )
-                },
-            )
-            Spacer(Modifier.height(12.dp))
-            if (dueCount + newCount > 0) {
+            if (goalsDone) {
+                // Goals met: keep going with the next new words.
+                SecondaryButton("📚 새 단어 더 배우기", onToday)
+            } else if (dueCount + newCount > 0) {
                 PrimaryButton("오늘 학습 시작", onToday)
             } else {
                 Text(
