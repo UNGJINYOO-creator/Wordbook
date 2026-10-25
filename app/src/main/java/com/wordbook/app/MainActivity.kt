@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
             Backup.weeklyToTelegram(applicationContext)
         }
         Reminder.schedule(applicationContext)
+        com.wordbook.app.data.EveningReport.schedule(applicationContext)
         if (android.os.Build.VERSION.SDK_INT >= 33 && settings.reminderHour >= 0) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
         }

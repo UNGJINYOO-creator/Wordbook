@@ -61,6 +61,11 @@ class DailyStats(context: Context) {
         get() { ensureToday(); return prefs.getBoolean("wordsNotified", false) }
         set(v) { ensureToday(); prefs.edit().putBoolean("wordsNotified", v).apply() }
 
+    /** Set once every goal that is switched on was met today (for the parents' one-line ping). */
+    var allGoalsNotified: Boolean
+        get() { ensureToday(); return prefs.getBoolean("allNotified", false) }
+        set(v) { ensureToday(); prefs.edit().putBoolean("allNotified", v).apply() }
+
     var goalNotified: Boolean
         get() { ensureToday(); return prefs.getBoolean("notified", false) }
         set(v) { ensureToday(); prefs.edit().putBoolean("notified", v).apply() }

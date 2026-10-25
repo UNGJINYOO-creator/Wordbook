@@ -82,13 +82,7 @@ class ReminderReceiver : BroadcastReceiver() {
         Reminder.schedule(context)
         if (missing == null) return
         Reminder.notifyChild(context, "목표까지 $missing 남았어요. 조금만 더 해 볼까요?")
-        if (settings.alertEvening) {
-            val result = goAsync()
-            CoroutineScope(Dispatchers.IO).launch {
-                ParentAlerts.send(context, "⏰ 아직 오늘 목표를 못 채웠어요 ($missing 남음)")
-                result.finish()
-            }
-        }
+        // What is still missing reaches the parents in the evening report.
     }
 }
 

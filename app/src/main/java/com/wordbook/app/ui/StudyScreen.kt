@@ -125,6 +125,7 @@ import com.wordbook.app.data.StudySettings
 import com.wordbook.app.data.AnswerEntry
 import com.wordbook.app.data.AnswerLog
 import com.wordbook.app.data.Report
+import com.wordbook.app.data.EveningReport
 import com.wordbook.app.data.Weakness
 import com.wordbook.app.data.MasterCheck
 import com.wordbook.app.data.WrongNote
@@ -426,14 +427,20 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         stats.goalNotified = true
         goalReached = true
         stamp()
-        if (telegramReady) sendTelegram()
+        checkAllGoals()
     }
 
-    fun sendTelegram() {
-        viewModelScope.launch {
-            // Sent quietly: the child doesn't see a notice about the report.
-            Telegram.send(settings.telegramToken, settings.telegramChatId, Report.build(getApplication()))
-        }
+    /** Every goal that is switched on is met: one short line to the parents (the full report comes in the evening). */
+    private fun checkAllGoals() {
+        val words = settings.dailyWords
+        val minutes = settings.dailyGoalMinutes
+        if (words <= 0 && minutes <= 0) return
+        if (words > 0 && stats.learnedCount < words) return
+        if (minutes > 0 && stats.studyMs < minutes * 60_000L) return
+        if (stats.allGoalsNotified) return
+        stats.allGoalsNotified = true
+        // Sent quietly: the child doesn't see a notice about it.
+        if (telegramReady) viewModelScope.launch { EveningReport.goalPing(getApplication()) }
     }
 
     private fun order(words: List<Word>) = if (shuffle) words.shuffled() else words.sortedBy { it.text.lowercase() }
@@ -486,16 +493,15 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     val testScore: Int get() = if (sessionSize == 0) 0 else firstTryKnown * 100 / sessionSize
 
     private fun sendTestResult() {
-        if (!telegramReady) return
         val missed = everMissed.map { "${it.text}(${it.meaning.substringBefore(" /")})" }
         viewModelScope.launch {
             val deckName = if (deckId > 0) dao.getDeck(deckId)?.name ?: "" else "전체 단어"
-            Telegram.send(
-                settings.telegramToken, settings.telegramChatId,
+            // Collected for the evening report.
+            EveningReport.add(
+                getApplication(),
                 buildString {
-                    append("📝 시험 결과 · $deckName\n\n")
-                    append("점수 ${testScore}점 (${sessionSize}문제 중 ${firstTryKnown}개 맞힘)\n")
-                    if (missed.isNotEmpty()) append("\n❗ 틀린 단어: ${missed.joinToString(", ")}")
+                    append("📝 시험 · $deckName: ${testScore}점 (${sessionSize}문제 중 ${firstTryKnown}개)")
+                    if (missed.isNotEmpty()) append("\n   틀린 단어: ${missed.joinToString(", ")}")
                 },
             )
         }
@@ -673,6 +679,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     celebrate("오늘 목표 ${goalWords}단어 달성! 🎉")
                     stamp()
                 }
+                checkAllGoals()
             }
         }
 

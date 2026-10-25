@@ -472,19 +472,20 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         report(false)
     }
 
+    /** Collected for the parents' evening report rather than sent right away. */
     private fun report(caught: Boolean) {
-        if (settings.telegramToken.isBlank() || settings.telegramChatId.isBlank()) return
         val text = buildString {
-            append(if (giantMode) "⛵ 대양 원정 최종전!\n\n" else "🎣 오늘의 낚시!\n\n")
-            if (caught) append("${fish.emoji} ${fish.name} ${Fishing.formatKg(kg)}을(를) 낚았어요!" + (if (newRecord) " 🏆 최고 기록" else "") + "\n")
-            else append("😢 줄이 끊어져서 ${fish.name}이(가) 도망갔어요${fishing.triesNote}\n")
-            append("정답 $right/$total · ${durationMs / 60_000}분 ${durationMs / 1000 % 60}초\n")
+            append(if (giantMode) "⛵ 원정 최종전: " else "🎣 낚시: ")
+            if (caught) append("${fish.emoji} ${fish.name} ${Fishing.formatKg(kg)} 낚음" + if (newRecord) " 🏆 최고 기록" else "")
+            else append("😢 놓침")
+            append(" · 정답 $right/$total · ${durationMs / 60_000}분 ${durationMs / 1000 % 60}초")
+            harpoon?.let { append(" · 🔱 ${it.fish.name}에게 작살 ${it.hit}개") }
             if (missed.isNotEmpty()) {
-                append("\n❗ 틀린 단어: ")
+                append("\n   틀린 단어: ")
                 append(missed.distinctBy { it.id }.joinToString(", ") { "${it.text}(${it.meaning.substringBefore(" /")})" })
             }
         }
-        viewModelScope.launch { Telegram.send(settings.telegramToken, settings.telegramChatId, text) }
+        com.wordbook.app.data.EveningReport.add(getApplication(), text)
     }
 
     fun backToIntro() {

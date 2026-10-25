@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -254,17 +255,17 @@ fun TelegramEditor(settings: StudySettings) {
         TextButton(onClick = {
             scope.launch {
                 status = "보내는 중…"
-                val error = Telegram.send(token, chatId, "✅ 낚아보카와 연결됐어요! 목표를 채우면 여기로 결과를 보내드릴게요.")
+                val error = Telegram.send(token, chatId, "✅ 낚아보카와 연결됐어요! 매일 저녁 여기로 학습 리포트를 보내드릴게요.")
                 status = error ?: "테스트 메시지를 보냈어요. 텔레그램을 확인하세요"
             }
         }, enabled = token.isNotBlank() && chatId.isNotBlank()) { Text("📨 테스트 보내기") }
         TextButton(onClick = {
             scope.launch {
                 status = "보내는 중…"
-                val error = Telegram.send(token, chatId, Report.build(context))
-                status = error ?: "오늘 학습 결과를 보냈어요"
+                val error = com.wordbook.app.data.EveningReport.send(context, force = true)
+                status = error ?: "저녁 리포트를 미리 보냈어요"
             }
-        }, enabled = token.isNotBlank() && chatId.isNotBlank()) { Text("📊 지금 오늘 학습 결과 보내기") }
+        }, enabled = token.isNotBlank() && chatId.isNotBlank()) { Text("📊 저녁 리포트 지금 미리 보내기") }
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
     }
 }
@@ -274,13 +275,20 @@ fun TelegramEditor(settings: StudySettings) {
 fun ParentAlerts(settings: StudySettings) {
     var coupon by remember { mutableStateOf(settings.alertCoupon) }
     var streak by remember { mutableStateOf(settings.alertStreak) }
-    var evening by remember { mutableStateOf(settings.alertEvening) }
+    var goal by remember { mutableStateOf(settings.alertGoal) }
+    var reportHour by remember { mutableIntStateOf(settings.reportHour) }
     var backup by remember { mutableStateOf(settings.telegramBackup) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     Column {
+        Labeled("🌙 저녁 리포트 보내는 시간", "하루 한 통: 세 줄 요약, 남은 양, 학습 내용, 낚시·원정·시험 결과를 모아서 보내요") {
+            NumberChoice(reportHour, Opt.reportHour, "시", 23, min = 0) {
+                reportHour = it; settings.reportHour = it; com.wordbook.app.data.EveningReport.schedule(context)
+            }
+        }
+        Text("바로 오는 짧은 알림", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+        SwitchRow("목표를 다 채우면 알림", "켜 둔 목표(단어·시간)를 모두 채우는 순간 한 줄", goal) { goal = it; settings.alertGoal = it }
         SwitchRow("쿠폰을 받으면 알림", "아이가 물고기로 보상 쿠폰을 받는 순간", coupon) { coupon = it; settings.alertCoupon = it }
         SwitchRow("연속 학습이 끊기면 알림", "이어지던 공부를 하루 쉬면 다음 날", streak) { streak = it; settings.alertStreak = it }
-        SwitchRow("저녁에 목표를 못 채웠으면 알림", "저녁 알림 시간에 남은 양을", evening) { evening = it; settings.alertEvening = it }
-        val context = androidx.compose.ui.platform.LocalContext.current
         if (com.wordbook.app.sync.FamilySync.code(context) == null) {
             SwitchRow("매주 자동 백업", "기기 동기화를 안 쓸 때만, 일주일에 한 번 백업 파일을 보내요", backup) { backup = it; settings.telegramBackup = it }
         } else {
@@ -299,6 +307,7 @@ object Opt {
     val dailyWords = listOf(0 to "끔", 10 to "10개", 20 to "20개", 30 to "30개")
     val minutes = listOf(0 to "끔", 10 to "10분", 20 to "20분", 30 to "30분")
     val reminder = listOf(-1 to "끔", 19 to "7시", 20 to "8시", 21 to "9시")
+    val reportHour = listOf(-1 to "끔", 20 to "8시", 21 to "9시", 22 to "10시")
     val session = listOf(0 to "전부", 10 to "10장", 20 to "20장")
     val test = listOf(10 to "10문제", 20 to "20문제", 30 to "30문제")
     val hand = listOf(5 to "5장", 10 to "10장", 20 to "20장")

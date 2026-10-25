@@ -74,7 +74,17 @@ class StudySettings(context: Context) {
         get() = prefs.getBoolean("alertStreak", true)
         set(v) = prefs.edit().putBoolean("alertStreak", v).apply()
 
-    /** Telegram the parents at reminder time when the goal isn't met yet. */
+    /** Hour of the parents' evening report (-1 = off). */
+    var reportHour: Int
+        get() = prefs.getInt("reportHour", 21)
+        set(v) = prefs.edit().putInt("reportHour", v).apply()
+
+    /** A short Telegram line the moment today's goals are met. */
+    var alertGoal: Boolean
+        get() = prefs.getBoolean("alertGoal", true)
+        set(v) = prefs.edit().putBoolean("alertGoal", v).apply()
+
+    /** No longer sent on its own: the evening report says what is missing. */
     var alertEvening: Boolean
         get() = prefs.getBoolean("alertEvening", true)
         set(v) = prefs.edit().putBoolean("alertEvening", v).apply()
