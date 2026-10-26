@@ -546,20 +546,20 @@ private fun HarpoonScene(h: Harpoon) {
     }
     Column(
         Modifier.fillMaxWidth().padding(top = 16.dp)
-            .background(Color(0xFF0B3C9E), RoundedCornerShape(16.dp)).padding(16.dp),
+            .background(com.wordbook.app.ui.theme.Sea.Panel, RoundedCornerShape(16.dp)).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(if (landed) "🔱 작살 명중!" else "🔱 작살 발사!", color = Color(0xFFFFE08A), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text("${h.fish.emoji} ${h.fish.name}", color = Color.White, style = MaterialTheme.typography.titleMedium)
+        Text(if (landed) "🔱 작살 명중!" else "🔱 작살 발사!", color = com.wordbook.app.ui.theme.Sea.Warm, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("${h.fish.emoji} ${h.fish.name}", color = com.wordbook.app.ui.theme.Sea.Ink, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(8.dp))
         ThickProgress(left.value / h.total.coerceAtLeast(1), Modifier.fillMaxWidth())
         Text(
             "오늘 외운 단어 ${h.hit}개가 꽂혔어요 · 남은 칸 ${left.value.roundToInt()}",
-            color = Color.White,
+            color = com.wordbook.app.ui.theme.Sea.Ink,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.padding(top = 6.dp),
         )
-        if (h.hpBefore - h.hit <= 0) Text("🏆 최종전이 열렸어요! 대양 원정에서 도전하세요", color = Color(0xFFFFE08A), fontWeight = FontWeight.Bold)
+        if (h.hpBefore - h.hit <= 0) Text("🏆 최종전이 열렸어요! 대양 원정에서 도전하세요", color = com.wordbook.app.ui.theme.Sea.Warm, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -779,8 +779,8 @@ private fun SeaBand(vm: FishingViewModel) {
         Modifier
             .fillMaxWidth()
             .background(
-                Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
-                RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp),
+                Brush.linearGradient(com.wordbook.app.ui.theme.Sea.Sky),
+                WaveBottomShape(7.dp),
             )
             .padding(start = 16.dp, end = 16.dp, top = dp(10, 6), bottom = dp(38, 32)),
     ) {
@@ -788,12 +788,12 @@ private fun SeaBand(vm: FishingViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     "🐟 물고기까지 ${"%.1f".format(distance)}m",
-                    color = if (danger) Color(0xFFFFB4B4) else Color.White,
+                    color = if (danger) com.wordbook.app.ui.theme.Sea.Danger else com.wordbook.app.ui.theme.Sea.Ink,
                     fontSize = sp(22, 18),
                     fontWeight = FontWeight.ExtraBold,
                     modifier = Modifier.weight(1f),
                 )
-                if (vm.combo >= 2) Text("🔥 콤보 ${vm.combo}", color = Color.White, fontWeight = FontWeight.Bold)
+                if (vm.combo >= 2) Text("🔥 콤보 ${vm.combo}", color = com.wordbook.app.ui.theme.Sea.Ink, fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(dp(10, 4)))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -804,7 +804,7 @@ private fun SeaBand(vm: FishingViewModel) {
                     modifier = Modifier
                         .size(dp(56, 36))
                         .clip(RoundedCornerShape(dp(16, 10)))
-                        .border(2.dp, Color.White.copy(alpha = 0.9f), RoundedCornerShape(dp(16, 10))),
+                        .border(2.dp, Color.White, RoundedCornerShape(dp(16, 10))),
                 )
                 BoxWithConstraints(Modifier.weight(1f).height(dp(56, 36))) {
                     val fishSize = dp(34, 26)
@@ -814,10 +814,10 @@ private fun SeaBand(vm: FishingViewModel) {
                         val y = size.height / 2
                         val end = (fishX + 4.dp).toPx() + jerk.value
                         drawLine(
-                            Color.White.copy(alpha = 0.6f), Offset(0f, y), Offset(size.width, y),
+                            com.wordbook.app.ui.theme.Sea.Ink.copy(alpha = 0.35f), Offset(0f, y), Offset(size.width, y),
                             strokeWidth = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 10f)),
                         )
-                        drawLine(Color(0xFF9FE3FF), Offset(0f, y), Offset(end, y), strokeWidth = 6.dp.toPx(), cap = StrokeCap.Round)
+                        drawLine(com.wordbook.app.ui.theme.Sea.Accent, Offset(0f, y), Offset(end, y), strokeWidth = 6.dp.toPx(), cap = StrokeCap.Round)
                     }
                     Text(
                         vm.fish.emoji,
@@ -834,12 +834,12 @@ private fun SeaBand(vm: FishingViewModel) {
                         distance < 20 -> "거의 다 왔어요! 조금만 더!"
                         else -> "🎣 ${vm.fish.name} 낚는 중"
                     },
-                    color = if (danger) Color(0xFFFFB4B4) else Color.White,
+                    color = if (danger) com.wordbook.app.ui.theme.Sea.Danger else com.wordbook.app.ui.theme.Sea.Ink,
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (danger || distance < 20) FontWeight.Bold else null,
                     modifier = Modifier.weight(1f),
                 )
-                Text("${vm.goal.toInt()}m면 줄이 끊어져요", color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.labelMedium)
+                Text("${vm.goal.toInt()}m면 줄이 끊어져요", color = com.wordbook.app.ui.theme.Sea.Soft, style = MaterialTheme.typography.labelMedium)
             }
             }
         }
@@ -1015,10 +1015,10 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
     if (showWords) GiantWords(g, f) { showWords = false }
     Column(
         Modifier.fillMaxWidth().padding(bottom = 8.dp)
-            .background(Color(0xFF0B3C9E), RoundedCornerShape(16.dp)).padding(16.dp),
+            .background(com.wordbook.app.ui.theme.Sea.Panel, RoundedCornerShape(16.dp)).padding(16.dp),
     ) {
-        Text("⛵ ${f.ocean.title} · ${g.index + 1}번째 거대 물고기 (${g.index + 1}/${Giant.species.size})", color = Color(0xFF9FE3FF), style = MaterialTheme.typography.labelLarge)
-        Text("${f.emoji} ${f.name}", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text("⛵ ${f.ocean.title} · ${g.index + 1}번째 거대 물고기 (${g.index + 1}/${Giant.species.size})", color = com.wordbook.app.ui.theme.Sea.Accent, style = MaterialTheme.typography.labelLarge)
+        Text("${f.emoji} ${f.name}", color = com.wordbook.app.ui.theme.Sea.Ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
         Column(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { showWords = true }.padding(2.dp),
@@ -1028,9 +1028,9 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                     row.forEach { w ->
                         val color = when (w.id) {
-                            in g.hitIds -> Color(0xFF4FC3F7)
+                            in g.hitIds -> Color(0xFF7DB7F2)
                             in g.pendingIds -> Color(0xFFFFD54F)
-                            else -> Color.White.copy(alpha = 0.15f)
+                            else -> Color.White
                         }
                         Box(Modifier.weight(1f).aspectRatio(1f).background(color, RoundedCornerShape(3.dp)))
                     }
@@ -1040,14 +1040,14 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
         }
         Text(
             "🟦 작살 꽂힌 단어 ${g.hit} · 🟨 오늘 외운 단어 ${g.pending} · 남은 칸 ${g.hp}  (칸을 누르면 단어 목록)",
-            color = Color.White,
+            color = com.wordbook.app.ui.theme.Sea.Ink,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp),
         )
         Spacer(Modifier.height(6.dp))
         when {
             g.ready -> {
-                Text("100칸을 다 채웠어요! 지쳐서 떠올랐어요", color = Color(0xFFFFE08A), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                Text("100칸을 다 채웠어요! 지쳐서 떠올랐어요", color = com.wordbook.app.ui.theme.Sea.Warm, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(10.dp))
                 PrimaryButton(
                     if (vm.giantReview) "📖 틀린 단어 보고 다시 도전" else "🏆 최종전: ${f.name} 끌어올리기!",
@@ -1056,11 +1056,11 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
             }
             g.pending > 0 -> Text(
                 "오늘의 낚시에 성공하면 노란 칸 ${g.pending}개가 작살로 바뀌어요!",
-                color = Color(0xFFFFE08A),
+                color = com.wordbook.app.ui.theme.Sea.Warm,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
             )
-            else -> Text("단어를 외우고 오늘의 낚시에 성공하면 칸이 채워져요", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            else -> Text("단어를 외우고 오늘의 낚시에 성공하면 칸이 채워져요", color = com.wordbook.app.ui.theme.Sea.Ink, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

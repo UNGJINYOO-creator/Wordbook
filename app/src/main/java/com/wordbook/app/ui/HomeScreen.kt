@@ -117,9 +117,10 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /** Cover colours for the deck tiles. */
+/** Pastel cover colours for the deck tiles (dark text on top). */
 val DeckColors = listOf(
-    Color(0xFF3182F6), Color(0xFFF04452), Color(0xFF03B26C), Color(0xFFFFB331),
-    Color(0xFF8B5CF6), Color(0xFF14B8C4), Color(0xFFFF7A45), Color(0xFF4E5968),
+    Color(0xFFD6E8FF), Color(0xFFFDE1DF), Color(0xFFD8F2E8), Color(0xFFFFEFC9),
+    Color(0xFFE8E1FF), Color(0xFFD5F1F4), Color(0xFFFFE3D2), Color(0xFFE4E9F0),
 )
 
 val DeckEmojis = listOf("📘", "📗", "📙", "📕", "⭐", "🏃", "🍎", "🌏", "✏️", "🎯", "🐶", "🚀")
@@ -413,10 +414,10 @@ fun HomeScreen(
                     vm.level, vm.known, vm.total, vm.stars, vm.totalMs,
                     Modifier.layout { measurable, constraints ->
                         val side = 16.dp.roundToPx()
-                        val overlap = (30 + 10).dp.roundToPx()
+                        val overlap = (4 + 10).dp.roundToPx()
                         val width = constraints.maxWidth + side * 2
                         val p = measurable.measure(constraints.copy(minWidth = width, maxWidth = width))
-                        // Full screen width past the grid padding, and 30dp shorter so the next card overlaps it.
+                        // Full screen width past the grid padding; the next card just touches the wave.
                         layout(constraints.maxWidth, p.height - overlap) { p.place(-side, 0) }
                     },
                 )
@@ -430,10 +431,10 @@ fun HomeScreen(
                     Card(
                         onClick = { onFishing(false) },
                         shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(containerColor = if (vm.fishOpen) Color(0xFF1E5AA8) else Color(0xFFDCEBFA)),
+                        colors = CardDefaults.cardColors(containerColor = if (vm.fishOpen) com.wordbook.app.ui.theme.Sea.MintCardOpen else com.wordbook.app.ui.theme.Sea.MintCard),
                         modifier = Modifier.weight(1f).fillMaxHeight(),
                     ) {
-                        val ink = if (vm.fishOpen) Color.White else Color(0xFF0B2A5B)
+                        val ink = com.wordbook.app.ui.theme.Sea.Ink
                         Column(Modifier.padding(14.dp)) {
                             Text("🎣", fontSize = 26.sp)
                             FitText("오늘의 낚시", MaterialTheme.typography.titleMedium.copy(color = ink, fontWeight = FontWeight.Bold), align = TextAlign.Start)
@@ -445,16 +446,16 @@ fun HomeScreen(
                         Card(
                             onClick = { onFishing(true) },
                             shape = MaterialTheme.shapes.large,
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0B2A5B)),
+                            colors = CardDefaults.cardColors(containerColor = com.wordbook.app.ui.theme.Sea.Lavender),
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                         ) {
                             Column(Modifier.padding(14.dp)) {
                                 Text("⛵", fontSize = 26.sp)
-                                FitText("대양 원정", MaterialTheme.typography.titleMedium.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                                FitText("대양 원정", MaterialTheme.typography.titleMedium.copy(color = com.wordbook.app.ui.theme.Sea.Ink, fontWeight = FontWeight.Bold), align = TextAlign.Start)
                                 if (f == null) {
-                                    Text("18마리 완성! 🏆", style = MaterialTheme.typography.bodySmall, color = Color.White)
+                                    Text("18마리 완성! 🏆", style = MaterialTheme.typography.bodySmall, color = com.wordbook.app.ui.theme.Sea.Ink)
                                 } else {
-                                    FitText("${f.ocean.title} · ${f.emoji} ${f.name}", MaterialTheme.typography.bodySmall.copy(color = Color.White), align = TextAlign.Start)
+                                    FitText("${f.ocean.title} · ${f.emoji} ${f.name}", MaterialTheme.typography.bodySmall.copy(color = com.wordbook.app.ui.theme.Sea.Soft), align = TextAlign.Start)
                                     Spacer(Modifier.height(6.dp))
                                     ThickProgress(g.hit / g.total.coerceAtLeast(1).toFloat(), Modifier.fillMaxWidth())
                                     Text(
@@ -464,7 +465,7 @@ fun HomeScreen(
                                             else -> "${g.hit}/${g.total}칸"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (g.ready || g.pending > 0) Color(0xFFFFE08A) else Color.White,
+                                        color = if (g.ready || g.pending > 0) com.wordbook.app.ui.theme.Sea.Warm else com.wordbook.app.ui.theme.Sea.Soft,
                                         modifier = Modifier.padding(top = 4.dp),
                                     )
                                 }
@@ -695,7 +696,7 @@ fun SheetItem(icon: ImageVector, title: String, desc: String, onClick: () -> Uni
     )
 }
 
-/** Blue sea header: the app name, a greeting, today's progress pill (starts 오늘 학습) and the picture in a frame on the right. */
+/** Pastel sea header with a wavy bottom edge: the app name, a greeting, today's progress pill (starts 오늘 학습) and the picture in a frame on the right. */
 @Composable
 private fun HomeHeader(level: Int, known: Int, total: Int, stars: Int, totalMs: Long, modifier: Modifier = Modifier) {
     var showLevels by remember { mutableStateOf(false) }
@@ -704,43 +705,43 @@ private fun HomeHeader(level: Int, known: Int, total: Int, stars: Int, totalMs: 
         modifier
             .fillMaxWidth()
             .background(
-                Brush.linearGradient(listOf(Color(0xFF0B3C9E), Color(0xFF1E6BFF), Color(0xFF33B5FF))),
-                RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+                Brush.linearGradient(com.wordbook.app.ui.theme.Sea.Sky),
+                WaveBottomShape(),
             )
             .statusBarsPadding()
-            .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 44.dp),
+            .padding(start = 20.dp, end = 16.dp, top = 12.dp, bottom = 30.dp),
     ) {
         Column(Modifier.align(Alignment.TopStart).padding(top = 6.dp)) {
             Text(
                 buildAnnotatedString {
                     append("낚아")
-                    withStyle(SpanStyle(color = Color(0xFF9FE3FF))) { append("보카") }
+                    withStyle(SpanStyle(color = com.wordbook.app.ui.theme.Sea.Mint)) { append("보카") }
                 },
-                color = Color.White,
+                color = com.wordbook.app.ui.theme.Sea.Accent,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Black,
             )
-            Text("오늘도 단어\n낚으러 가볼까? 🐟", color = Color.White.copy(alpha = 0.92f), style = MaterialTheme.typography.bodyMedium)
+            Text("오늘도 단어\n낚으러 가볼까? 🐟", color = com.wordbook.app.ui.theme.Sea.Soft, style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(10.dp))
             // Who the child is: the level badge (today's numbers live in the card below). Tap for the level popup.
             Column(
                 Modifier
                     .padding(end = 174.dp)
                     .clip(RoundedCornerShape(14.dp))
-                    .background(Color.White.copy(alpha = 0.14f))
-                    .border(1.5.dp, Color.White.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                    .background(Color.White.copy(alpha = 0.6f))
+                    .border(1.5.dp, com.wordbook.app.ui.theme.Sea.Line, RoundedCornerShape(14.dp))
                     .clickable { showLevels = true }
                     .padding(horizontal = 12.dp, vertical = 7.dp),
             ) {
                 FitText(
                     "🏅 Lv.$level ${Levels.starText(Levels.stars(known, total, level))}",
-                    MaterialTheme.typography.titleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold),
+                    MaterialTheme.typography.titleSmall.copy(color = com.wordbook.app.ui.theme.Sea.Ink, fontWeight = FontWeight.Bold),
                     align = TextAlign.Start,
                 )
-                FitText(Levels.title(level), MaterialTheme.typography.titleSmall.copy(color = Color.White, fontWeight = FontWeight.Bold), align = TextAlign.Start)
+                FitText(Levels.title(level), MaterialTheme.typography.titleSmall.copy(color = com.wordbook.app.ui.theme.Sea.Ink, fontWeight = FontWeight.Bold), align = TextAlign.Start)
                 FitText(
                     "🐟 ${stars}마리 · 전체 ${Levels.percent(known, total)}% 외움",
-                    MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.92f)),
+                    MaterialTheme.typography.labelSmall.copy(color = com.wordbook.app.ui.theme.Sea.Soft),
                     align = TextAlign.Start,
                 )
             }
@@ -753,7 +754,7 @@ private fun HomeHeader(level: Int, known: Int, total: Int, stars: Int, totalMs: 
                 .align(Alignment.TopEnd)
                 .size(166.dp)
                 .clip(RoundedCornerShape(28.dp))
-                .border(3.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(28.dp)),
+                .border(3.dp, Color.White, RoundedCornerShape(28.dp)),
         )
     }
 }
@@ -920,12 +921,12 @@ private fun DeckTile(
                 if (deck.wordCount > 0) {
                     Text(
                         "목록 ›",
-                        color = Color.White,
+                        color = com.wordbook.app.ui.theme.Sea.Ink,
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color.White.copy(alpha = 0.25f))
+                            .background(Color.White.copy(alpha = 0.65f))
                             .clickable(onClick = onOpen)
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                     )
@@ -934,7 +935,7 @@ private fun DeckTile(
             Spacer(Modifier.weight(1f))
             Text(
                 deck.name,
-                color = Color.White,
+                color = com.wordbook.app.ui.theme.Sea.Ink,
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -944,15 +945,15 @@ private fun DeckTile(
                     (collectionName?.let { " · $it" } ?: ""),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                color = Color.White.copy(alpha = 0.9f),
+                color = com.wordbook.app.ui.theme.Sea.Soft,
                 style = MaterialTheme.typography.labelMedium,
             )
             Spacer(Modifier.height(8.dp))
             LinearProgressIndicator(
                 progress = { progress },
                 modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-                color = Color.White,
-                trackColor = Color.White.copy(alpha = 0.35f),
+                color = com.wordbook.app.ui.theme.Sea.Ink.copy(alpha = 0.45f),
+                trackColor = Color.White.copy(alpha = 0.75f),
                 gapSize = 0.dp,
                 drawStopIndicator = {},
             )
@@ -990,7 +991,7 @@ private fun CoverDialog(deck: DeckSummary, level: Int, onDismiss: () -> Unit, on
                 Box(
                     Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(14.dp)).background(DeckColors[color]),
                     contentAlignment = Alignment.Center,
-                ) { Text("$emoji  ${deck.name}", color = Color.White, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                ) { Text("$emoji  ${deck.name}", color = com.wordbook.app.ui.theme.Sea.Ink, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 Text("색", style = MaterialTheme.typography.labelLarge)
                 DeckColors.chunked(4).forEachIndexed { row, colors ->
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -999,7 +1000,7 @@ private fun CoverDialog(deck: DeckSummary, level: Int, onDismiss: () -> Unit, on
                             Box(
                                 Modifier.size(40.dp).clip(CircleShape).background(c).clickable { color = index },
                                 contentAlignment = Alignment.Center,
-                            ) { if (index == color) Text("✓", color = Color.White, fontWeight = FontWeight.Bold) }
+                            ) { if (index == color) Text("✓", color = com.wordbook.app.ui.theme.Sea.Ink, fontWeight = FontWeight.Bold) }
                         }
                     }
                 }

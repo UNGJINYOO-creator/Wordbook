@@ -20,23 +20,40 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.wordbook.app.R
 
-// Sea palette from the app picture: pale sky page, white cards, ocean blue accent, navy text.
-val Blue = Color(0xFF1E6BFF)
-private val Ink = Color(0xFF0B1F4B)
-private val Grey700 = Color(0xFF4A5B78)
-private val Grey500 = Color(0xFF8394AE)
-private val Grey200 = Color(0xFFDCE6F3)
-private val Grey100 = Color(0xFFEEF5FF)
+// Pastel sea (형 chose ① 하늘·민트, 2026-10-26): pale sky and mint, soft blue accent, dark ink only for text,
+// so the colours never pull the eye away from the words.
+val Blue = Color(0xFF5A9BEE)
+private val Ink = Color(0xFF2B3A4F)
+private val Grey700 = Color(0xFF56657C)
+private val Grey500 = Color(0xFF8A97AB)
+private val Grey200 = Color(0xFFE1EAF4)
+private val Grey100 = Color(0xFFF2F9FC)
+
+/** Fixed pastel colours for the sea pieces (headers, game cards, panels). */
+object Sea {
+    val Ink = Color(0xFF2B3A4F)
+    val Soft = Color(0xFF6E7D93)
+    val Accent = Color(0xFF3A7BD5)
+    val Mint = Color(0xFF3FA79C)
+    val Sky = listOf(Color(0xFFDCEFFF), Color(0xFFD6F3F1))
+    val Panel = Color(0xFFE6F2FF)
+    val MintCard = Color(0xFFE2F5EF)
+    val MintCardOpen = Color(0xFFCDEEE3)
+    val Lavender = Color(0xFFE6E9FB)
+    val Line = Color(0x598CB4DC)
+    val Warm = Color(0xFFD9692B)
+    val Danger = Color(0xFFE5534B)
+}
 
 private val Light = lightColorScheme(
     primary = Blue,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFE3EEFF),
-    onPrimaryContainer = Color(0xFF0B3C9E),
+    primaryContainer = Color(0xFFE3F0FF),
+    onPrimaryContainer = Color(0xFF2F5FA8),
     secondary = Grey700,
-    secondaryContainer = Color(0xFFE3EEFF),
-    onSecondaryContainer = Color(0xFF0B1F4B),
-    tertiary = Color(0xFF0B3C9E),
+    secondaryContainer = Color(0xFFE2F5EF),
+    onSecondaryContainer = Color(0xFF24493F),
+    tertiary = Color(0xFF3F7FC9),
     background = Grey100,
     onBackground = Ink,
     surface = Color.White,
@@ -46,7 +63,7 @@ private val Light = lightColorScheme(
     surfaceContainer = Color.White,
     surfaceContainerLow = Color.White,
     surfaceContainerHigh = Color.White,
-    surfaceContainerHighest = Color(0xFFE6EFFB),
+    surfaceContainerHighest = Color(0xFFEAF2FA),
     outline = Grey500,
     outlineVariant = Grey200,
     error = Color(0xFFF04452),

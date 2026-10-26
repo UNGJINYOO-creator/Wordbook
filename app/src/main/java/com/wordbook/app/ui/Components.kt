@@ -108,3 +108,25 @@ fun FitText(text: String, style: TextStyle, modifier: Modifier = Modifier, align
         modifier = modifier.drawWithContent { if (ready) drawContent() },
     )
 }
+
+/** A box whose bottom edge is a gentle wave instead of a straight line (the sea headers). */
+class WaveBottomShape(private val amplitude: androidx.compose.ui.unit.Dp = 9.dp) : androidx.compose.ui.graphics.Shape {
+    override fun createOutline(
+        size: androidx.compose.ui.geometry.Size,
+        layoutDirection: androidx.compose.ui.unit.LayoutDirection,
+        density: androidx.compose.ui.unit.Density,
+    ): androidx.compose.ui.graphics.Outline {
+        val a = with(density) { amplitude.toPx() }
+        val w = size.width
+        val base = size.height - a
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(0f, 0f)
+            lineTo(w, 0f)
+            lineTo(w, base)
+            cubicTo(w * 0.86f, base + a, w * 0.66f, base - a, w * 0.5f, base)
+            cubicTo(w * 0.34f, base + a, w * 0.14f, base - a, 0f, base + a * 0.4f)
+            close()
+        }
+        return androidx.compose.ui.graphics.Outline.Generic(path)
+    }
+}
