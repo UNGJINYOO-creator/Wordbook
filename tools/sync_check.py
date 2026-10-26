@@ -105,6 +105,27 @@ def dump(label):
         say(f"  [{label} {f}.xml]", " ".join(raw.split())[:700])
 
 
+def remote_study(code):
+    import json, urllib.request
+    key = "AIzaSyDChZaflfeKcGBrxmrq4ILejJlhEp2Jvwk"
+    try:
+        req = urllib.request.Request(f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={key}", data=b"{}", headers={"Content-Type": "application/json"})
+        tok = json.load(urllib.request.urlopen(req))["idToken"]
+        url = f"https://firestore.googleapis.com/v1/projects/nakabocab/databases/(default)/documents/families/{code}/prefs/study"
+        doc = json.load(urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer " + tok})))
+        data = doc["fields"]["data"]["stringValue"]
+        say("  [server study]", re.sub(r'"tgToken":\["s","[^"]*"\]', '"tgToken":…', data)[:500], "updatedAt", doc["fields"]["updatedAt"])
+    except Exception as e:
+        say("  [server study] error", e)
+
+
+def hashes(label):
+    raw = adb("exec-out", "run-as", APP, "cat", "files/sync_hashes.json").decode("utf-8", "ignore")
+    m = re.search(r'"bstudy":(\{.*?\})', raw)
+    p = re.search(r'"pstudy":"([^"]*)"', raw)
+    say(f"  [{label} hashes] pstudy={p.group(1)[:10] if p else None} bstudy=", re.sub(r'"tgToken":\["s","[^"]*"\]', '"tgToken":…', m.group(1))[:400] if m else None)
+
+
 def check(label, ok):
     say(("PASS " if ok else "FAIL ") + label)
 
@@ -162,15 +183,19 @@ tap("설정 저장")
 time.sleep(10)
 check("B saved 10 words", pref("study", "dailyWords") == "10")
 dump("B after saving")
+remote_study(code)
 save_device("B")
 
 say("== Back to device A: opens the app ==")
 load_device("A")
+hashes("A before opening")
 start()
 time.sleep(10)
 adb("shell", "input", "keyevent", "3")
 time.sleep(10)
 dump("A after reopening")
+hashes("A after reopening")
+remote_study(code)
 if pref("study", "dailyWords") != "10":
     say("  one more open and close")
     start(); time.sleep(10); adb("shell", "input", "keyevent", "3"); time.sleep(12)
