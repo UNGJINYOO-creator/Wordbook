@@ -32,8 +32,8 @@ def nodes():
         return []
 
 
-def tap(text, tries=4):
-    for _ in range(tries):
+def tap(text, tries=7):
+    for k in range(tries):
         for n in nodes():
             t = (n.get("text") or "") + "|" + (n.get("content-desc") or "")
             if text in t:
@@ -41,8 +41,11 @@ def tap(text, tries=4):
                 adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
                 time.sleep(1.5)
                 return True
-        # Maybe below the fold.
-        adb("shell", "input", "swipe", "540", "1500", "540", "600", "600")
+        # Maybe off screen: look further down first, then back up.
+        if k < 3:
+            adb("shell", "input", "swipe", "540", "1500", "540", "600", "600")
+        else:
+            adb("shell", "input", "swipe", "540", "600", "540", "1500", "600")
         time.sleep(2)
     seen = [n.get("text") for n in nodes() if n.get("text")]
     say("  (not found:", text + ") seen:", " / ".join(seen)[:400])
@@ -74,8 +77,12 @@ def start():
 def fresh_device():
     adb("shell", "pm", "clear", APP)
     start()
-    tap("건너뛰기")
-    time.sleep(3)
+    for _ in range(5):
+        texts = [n.get("text") for n in nodes()]
+        if "복습·통계" in texts:
+            break
+        tap("건너뛰기", tries=1)
+        time.sleep(3)
 
 
 def save_device(name):
