@@ -70,6 +70,7 @@ def pref(file, key):
 
 def start():
     adb("shell", "am", "force-stop", APP)
+    adb("shell", "pm", "grant", APP, "android.permission.POST_NOTIFICATIONS")
     adb("shell", "am", "start", "-n", f"{APP}/.MainActivity")
     time.sleep(8)
 
@@ -95,6 +96,13 @@ def save_device(name):
 def load_device(name):
     adb("shell", "pm", "clear", APP)
     adb("shell", "run-as", APP, "tar", "-xf", "-", stdin=open(f"/tmp/{name}.tar", "rb").read())
+
+
+def dump(label):
+    for f in ("sync", "study"):
+        raw = adb("exec-out", "run-as", APP, "cat", f"shared_prefs/{f}.xml").decode("utf-8", "ignore")
+        raw = re.sub(r'(tgToken">)[^<]*', r"\1…", raw)
+        say(f"  [{label} {f}.xml]", " ".join(raw.split())[:700])
 
 
 def check(label, ok):
@@ -153,6 +161,7 @@ tap("10개")
 tap("설정 저장")
 time.sleep(10)
 check("B saved 10 words", pref("study", "dailyWords") == "10")
+dump("B after saving")
 save_device("B")
 
 say("== Back to device A: opens the app ==")
@@ -161,6 +170,11 @@ start()
 time.sleep(10)
 adb("shell", "input", "keyevent", "3")
 time.sleep(10)
+dump("A after reopening")
+if pref("study", "dailyWords") != "10":
+    say("  one more open and close")
+    start(); time.sleep(10); adb("shell", "input", "keyevent", "3"); time.sleep(12)
+    dump("A after second open")
 check("A got B's 하루 목표 (10)", pref("study", "dailyWords") == "10")
 check("A still has its Telegram token", pref("study", "tgToken") == "TESTTOKEN123")
 start()
