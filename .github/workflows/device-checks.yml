@@ -44,7 +44,9 @@ jobs:
             ./gradlew connectedDebugAndroidTest > results/instrumented.txt 2>&1 || echo "INSTRUMENTED TESTS FAILED" >> results/instrumented.txt
             cp -r app/build/reports/androidTests/connected results/instrumented-report || true
             adb install -r -g app/build/outputs/apk/debug/app-debug.apk
+            adb logcat -c
             python3 tools/sync_check.py results
+            adb logcat -d -s WBSync AndroidRuntime > results/logcat.txt
 
       - name: Publish results
         if: always()

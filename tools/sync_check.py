@@ -7,6 +7,10 @@ os.makedirs(OUT, exist_ok=True)
 log = open(f"{OUT}/sync-check.txt", "w")
 
 
+def mark(label):
+    adb("shell", "log", "-t", "WBSync", "== " + label.replace(" ", "_"))
+
+
 def say(*a):
     line = " ".join(str(x) for x in a)
     print(line, flush=True)
@@ -196,6 +200,7 @@ tap("설정")
 tap("하루 목표")
 tap("10개")
 t = now_ms()
+mark("B pressing save")
 tap("설정 저장")
 wait_sync(t, "B saving")
 check("B saved 10 words", pref("study", "dailyWords") == "10")

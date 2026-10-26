@@ -60,8 +60,11 @@ object FamilySync {
     suspend fun run(context: Context): String? {
         if (!FirebaseConfig.ready) return null
         val code = code(context) ?: return null
+        android.util.Log.d("WBSync", "waiting")
         return lock.withLock {
+            android.util.Log.d("WBSync", "start")
             val error = runCatching { syncOnce(context, code) }.exceptionOrNull()?.let { it.message ?: it.toString() }
+            android.util.Log.d("WBSync", "end ${error ?: "ok"}")
             prefs(context).edit().apply {
                 if (error == null) putLong("lastSync", System.currentTimeMillis()).remove("error") else putString("error", error)
             }.apply()
