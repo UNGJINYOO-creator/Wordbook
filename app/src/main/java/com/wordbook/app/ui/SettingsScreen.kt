@@ -324,6 +324,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                         Labeled("하루 도전 횟수") {
                             NumberChoice(fishTries, Opt.tries, "번", 20, min = 0) { fishTries = it; settings.fishTries = it }
                         }
+                        GiantMixEditor(settings)
                         TextButton(onClick = { fishDetail = !fishDetail }) {
                             Text(if (fishDetail) "▾ 세부 거리 접기" else "▸ 세부 거리 직접 조정")
                         }

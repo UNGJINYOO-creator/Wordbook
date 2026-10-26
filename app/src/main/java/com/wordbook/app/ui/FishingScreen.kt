@@ -307,12 +307,30 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         word = w
         val roll = Math.random()
         val muted = audio.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) == 0
-        mode = when {
-            roll < 0.6 -> StudyMode.CHOICE
-            roll < 0.85 || muted -> StudyMode.SPELLING
-            else -> StudyMode.DICTATION
-        }
         modeNote = null
+        if (giantMode) {
+            // The parent's chosen shares: 4지선다, 빈칸, 풀스펠링, 듣고 쓰기.
+            val mix = settings.giantMix
+            var r = roll * mix.sum()
+            val kind = mix.indices.firstOrNull { r -= mix[it]; r < 0 } ?: mix.indexOfLast { it > 0 }
+            mode = when (kind) {
+                0 -> StudyMode.CHOICE
+                3 -> StudyMode.DICTATION
+                else -> StudyMode.SPELLING
+            }
+            if (kind == 2 || (kind == 3 && (muted || listenOff))) {
+                mode = StudyMode.SPELLING
+                pattern = w.text.map { if (it.isLetter()) '_' else it }.joinToString("")
+                modeNote = if (kind == 2) "✍️ 뜻을 보고 스펠링 전체를 쓰세요" else "🔇 뜻을 보고 스펠링 전체를 쓰세요"
+                return
+            }
+        } else {
+            mode = when {
+                roll < 0.6 -> StudyMode.CHOICE
+                roll < 0.85 || muted -> StudyMode.SPELLING
+                else -> StudyMode.DICTATION
+            }
+        }
         if (mode == StudyMode.DICTATION && listenOff) {
             mode = StudyMode.SPELLING
             pattern = w.text.map { if (it.isLetter()) '_' else it }.joinToString("")

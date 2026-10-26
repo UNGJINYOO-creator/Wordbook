@@ -141,6 +141,12 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("fishTries", 0)
         set(v) = prefs.edit().putInt("fishTries", v).apply()
 
+    /** 대왕물고기(원정 최종전) question shares in percent: 4지선다, 빈칸 스펠링, 풀스펠링, 듣고 쓰기. */
+    var giantMix: List<Int>
+        get() = prefs.getString("giantMix", null)?.split(",")?.mapNotNull { it.trim().toIntOrNull() }
+            ?.takeIf { it.size == 4 && it.sum() > 0 } ?: GIANT_MIX_DEFAULT
+        set(v) = prefs.edit().putString("giantMix", v.joinToString(",")).apply()
+
     /** The child's name for the weekly report, "" = not set. */
     var childName: String
         get() = prefs.getString("childName", "") ?: ""
@@ -244,3 +250,6 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("recentDays", 7)
         set(v) = prefs.edit().putInt("recentDays", v).apply()
 }
+
+/** The mix the giant battle used before it could be chosen. */
+val GIANT_MIX_DEFAULT = listOf(60, 25, 0, 15)

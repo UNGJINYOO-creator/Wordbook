@@ -30,12 +30,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.wordbook.app.data.GIANT_MIX_DEFAULT
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Report
 import com.wordbook.app.data.Reward
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.net.Telegram
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /**
  * A small number field that sits after a row of preset chips. It stays empty while a preset is chosen;
@@ -458,5 +460,46 @@ fun ResetEditor() {
                 }) { Text(if (ok) "다시 시작" else "닫기") }
             },
         )
+    }
+}
+
+/** 대왕물고기(원정 최종전) question shares: a few one-tap presets, then each kind's percent. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun GiantMixEditor(settings: StudySettings) {
+    var mix by remember { mutableStateOf(settings.giantMix) }
+    val set = { v: List<Int> -> mix = v; settings.giantMix = v }
+    val names = listOf("4지선다", "빈칸 스펠링", "풀스펠링 쓰기", "듣고 쓰기")
+    val presets = listOf(
+        "기본" to GIANT_MIX_DEFAULT,
+        "풀스펠링 100%" to listOf(0, 0, 100, 0),
+        "쓰기 위주" to listOf(0, 50, 50, 0),
+        "골고루" to listOf(25, 25, 25, 25),
+    )
+    Labeled("⛵ 대왕물고기 문제 비율", "원정 최종전에 나오는 문제 종류를 정해요. 합이 100%가 아니면 비율대로 나눠요.") {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            presets.forEach { (label, v) -> FilterChip(mix == v, { set(v) }, label = { Text(label) }) }
+        }
+        val total = mix.sum().coerceAtLeast(1)
+        names.forEachIndexed { i, name ->
+            val share = (mix[i] * 100f / total).roundToInt()
+            Text("$name · 실제 ${share}%", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0, 25, 50, 75, 100).forEach { p ->
+                    FilterChip(mix[i] == p, {
+                        val next = mix.toMutableList().also { it[i] = p }
+                        // Never leave every kind at 0: that would have no question to ask.
+                        if (next.sum() > 0) set(next)
+                    }, label = { Text("$p%") })
+                }
+            }
+        }
+        if (mix[3] > 0) {
+            Text(
+                "소리가 꺼져 있으면 듣고 쓰기는 풀스펠링 쓰기로 바뀌어요.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.outline,
+            )
+        }
     }
 }
