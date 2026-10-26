@@ -114,6 +114,7 @@ class ReviewViewModel(app: Application) : AndroidViewModel(app) {
 fun ReviewScreen(
     onReview: () -> Unit,
     onStudyAll: () -> Unit,
+    onWeekly: () -> Unit,
     vm: ReviewViewModel = viewModel(),
 ) {
     val words by vm.words.collectAsStateWithLifecycle()
@@ -155,6 +156,18 @@ fun ReviewScreen(
                         Spacer(Modifier.height(8.dp))
                         SecondaryButton("모든 단어장 합쳐서 학습", onStudyAll)
                     }
+                }
+            }
+            item {
+                Panel {
+                    Text("📊 주간 리포트", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "최근 7일 공부 시간, 정답률, 기억 상태, 자주 틀린 단어를 부모님이 보기 좋게 정리했어요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    SecondaryButton("주간 리포트 보기", onWeekly)
                 }
             }
             item {

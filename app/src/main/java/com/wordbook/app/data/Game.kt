@@ -106,7 +106,8 @@ class Game(context: Context) {
         val proven = stats.provenIds
         val byText = all.groupBy { it.text.trim().lowercase() }
         val known = byText.count { (_, words) -> words.any { it.id in proven } }
-        prefs.edit().putInt("known", known).putInt("total", byText.size).apply()
+        // A dated copy of the count, for the weekly report's 4-week line.
+        prefs.edit().putInt("known", known).putInt("total", byText.size).putInt("knownOn_${day()}", known).apply()
         val best = prefs.getInt("bestLevel", 0)
         val now = Levels.levelOf(percent)
         if (now <= best) return null
@@ -116,6 +117,10 @@ class Game(context: Context) {
         addStars(Levels.gift(now))
         return now
     }
+
+    /** Known words as last counted on or before the day [daysAgo] days ago (looking back up to 60 days), or null. */
+    fun knownOn(daysAgo: Int): Int? =
+        (daysAgo until daysAgo + 60).firstNotNullOfOrNull { n -> prefs.getInt("knownOn_${day(n)}", -1).takeIf { it >= 0 } }
 
     fun hasStamp(daysAgo: Int = 0): Boolean = prefs.getBoolean("stamp_${day(daysAgo)}", false)
 

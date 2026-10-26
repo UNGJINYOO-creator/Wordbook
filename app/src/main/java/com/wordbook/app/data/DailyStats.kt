@@ -70,11 +70,67 @@ class DailyStats(context: Context) {
         get() { ensureToday(); return prefs.getBoolean("notified", false) }
         set(v) { ensureToday(); prefs.edit().putBoolean("notified", v).apply() }
 
-    fun addStudyMs(ms: Long) {
+    /**
+     * Adds study time. [kind] is how the child studied (a [StudyMode] name or "FISHING"); the time is also
+     * kept per kind and per hour of the day for the weekly report.
+     */
+    fun addStudyMs(ms: Long, kind: String = "") {
         ensureToday()
         prefs.edit().putLong("ms", prefs.getLong("ms", 0) + ms).apply()
-        val key = "ms_${today()}"
-        history.edit().putLong(key, history.getLong(key, 0) + ms).apply()
+        val day = today()
+        val key = "ms_$day"
+        val hourKey = "msh_${day}_${java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)}"
+        val edit = history.edit()
+            .putLong(key, history.getLong(key, 0) + ms)
+            .putLong(hourKey, history.getLong(hourKey, 0) + ms)
+        if (kind.isNotEmpty()) {
+            val kindKey = "msk_${day}_$kind"
+            edit.putLong(kindKey, history.getLong(kindKey, 0) + ms)
+        }
+        edit.apply()
+    }
+
+    /** Study time of the day [n] days ago by kind (see [addStudyMs]); empty for days before this was kept. */
+    fun msByKind(n: Int): Map<String, Long> {
+        val prefix = "msk_${daysAgo(n)}_"
+        return history.all.filterKeys { it.startsWith(prefix) }
+            .mapNotNull { (k, v) -> (v as? Long)?.let { k.removePrefix(prefix) to it } }.toMap()
+    }
+
+    /** Study time of the day [n] days ago by hour of the day (0..23). */
+    fun msByHour(n: Int): Map<Int, Long> {
+        val prefix = "msh_${daysAgo(n)}_"
+        return history.all.filterKeys { it.startsWith(prefix) }
+            .mapNotNull { (k, v) -> k.removePrefix(prefix).toIntOrNull()?.let { h -> (v as? Long)?.let { h to it } } }.toMap()
+    }
+
+    /** Study time of the day [n] days ago. */
+    fun msOn(n: Int): Long = history.getLong("ms_${daysAgo(n)}", 0)
+
+    /** Words counted toward the word goal on the day [n] days ago. */
+    fun wordsOn(n: Int): Int = history.getInt("words_${daysAgo(n)}", 0)
+
+    /** A 말하기 card finished: said right, or given up after 3 tries. */
+    fun recordSpeech(word: String, right: Boolean) {
+        val day = today()
+        val edit = history.edit()
+            .putInt("say_$day", history.getInt("say_$day", 0) + 1)
+            .putInt("sayOk_$day", history.getInt("sayOk_$day", 0) + if (right) 1 else 0)
+        if (!right) {
+            val missed = history.getString("sayMiss_$day", "")!!.split('\n').filter { it.isNotBlank() }
+            if (word !in missed) edit.putString("sayMiss_$day", (missed + word).joinToString("\n"))
+        }
+        edit.apply()
+    }
+
+    /** 말하기 on the day [n] days ago: cards, cards said right, and words given up on. */
+    fun speechOn(n: Int): Triple<Int, Int, List<String>> {
+        val day = daysAgo(n)
+        return Triple(
+            history.getInt("say_$day", 0),
+            history.getInt("sayOk_$day", 0),
+            history.getString("sayMiss_$day", "")!!.split('\n').filter { it.isNotBlank() },
+        )
     }
 
     /** Study time per day for the last [n] days, oldest first. */

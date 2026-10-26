@@ -349,7 +349,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 if (loading || finished) continue
                 paused = System.currentTimeMillis() - lastTouch > idleMs
                 if (!paused) {
-                    stats.addStudyMs(1000)
+                    stats.addStudyMs(1000, mode.name)
                     todayMs = stats.studyMs
                     checkGoal()
                 }
@@ -909,6 +909,7 @@ fun StudyScreen(
                         var sayDone by remember(vm.turn) { mutableStateOf(false) }
                         val speech = rememberSpeechCheck()
                         val context = LocalContext.current
+                        val sayStats = remember { com.wordbook.app.data.DailyStats(context) }
                         val startListening = {
                             sayFeedback = "🎤 듣고 있어요… \"${word.text}\" 말해 보세요"
                             speech.start { heard, error ->
@@ -921,7 +922,11 @@ fun StudyScreen(
                                     heard.isNotEmpty() -> "🎤 \"${heard.first()}\"(으)로 들렸어요. 정답 발음을 듣고 따라 해 봐요 (${sayMisses}/3)"
                                     else -> null
                                 }
-                                if (right || sayMisses >= 3) sayDone = true
+                                if ((right || sayMisses >= 3) && !sayDone) {
+                                    sayDone = true
+                                    // Kept for the weekly report's 말하기 numbers.
+                                    sayStats.recordSpeech(word.text, right)
+                                }
                                 // Every miss plays the right pronunciation, so the child copies it instead of repeating the mistake.
                                 if (!right) speak()
                             }

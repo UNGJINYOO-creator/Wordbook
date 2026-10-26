@@ -138,6 +138,11 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("fishTries", 0)
         set(v) = prefs.edit().putInt("fishTries", v).apply()
 
+    /** The child's name for the weekly report, "" = not set. */
+    var childName: String
+        get() = prefs.getString("childName", "") ?: ""
+        set(v) = prefs.edit().putString("childName", v.trim()).apply()
+
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int
         get() = prefs.getInt("dailyGoal", 0)

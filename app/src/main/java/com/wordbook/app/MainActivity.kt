@@ -181,7 +181,11 @@ private fun AppContent() {
                             ReviewScreen(
                                 onReview = { nav.navigate("study/-1?review=true") },
                                 onStudyAll = { nav.navigate("study/-1?all=true") },
+                                onWeekly = { nav.navigate("weekly") },
                             )
+                        }
+                        composable("weekly") {
+                            com.wordbook.app.ui.WeeklyReportScreen(onBack = { nav.popBackStack() })
                         }
                         composable("settings") {
                             SettingsScreen(onAdd = { kind ->

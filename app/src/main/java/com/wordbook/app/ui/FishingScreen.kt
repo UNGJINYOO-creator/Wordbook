@@ -421,7 +421,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun finishGame() {
         durationMs = System.currentTimeMillis() - startedAt
-        stats.addStudyMs(durationMs)
+        stats.addStudyMs(durationMs, "FISHING")
         word = null
     }
 
@@ -497,7 +497,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         // Leaving mid-game counts as letting the fish go; the time still counts as study.
         if (phase == FishPhase.PLAYING) {
             durationMs = System.currentTimeMillis() - startedAt
-            stats.addStudyMs(durationMs)
+            stats.addStudyMs(durationMs, "FISHING")
         }
         tone?.release()
         sfx.release()
