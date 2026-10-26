@@ -42,9 +42,11 @@ def tap(text, tries=4):
                 time.sleep(1.5)
                 return True
         # Maybe below the fold.
-        adb("shell", "input", "swipe", "540", "1700", "540", "900", "300")
-        time.sleep(1)
-    say("  (not found:", text + ")")
+        adb("shell", "input", "swipe", "540", "1500", "540", "600", "600")
+        time.sleep(2)
+    seen = [n.get("text") for n in nodes() if n.get("text")]
+    say("  (not found:", text + ") seen:", " / ".join(seen)[:400])
+    shot("missing-" + re.sub(r"\W", "", text)[:12])
     return False
 
 
