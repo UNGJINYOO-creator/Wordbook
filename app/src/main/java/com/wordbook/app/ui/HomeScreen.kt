@@ -347,6 +347,7 @@ fun HomeScreen(
     onToday: () -> Unit,
     onStudyDeck: (Long) -> Unit,
     onWrongNote: () -> Unit,
+    onWrongList: () -> Unit,
     onFishing: (giant: Boolean) -> Unit,
     vm: HomeViewModel = viewModel(),
 ) {
@@ -489,6 +490,9 @@ fun HomeScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = Color(0xFF8A2A0A),
                                 )
+                            }
+                            TextButton(onClick = onWrongList) {
+                                Text("목록", style = MaterialTheme.typography.labelLarge, color = Color(0xFF8A2A0A))
                             }
                             Text("학습 ›", style = MaterialTheme.typography.labelLarge, color = Color(0xFF8A2A0A), fontWeight = FontWeight.Bold)
                         }

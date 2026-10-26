@@ -153,6 +153,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** -1 with [review] = today's reviews across all decks; -1 with [allDecks] = every deck together. */
     private val deckId: Long = checkNotNull(handle.get<Long>("deckId"))
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
+    /** ⭐ 별표만: only the deck's starred words. */
+    private val starredOnly: Boolean = handle.get<Boolean>("starred") ?: false
     val review: Boolean = handle.get<Boolean>("review") ?: false
     private val allDecks: Boolean = handle.get<Boolean>("all") ?: false
     /** 오늘 학습: today's reviews plus the day's word goal of new words, across all decks. */
@@ -320,7 +322,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     val words = dao.getWords(deckId).filter { !it.excluded }
                     if (words.size >= 4) pool = words
                     // Mastered cards are skipped, unless that leaves nothing to study.
-                    val candidates = if (onlyUnknown) words.filter { !it.known }
+                    val candidates = if (starredOnly) words.filter { it.bookmarked }
+                    else if (onlyUnknown) words.filter { !it.known }
                     else words.filter { !it.mastered }.ifEmpty { words }
                     if (dao.getDeck(deckId)?.isCollection == true) {
                         // 종합단어장: mostly recent words, plus the old words that most need a look.
@@ -773,6 +776,13 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     fun toggleFlag() = changeCurrent { it.copy(flagged = !it.flagged) }
 
+    fun toggleBookmark() = changeCurrent { it.copy(bookmarked = !it.bookmarked) }
+
+    /** 뜻 가리기 on the 단어장 보기 step, remembered with the deck screen's. */
+    var listCover: Int
+        get() = settings.listCover
+        set(v) { settings.listCover = v }
+
     /** Takes the current card out of this and future sessions. */
     fun excludeCurrent() {
         val word = hand.firstOrNull() ?: return
@@ -847,6 +857,7 @@ fun StudyScreen(
                 },
                 actions = {
                     StudyTimer(vm)
+                    if (inSession && vm.mode != StudyMode.LIST) vm.current?.let { StarButton(it.bookmarked, vm::toggleBookmark) }
                     // Card editing lives with the parent (deck screen, settings), not in the child's study screen.
                     IconButton(onClick = onSettings) { Icon(Icons.Default.Settings, "설정") }
                 },
@@ -869,6 +880,8 @@ fun StudyScreen(
                 vm.finished -> Summary(vm, onBack)
                 vm.mode == StudyMode.LIST -> WordListStep(
                     words = vm.runWords,
+                    initialCover = ListCover.of(vm.listCover),
+                    onCover = { vm.listCover = it.ordinal },
                     last = vm.stepIndex == vm.stepCount - 1,
                     onSpeak = { w -> tts?.speak(w.text, TextToSpeech.QUEUE_FLUSH, null, "l${w.id}") },
                     onDone = vm::nextStep,
@@ -1384,23 +1397,42 @@ private fun Summary(vm: StudyViewModel, onBack: () -> Unit) {
 
 /** 단어장 보기 step: every word with its meaning, to read through before the questions. */
 @Composable
-private fun WordListStep(words: List<Word>, last: Boolean, onSpeak: (Word) -> Unit, onDone: () -> Unit) {
+private fun WordListStep(
+    words: List<Word>,
+    initialCover: ListCover,
+    onCover: (ListCover) -> Unit,
+    last: Boolean,
+    onSpeak: (Word) -> Unit,
+    onDone: () -> Unit,
+) {
+    var cover by remember { mutableStateOf(initialCover) }
+    var revealed by remember(cover) { mutableStateOf(emptySet<Long>()) }
     Column(Modifier.fillMaxSize()) {
-        Text(
-            "먼저 단어와 뜻을 훑어보세요. 🔊를 누르면 발음이 나와요.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.outline,
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-        )
+        Row(Modifier.padding(start = 24.dp, end = 8.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (cover == ListCover.NONE) "먼저 단어와 뜻을 훑어보세요. 🔊를 누르면 발음이 나와요."
+                else "가린 칸을 떠올려 보고, 줄을 누르면 보여요.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.weight(1f),
+            )
+            CoverToggle(cover) { cover = it; onCover(it) }
+        }
         LazyColumn(Modifier.weight(1f)) {
             items(words, key = { it.id }) { w ->
+                val c = if (w.id in revealed) ListCover.NONE else cover
                 ListItem(
-                    headlineContent = { Text(w.text, style = MaterialTheme.typography.titleLarge) },
+                    headlineContent = {
+                        if (c == ListCover.WORD) CoverBar() else Text(w.text, style = MaterialTheme.typography.titleLarge)
+                    },
                     supportingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             PosBadge(w.pos, Modifier.padding(end = 6.dp))
-                            Text(w.meaning, style = MaterialTheme.typography.bodyLarge)
+                            if (c == ListCover.MEANING) CoverBar(width = 120) else Text(w.meaning, style = MaterialTheme.typography.bodyLarge)
                         }
+                    },
+                    modifier = Modifier.clickable(enabled = cover != ListCover.NONE) {
+                        revealed = if (w.id in revealed) revealed - w.id else revealed + w.id
                     },
                     trailingContent = {
                         IconButton(onClick = { onSpeak(w) }) { Icon(Icons.AutoMirrored.Filled.VolumeUp, "발음 듣기") }

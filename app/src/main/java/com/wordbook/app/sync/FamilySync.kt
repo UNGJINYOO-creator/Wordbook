@@ -92,7 +92,7 @@ object FamilySync {
             "known" to w.known, "mastered" to w.mastered, "correctCount" to w.correctCount, "box" to w.box,
             "dueAt" to w.dueAt, "wrongCount" to w.wrongCount, "intervalMs" to w.intervalMs, "excluded" to w.excluded,
             "flagged" to w.flagged, "addedAt" to w.addedAt,
-        )
+        ) + if (w.bookmarked) mapOf("bookmarked" to true) else emptyMap() // only when set, so older words keep their hash
         fun wordHash(w: Word, byId: Map<Long, Deck>) = sha(wordFields(w, byId[w.deckId]?.name).values.joinToString("|"))
 
         // 1. Pull what the other devices changed.
@@ -142,7 +142,7 @@ object FamilySync {
                 known = r["known"] == true, mastered = r["mastered"] == true, correctCount = long("correctCount").toInt(),
                 box = long("box").toInt(), dueAt = long("dueAt"), wrongCount = long("wrongCount").toInt(),
                 intervalMs = long("intervalMs"), excluded = r["excluded"] == true, flagged = r["flagged"] == true,
-                addedAt = long("addedAt"),
+                addedAt = long("addedAt"), bookmarked = r["bookmarked"] == true,
             )
             if (local == null) {
                 if (stored(key) != null) return@forEach // deleted here; the deletion goes up below

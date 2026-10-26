@@ -174,6 +174,7 @@ private fun AppContent() {
                                 onToday = { nav.navigate("study/-1?today=true") },
                                 onStudyDeck = { id -> nav.navigate("study/$id") },
                                 onWrongNote = { nav.navigate("study/-1?wrong=true") },
+                                onWrongList = { nav.navigate("wrongnote") },
                                 onFishing = { giant -> nav.navigate(if (giant) "fishing?giant=true" else "fishing") },
                             )
                         }
@@ -182,6 +183,12 @@ private fun AppContent() {
                                 onReview = { nav.navigate("study/-1?review=true") },
                                 onStudyAll = { nav.navigate("study/-1?all=true") },
                                 onWeekly = { nav.navigate("weekly") },
+                            )
+                        }
+                        composable("wrongnote") {
+                            com.wordbook.app.ui.WrongNoteScreen(
+                                onBack = { nav.popBackStack() },
+                                onStudy = { nav.navigate("study/-1?wrong=true") },
                             )
                         }
                         composable("weekly") {
@@ -239,15 +246,17 @@ private fun AppContent() {
                                 onPhoto = { deckId, uris ->
                                     nav.navigate("scan?uri=${encodeUris(uris)}&deckId=$deckId")
                                 },
-                                onStudy = { deckId, onlyUnknown, modes, staged ->
-                                    nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&mode=$modes&staged=$staged")
+                                onStudy = { deckId, scope, modes, staged ->
+                                    val onlyUnknown = scope == com.wordbook.app.data.StudyScope.UNKNOWN
+                                    val starred = scope == com.wordbook.app.data.StudyScope.STARRED
+                                    nav.navigate("study/$deckId?onlyUnknown=$onlyUnknown&starred=$starred&mode=$modes&staged=$staged")
                                 },
                                 onTest = { deckId -> nav.navigate("study/$deckId?test=true") },
                                 onMatch = { deckId -> nav.navigate("match/$deckId") },
                             )
                         }
                         composable(
-                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}&today={today}&wrong={wrong}&test={test}",
+                            "study/{deckId}?onlyUnknown={onlyUnknown}&review={review}&mode={mode}&staged={staged}&all={all}&today={today}&wrong={wrong}&test={test}&starred={starred}",
                             arguments = listOf(
                                 navArgument("deckId") { type = NavType.LongType },
                                 navArgument("onlyUnknown") { type = NavType.BoolType; defaultValue = false },
@@ -258,6 +267,7 @@ private fun AppContent() {
                                 navArgument("today") { type = NavType.BoolType; defaultValue = false },
                                 navArgument("wrong") { type = NavType.BoolType; defaultValue = false },
                                 navArgument("test") { type = NavType.BoolType; defaultValue = false },
+                                navArgument("starred") { type = NavType.BoolType; defaultValue = false },
                             ),
                         ) {
                             StudyScreen(onBack = { nav.popBackStack() }, onSettings = { nav.navigate("settings") })

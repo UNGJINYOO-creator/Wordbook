@@ -21,6 +21,9 @@ class WrongNote(context: Context) {
     /** Word ids now in the note. */
     val ids: Set<Long> get() = read().filterValues { it.first >= MISSES }.keys
 
+    /** Words now in the note with their misses and right answers in a row since. */
+    val entries: Map<Long, Pair<Int, Int>> get() = read().filterValues { it.first >= MISSES }
+
     /** Records a quiz answer. Returns +1 when the word just entered the note, -1 when it just left, else 0. */
     fun record(wordId: Long, correct: Boolean): Int {
         val m = read()

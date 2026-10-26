@@ -22,6 +22,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.ui.draw.alpha
 import com.wordbook.app.data.StudyMode
+import com.wordbook.app.data.StudyScope
 import com.wordbook.app.data.StudySettings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -121,6 +122,8 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     fun setExcluded(word: Word, excluded: Boolean) = viewModelScope.launch { dao.updateWord(word.copy(excluded = excluded)) }
 
+    fun toggleBookmark(word: Word) = viewModelScope.launch { dao.updateWord(word.copy(bookmarked = !word.bookmarked)) }
+
     fun deleteDeck(onDone: () -> Unit) = viewModelScope.launch {
         dao.unlinkChildren(deckId)
         dao.deleteDeck(deckId)
@@ -144,14 +147,14 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     }
 }
 
-private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모르는 것"), FLAGGED("수정 필요"), EXCLUDED("뺀 카드") }
+private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모르는 것"), STARRED("⭐ 별표"), FLAGGED("수정 필요"), EXCLUDED("뺀 카드") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeckScreen(
     onBack: () -> Unit,
     onPhoto: (deckId: Long, List<Uri>) -> Unit,
-    onStudy: (deckId: Long, onlyUnknown: Boolean, modes: String, staged: Boolean) -> Unit,
+    onStudy: (deckId: Long, scope: StudyScope, modes: String, staged: Boolean) -> Unit,
     onTest: (deckId: Long) -> Unit,
     onMatch: (deckId: Long) -> Unit,
     vm: DeckViewModel = viewModel(factory = DeckViewModel.Factory),
@@ -178,6 +181,9 @@ fun DeckScreen(
     var menuOpen by remember { mutableStateOf(false) }
     var filter by rememberSaveable { mutableStateOf(WordFilter.ALL) }
     var editing by remember { mutableStateOf<Word?>(null) }
+    var cover by remember { mutableStateOf(ListCover.of(vm.settings.listCover)) }
+    // Rows uncovered by a tap while 뜻 가리기 is on; cleared when the cover changes.
+    var revealed by remember(cover) { mutableStateOf(emptySet<Long>()) }
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -199,6 +205,7 @@ fun DeckScreen(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
                 actions = {
+                    if (words.isNotEmpty()) CoverToggle(cover) { cover = it; vm.settings.listCover = it.ordinal }
                     Box {
                         IconButton(onClick = { menuOpen = true }) { Icon(Icons.Default.MoreVert, "단어장 메뉴") }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -245,6 +252,7 @@ fun DeckScreen(
         val shown = when (filter) {
             WordFilter.ALL -> words
             WordFilter.UNKNOWN -> active.filter { !it.known }
+            WordFilter.STARRED -> words.filter { it.bookmarked }
             WordFilter.FLAGGED -> words.filter { it.flagged }
             WordFilter.EXCLUDED -> words.filter { it.excluded }
         }
@@ -272,6 +280,7 @@ fun DeckScreen(
                             val count = when (f) {
                                 WordFilter.ALL -> words.size
                                 WordFilter.UNKNOWN -> unknownCount
+                                WordFilter.STARRED -> words.count { it.bookmarked }
                                 WordFilter.FLAGGED -> words.count { it.flagged }
                                 WordFilter.EXCLUDED -> words.count { it.excluded }
                             }
@@ -299,7 +308,13 @@ fun DeckScreen(
             items(shown, key = { it.id }) { word ->
                 WordRow(
                     word = word,
-                    onClick = { guard { editing = word } },
+                    cover = if (word.id in revealed) ListCover.NONE else cover,
+                    onClick = {
+                        if (cover == ListCover.NONE) guard { editing = word }
+                        else revealed = if (word.id in revealed) revealed - word.id else revealed + word.id
+                    },
+                    onEdit = { guard { editing = word } },
+                    onStar = { vm.toggleBookmark(word) },
                     onToggleMastered = { guard { vm.toggleMastered(word) } },
                     onFlag = { guard { vm.setFlagged(word, !word.flagged) } },
                     onExclude = { guard { vm.setExcluded(word, !word.excluded) } },
@@ -334,12 +349,13 @@ fun DeckScreen(
         StudySheet(
             total = studyCount,
             unknown = unknownCount,
+            starred = active.count { it.bookmarked },
             initialModes = vm.settings.modes,
             initialStaged = vm.settings.staged,
             onDismiss = { showStudy = false },
-            onStart = { onlyUnknown, modes, staged ->
+            onStart = { scope, modes, staged ->
                 showStudy = false
-                onStudy(vm.deckId, onlyUnknown, encodeModes(modes), staged)
+                onStudy(vm.deckId, scope, encodeModes(modes), staged)
             },
         )
     }
@@ -407,7 +423,10 @@ fun DeckScreen(
 @Composable
 private fun WordRow(
     word: Word,
+    cover: ListCover,
     onClick: () -> Unit,
+    onEdit: () -> Unit,
+    onStar: () -> Unit,
     onToggleMastered: () -> Unit,
     onFlag: () -> Unit,
     onExclude: () -> Unit,
@@ -418,7 +437,8 @@ private fun WordRow(
     ListItem(
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(word.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.alpha(dim))
+                if (cover == ListCover.WORD) CoverBar(Modifier.alpha(dim))
+                else Text(word.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.alpha(dim))
                 if (word.flagged) Text("  ⚑ 수정 필요", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 if (word.excluded) Text("  학습에서 뺌", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             }
@@ -426,7 +446,7 @@ private fun WordRow(
         supportingContent = {
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.alpha(dim)) {
                 PosBadge(word.pos, Modifier.padding(end = 6.dp))
-                Text(word.meaning.ifBlank { "(뜻 없음)" })
+                if (cover == ListCover.MEANING) CoverBar(width = 120) else Text(word.meaning.ifBlank { "(뜻 없음)" })
             }
         },
         leadingContent = {
@@ -448,10 +468,12 @@ private fun WordRow(
             }
         },
         trailingContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+            StarButton(word.bookmarked, onStar)
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Default.MoreVert, "카드 메뉴", tint = MaterialTheme.colorScheme.outline) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("수정") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; onClick() })
+                    DropdownMenuItem(text = { Text("수정") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; onEdit() })
                     DropdownMenuItem(
                         text = { Text(if (word.flagged) "수정 필요 표시 지우기" else "오타·수정 필요 표시") },
                         leadingIcon = { Icon(Icons.Default.Flag, null) },
@@ -469,6 +491,7 @@ private fun WordRow(
                     )
                 }
             }
+            }
         },
         modifier = Modifier.clickable(onClick = onClick),
     )
@@ -480,20 +503,24 @@ private fun WordRow(
 private fun StudySheet(
     total: Int,
     unknown: Int,
+    starred: Int,
     initialModes: List<StudyMode>,
     initialStaged: Boolean,
     onDismiss: () -> Unit,
-    onStart: (onlyUnknown: Boolean, modes: List<StudyMode>, staged: Boolean) -> Unit,
+    onStart: (scope: StudyScope, modes: List<StudyMode>, staged: Boolean) -> Unit,
 ) {
-    var onlyUnknown by remember { mutableStateOf(false) }
+    var scope by remember { mutableStateOf(StudyScope.ALL) }
     var modes by remember { mutableStateOf(initialModes) }
     var staged by remember { mutableStateOf(initialStaged) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp).verticalScroll(rememberScrollState())) {
             Text("어떻게 학습할까요?", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
             Row(Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) {
-                FilterChip(selected = !onlyUnknown, onClick = { onlyUnknown = false }, label = { Text("전체 ${total}개") }, modifier = Modifier.padding(end = 8.dp))
-                FilterChip(selected = onlyUnknown, onClick = { onlyUnknown = true }, label = { Text("모르는 것만 ${unknown}개") }, enabled = unknown > 0)
+                FilterChip(selected = scope == StudyScope.ALL, onClick = { scope = StudyScope.ALL }, label = { Text("전체 ${total}개") }, modifier = Modifier.padding(end = 8.dp))
+                FilterChip(selected = scope == StudyScope.UNKNOWN, onClick = { scope = StudyScope.UNKNOWN }, label = { Text("모르는 것만 ${unknown}개") }, enabled = unknown > 0, modifier = Modifier.padding(end = 8.dp))
+                if (starred > 0) {
+                    FilterChip(selected = scope == StudyScope.STARRED, onClick = { scope = StudyScope.STARRED }, label = { Text("⭐ 별표만 ${starred}개") })
+                }
             }
             Text(
                 "처음엔 설정에 저장된 순서가 들어 있어요. 이번 학습만 바꿔도 돼요",
@@ -502,7 +529,7 @@ private fun StudySheet(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
             )
             ModePicker(modes, staged) { m, st -> modes = m; staged = st }
-            PrimaryButton("학습 시작", { onStart(onlyUnknown, modes, staged) }, Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
+            PrimaryButton("학습 시작", { onStart(scope, modes, staged) }, Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
         }
     }
 }

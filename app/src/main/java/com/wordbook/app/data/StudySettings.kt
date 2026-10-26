@@ -13,6 +13,9 @@ enum class StudyMode(val label: String, val description: String) {
     MIXED("섞기", "여러 방식을 무작위로"),
 }
 
+/** Which of a deck's cards a session takes, from the 학습 시작 sheet. */
+enum class StudyScope { ALL, UNKNOWN, STARRED }
+
 /** The ways to study, from easiest to hardest. */
 /** Ready-made step orders for the 묶음 buttons. */
 val ModePresets = listOf(
@@ -142,6 +145,11 @@ class StudySettings(context: Context) {
     var childName: String
         get() = prefs.getString("childName", "") ?: ""
         set(v) = prefs.edit().putString("childName", v.trim()).apply()
+
+    /** Word lists: 0 = show all, 1 = cover the meanings, 2 = cover the words (see [com.wordbook.app.ui.ListCover]). */
+    var listCover: Int
+        get() = prefs.getInt("listCover", 0)
+        set(v) = prefs.edit().putInt("listCover", v).apply()
 
     /** Minimum study time per day in minutes, 0 = no goal. */
     var dailyGoalMinutes: Int

@@ -68,6 +68,8 @@ data class Word(
     val addedAt: Long = System.currentTimeMillis(),
     /** Example sentence with its Korean translation, shown on the back of the card. */
     val example: String = "",
+    /** ⭐ starred by the child to study on its own; separate from [flagged] (needs a fix). */
+    val bookmarked: Boolean = false,
 )
 
 /** Deck row with counts for the home screen. */
