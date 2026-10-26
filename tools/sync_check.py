@@ -126,6 +126,21 @@ def hashes(label):
     say(f"  [{label} hashes] pstudy={p.group(1)[:10] if p else None} bstudy=", re.sub(r'"tgToken":\["s","[^"]*"\]', '"tgToken":…', m.group(1))[:400] if m else None)
 
 
+def wait_sync(before, label, limit=120):
+    """Waits until the app finishes a sync that started after [before] (lastSync moves past it)."""
+    for i in range(limit // 3):
+        v = pref("sync", "lastSync")
+        if v and int(v) > before:
+            say(f"  {label}: synced after {i * 3}s")
+            return
+        time.sleep(3)
+    say(f"  {label}: no sync finished within {limit}s")
+
+
+def now_ms():
+    return int(adb("shell", "date", "+%s").decode().strip() or 0) * 1000
+
+
 def check(label, ok):
     say(("PASS " if ok else "FAIL ") + label)
 
@@ -167,8 +182,9 @@ tap("설정")
 tap("기기 동기화")
 tap("다른 기기에 나온 가족 코드")
 typ(code or "")
+t = now_ms()
 tap("이 코드로 연결")
-time.sleep(15)
+wait_sync(t, "B joining", 180)
 shot("B-joined")
 check("B got A's Telegram token", pref("study", "tgToken") == "TESTTOKEN123")
 check("B got A's Telegram chat id", pref("study", "tgChat") == "111")
@@ -179,8 +195,9 @@ say("  B changes 하루 목표 to 10 words")
 tap("설정")
 tap("하루 목표")
 tap("10개")
+t = now_ms()
 tap("설정 저장")
-time.sleep(10)
+wait_sync(t, "B saving")
 check("B saved 10 words", pref("study", "dailyWords") == "10")
 dump("B after saving")
 remote_study(code)
@@ -189,8 +206,9 @@ save_device("B")
 say("== Back to device A: opens the app ==")
 load_device("A")
 hashes("A before opening")
+t = now_ms()
 start()
-time.sleep(10)
+wait_sync(t, "A opening")
 adb("shell", "input", "keyevent", "3")
 time.sleep(10)
 dump("A after reopening")
