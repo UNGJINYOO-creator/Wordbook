@@ -76,4 +76,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.9.0")
 
     testImplementation("junit:junit:4.13.2")
+    // Real org.json for JVM tests of the sync merge (the Android one is only a stub there).
+    testImplementation("org.json:json:20231013")
 }
