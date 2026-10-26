@@ -16,6 +16,7 @@ android {
         // The CI run number, so the app can tell when a newer build is out (see net/Updater.kt).
         versionCode = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
         versionName = "build-$versionCode"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Modern phones are all 64-bit ARM; dropping other ABIs keeps the APK much smaller
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -78,4 +79,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // Real org.json for JVM tests of the sync merge (the Android one is only a stub there).
     testImplementation("org.json:json:20231013")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
 }

@@ -42,7 +42,7 @@ object EveningReport {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         alarm.cancel(pending)
-        if (settings.reportHour < 0) return
+        if (settings.reportHour < 0) { pending.cancel(); return }
         val next = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, settings.reportHour)
             set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0)
