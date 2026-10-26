@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +38,6 @@ import com.wordbook.app.data.Reward
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.net.Telegram
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 /**
  * A small number field that sits after a row of preset chips. It stays empty while a preset is chosen;
@@ -463,43 +463,58 @@ fun ResetEditor() {
     }
 }
 
-/** 대왕물고기(원정 최종전) question shares: a few one-tap presets, then each kind's percent. */
-@OptIn(ExperimentalLayoutApi::class)
+/** 대왕물고기(원정 최종전) question shares: one summary line; opened, three number fields with −/+ and the last kind filled in as 100 minus the rest. */
 @Composable
 fun GiantMixEditor(settings: StudySettings) {
-    var mix by remember { mutableStateOf(settings.giantMix) }
-    val set = { v: List<Int> -> mix = v; settings.giantMix = v }
+    var mix by remember { mutableStateOf(settings.giantMix.let { m -> m.map { it * 100 / m.sum() }.let { it.take(3) + (100 - it.take(3).sum()) } }) }
+    var open by remember { mutableStateOf(false) }
+    var edits by remember { mutableIntStateOf(0) }
     val names = listOf("4지선다", "빈칸 스펠링", "풀스펠링 쓰기", "듣고 쓰기")
-    val presets = listOf(
-        "기본" to GIANT_MIX_DEFAULT,
-        "풀스펠링 100%" to listOf(0, 0, 100, 0),
-        "쓰기 위주" to listOf(0, 50, 50, 0),
-        "골고루" to listOf(25, 25, 25, 25),
-    )
-    Labeled("⛵ 대왕물고기 문제 비율", "원정 최종전에 나오는 문제 종류를 정해요. 합이 100%가 아니면 비율대로 나눠요.") {
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            presets.forEach { (label, v) -> FilterChip(mix == v, { set(v) }, label = { Text(label) }) }
-        }
-        val total = mix.sum().coerceAtLeast(1)
-        names.forEachIndexed { i, name ->
-            val share = (mix[i] * 100f / total).roundToInt()
-            Text("$name · 실제 ${share}%", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 6.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(0, 25, 50, 75, 100).forEach { p ->
-                    FilterChip(mix[i] == p, {
-                        val next = mix.toMutableList().also { it[i] = p }
-                        // Never leave every kind at 0: that would have no question to ask.
-                        if (next.sum() > 0) set(next)
-                    }, label = { Text("$p%") })
+    val short = listOf("4지", "빈칸", "풀스펠링", "듣기")
+    fun set(i: Int, v: Int) {
+        val others = (0..2).filter { it != i }.sumOf { mix[it] }
+        val next = mix.toMutableList().also { it[i] = v.coerceIn(0, 100 - others) }
+        next[3] = 100 - next.take(3).sum()
+        mix = next; settings.giantMix = next
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Text("⛵ 대왕물고기 문제 비율", style = MaterialTheme.typography.bodyLarge)
+        Text(
+            names.indices.joinToString(" · ") { "${short[it]} ${mix[it]}%" },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        TextButton(onClick = { open = !open }) { Text(if (open) "▾ 비율 접기" else "▸ 비율 바꾸기") }
+        if (open) key(edits) {
+            (0..2).forEach { i ->
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(names[i], style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    TextButton(onClick = { set(i, mix[i] - 5); edits++ }) { Text("−") }
+                    var text by remember { mutableStateOf(mix[i].toString()) }
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { v ->
+                            text = v.filter { it.isDigit() }.take(3)
+                            text.toIntOrNull()?.let { n -> set(i, n); if (mix[i] != n) text = mix[i].toString() }
+                        },
+                        singleLine = true,
+                        suffix = { Text("%") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.width(88.dp),
+                    )
+                    TextButton(onClick = { set(i, mix[i] + 5); edits++ }) { Text("+") }
                 }
             }
-        }
-        if (mix[3] > 0) {
+            Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("${names[3]} (자동)", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                Text("${mix[3]}%", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(end = 16.dp))
+            }
             Text(
-                "소리가 꺼져 있으면 듣고 쓰기는 풀스펠링 쓰기로 바뀌어요.",
+                "합계는 늘 100%예요. 듣고 쓰기는 100에서 나머지를 뺀 값이에요. 소리가 꺼져 있으면 듣고 쓰기는 풀스펠링 쓰기로 바뀌어요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )
+            TextButton(onClick = { mix = GIANT_MIX_DEFAULT; settings.giantMix = GIANT_MIX_DEFAULT; edits++ }) { Text("기본으로 (60·25·0·15)") }
         }
     }
 }
