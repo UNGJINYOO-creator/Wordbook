@@ -187,7 +187,13 @@ object FamilySync {
             val key = wordKey(w, byId)
             wordKeys += key
             val h = wordHash(w, byId)
-            if (stored(key) != h) {
+            // Built-in words nobody has touched yet are the same on every device: not sent until studied,
+            // so a new family or a newly joined device doesn't write all 1800 of them.
+            val untouched = w.addedAt == 0L && w.text.trim().lowercase() in builtIn && w.box == 0 && !w.known && !w.mastered &&
+                w.correctCount == 0 && w.wrongCount == 0 && !w.excluded && !w.flagged && !w.bookmarked
+            if (untouched && stored(key) == null) {
+                hashes.put(key, h)
+            } else if (stored(key) != h) {
                 out += Triple("words", key, wordFields(w, byId[w.deckId]?.name) + mapOf("deleted" to false, "updatedAt" to now))
                 hashes.put(key, h)
             }
