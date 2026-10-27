@@ -38,13 +38,13 @@ def nodes():
 
 def tap(text, tries=7):
     for k in range(tries):
-        for n in nodes():
-            t = (n.get("text") or "") + "|" + (n.get("content-desc") or "")
-            if text in t:
-                x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
-                adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
-                time.sleep(1.5)
-                return True
+        # The shortest match is the button itself, not a help line that mentions it ("…💾 설정 저장을 누르면…").
+        hits = [n for n in nodes() if text in (n.get("text") or "") + "|" + (n.get("content-desc") or "")]
+        for n in sorted(hits, key=lambda n: len(n.get("text") or "") + len(n.get("content-desc") or ""))[:1]:
+            x1, y1, x2, y2 = map(int, re.findall(r"\d+", n.get("bounds")))
+            adb("shell", "input", "tap", str((x1 + x2) // 2), str((y1 + y2) // 2))
+            time.sleep(1.5)
+            return True
         # Maybe off screen: look further down first, then back up.
         if k < 3:
             adb("shell", "input", "swipe", "540", "1500", "540", "600", "600")
