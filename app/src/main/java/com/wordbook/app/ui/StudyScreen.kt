@@ -124,7 +124,6 @@ import com.wordbook.app.data.StudyMode
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.data.AnswerEntry
 import com.wordbook.app.data.AnswerLog
-import com.wordbook.app.data.Report
 import com.wordbook.app.data.EveningReport
 import com.wordbook.app.data.Weakness
 import com.wordbook.app.data.MasterCheck

@@ -33,7 +33,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.GIANT_MIX_DEFAULT
 import com.wordbook.app.data.Game
-import com.wordbook.app.data.Report
 import com.wordbook.app.data.Reward
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.net.Telegram
@@ -282,7 +281,7 @@ fun ParentAlerts(settings: StudySettings) {
     var backup by remember { mutableStateOf(settings.telegramBackup) }
     val context = androidx.compose.ui.platform.LocalContext.current
     Column {
-        Labeled("🌙 저녁 리포트 보내는 시간", "하루 한 통: 세 줄 요약, 남은 양, 학습 내용, 낚시·원정·시험 결과를 모아서 보내요") {
+        Labeled("🌙 저녁 리포트 보내는 시간", "하루 한 통: 세 줄 요약, 약한 부분, 낚시·원정·시험 결과를 짧게 모아서 보내요") {
             NumberChoice(reportHour, Opt.reportHour, "시", 23, min = 0) {
                 reportHour = it; settings.reportHour = it; com.wordbook.app.data.EveningReport.schedule(context)
             }

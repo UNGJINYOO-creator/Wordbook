@@ -15,8 +15,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * The parents' one Telegram a day: at the set evening hour, a three-line summary on top, what is still
- * missing, the full study report, and the day's 낚시·원정·시험 results collected through the day.
+ * The parents' one Telegram a day: at the set evening hour, a three-line summary on top, the weak spots,
+ * and the day's 낚시·원정·시험 results summed up in a few lines (see [EveningSummary]).
  */
 object EveningReport {
     private val dayFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -68,13 +68,16 @@ object EveningReport {
         return error
     }
 
+    private val posNames = mapOf("명" to "명사", "동" to "동사", "형" to "형용사", "부" to "부사")
+    private val modeNames = mapOf(StudyMode.CHOICE to "객관식", StudyMode.SPELLING to "빈칸", StudyMode.DICTATION to "듣고 쓰기")
+    private fun pct(right: Int, n: Int) = if (n == 0) 0 else right * 100 / n
+
+    /** About fifteen lines: the day in three, the weak spots, then 낚시·원정·시험 summed up. */
     suspend fun build(context: Context): String {
         val settings = StudySettings(context)
         val stats = DailyStats(context)
-        val log = AnswerLog(context)
+        val answers = AnswerLog(context).read()
         val dao = AppDatabase.get(context).wordDao()
-        val fishing = Fishing(context)
-        val answers = log.read()
         val missing = Reminder.missing(context)
         val endOfTomorrow = Calendar.getInstance().apply {
             add(Calendar.DAY_OF_YEAR, 1)
@@ -82,39 +85,66 @@ object EveningReport {
         }.timeInMillis
         val due = dao.countDue(endOfTomorrow)
         val newWords = settings.dailyWords.takeIf { it > 0 } ?: 10
+        val right = answers.count { it.correct }
 
-        // 👍 the best of the day
+        // 👍 the day in one line
         val good = buildList {
             val goalsSet = settings.dailyWords > 0 || settings.dailyGoalMinutes > 0
-            if (goalsSet && missing == null) add("오늘 목표 달성")
+            if (goalsSet && missing == null) add("목표 달성")
+            if (stats.studyMs >= 60_000) add("${stats.studyMs / 60_000}분 공부")
             if (stats.learnedCount > 0) add("${stats.learnedCount}단어 외움")
-            if (fishing.caughtToday) add("낚시에서 ${fishing.caughtFishToday} 낚음")
+            if (answers.isNotEmpty()) add("정답률 ${pct(right, answers.size)}%")
         }
-        // ⚠️ the weakest point, only when it is clearly weak
-        val worry = run {
-            val posNames = mapOf("명" to "명사", "동" to "동사", "형" to "형용사", "부" to "부사")
-            val weakPos = answers.filter { it.pos in posNames }.groupBy { it.pos }
-                .filter { it.value.size >= 5 }
-                .map { (pos, l) -> posNames.getValue(pos) to l.count { it.correct } * 100 / l.size }
-                .filter { it.second < 75 }.minByOrNull { it.second }
-            val hardest = answers.filter { !it.correct }.groupingBy { it.text }.eachCount()
-                .filter { it.value >= 2 }.maxByOrNull { it.value }
-            listOfNotNull(
-                weakPos?.let { "${it.first} 정답률 ${it.second}%" },
-                hardest?.let { "${it.key}를 ${it.value}번 틀림" },
-            ).joinToString(", ").ifEmpty { "특별히 약한 부분은 없어요" }
-        }
+        // ⚠️ only what is clearly weak
+        val byPos = answers.filter { it.pos in posNames }.groupBy { it.pos }
+            .map { (pos, l) -> Triple(posNames.getValue(pos), pct(l.count { it.correct }, l.size), l.size) }
+            .sortedByDescending { it.third }
+        val byMode = answers.groupBy { it.mode }.filterKeys { it in modeNames }
+            .map { (mode, l) -> Triple(modeNames.getValue(mode), pct(l.count { it.correct }, l.size), l.size) }
+        val missedMany = answers.groupBy { it.wordId }.values
+            .map { l -> l.first().text to l.count { !it.correct } }
+            .filter { it.second >= 2 }.sortedByDescending { it.second }
+        val guesses = answers.count { it.mode == StudyMode.CHOICE && it.ms in 1 until 1000 }
+        val worry = listOfNotNull(
+            weakest(byPos)?.let { "${it.first} 정답률 ${it.second}%" },
+            missedMany.takeIf { it.isNotEmpty() }?.let { l ->
+                "2번 이상 틀린 단어: " + l.take(5).joinToString(", ") { it.first } + if (l.size > 5) " 등" else ""
+            },
+            if (guesses >= 5) "1초 안에 찍은 객관식 ${guesses}개" else null,
+        )
 
         return buildString {
             append("🌙 낚아보카 저녁 리포트 · ${SimpleDateFormat("M월 d일 (E)", Locale.KOREA).format(Date())}\n\n")
-            if (missing != null) append("⏰ 아직 오늘 목표까지 $missing 남았어요\n\n")
-            append("👍 ${good.joinToString(", ").ifEmpty { "오늘은 아직 공부 기록이 없어요" }}\n")
-            append("⚠️ $worry\n")
+            if (missing != null) append("⏰ 아직 오늘 목표까지 $missing 남았어요\n")
+            append("👍 ${good.joinToString(" · ").ifEmpty { "오늘은 아직 공부 기록이 없어요" }}\n")
+            append("⚠️ ${worry.joinToString(" · ").ifEmpty { "특별히 약한 부분은 없어요" }}\n")
             append("📅 내일: 복습 ${due}개 + 새 단어 ${newWords}개\n")
-            append("\n━━━━━━━━━━\n\n")
-            append(Report.build(context).substringAfter("\n\n"))
-            collected(context)?.let { append("\n━━━━━━━━━━\n🎣 오늘의 낚시 · 원정 · 시험\n\n").append(it).append("\n") }
+
+            val details = buildList {
+                if (byPos.isNotEmpty()) add("📖 품사별: " + byPos.take(4).joinToString(" · ") { "${it.first} ${it.second}%" })
+                if (byMode.isNotEmpty()) {
+                    val weak = weakest(byMode)
+                    add("✍️ 방식별: " + byMode.joinToString(" · ") { "${it.first} ${it.second}%" + if (it == weak) " ⚠️" else "" })
+                }
+                val pairs = answers.filter { !it.correct && it.mode == StudyMode.CHOICE && it.response.isNotBlank() }
+                    .groupingBy { "${it.text}↔${it.response}" }.eachCount().entries.sortedByDescending { it.value }
+                if (pairs.isNotEmpty()) add("🔀 헷갈린 짝: " + pairs.take(2).joinToString(", ") { it.key })
+                val typos = answers.filter { !it.correct && it.mode != StudyMode.CHOICE && EveningSummary.isRealTypo(it.response, it.text) }
+                    .distinctBy { it.wordId }
+                if (typos.isNotEmpty()) add("🔤 틀린 스펠링: " + typos.take(3).joinToString(", ") { "${it.response.trim()}→${it.text}" })
+            }
+            if (details.isNotEmpty()) append("\n").append(details.joinToString("\n")).append("\n")
+
+            val games = collected(context)?.split("\n\n")?.filter { it.isNotBlank() }.orEmpty()
+            val gameLines = EveningSummary.games(games)
+            if (gameLines.isNotEmpty()) append("\n").append(gameLines.joinToString("\n")).append("\n")
         }
+    }
+
+    /** The lowest accuracy, when it is clearly low and based on enough answers. */
+    private fun weakest(rows: List<Triple<String, Int, Int>>): Triple<String, Int, Int>? {
+        val w = rows.filter { it.third >= 5 }.minByOrNull { it.second } ?: return null
+        return if (w.second < 75 && rows.size > 1) w else null
     }
 
     /** A short line the moment every goal that is switched on is met. */
