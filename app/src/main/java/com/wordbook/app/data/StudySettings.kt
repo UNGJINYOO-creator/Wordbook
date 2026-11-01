@@ -295,3 +295,6 @@ class StudySettings(context: Context) {
         fun secondsText(ms: Long): String = if (ms % 1000 == 0L) "${ms / 1000}" else "${ms / 1000}.${ms % 1000 / 100}"
     }
 }
+
+/** The mix the giant battle used before it could be chosen. */
+val GIANT_MIX_DEFAULT = listOf(60, 25, 0, 15)
