@@ -647,8 +647,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (undoStack.size > 30) undoStack.removeFirst()
         canUndo = !test
         // Card swipes are the child's own word, so only quiz answers count for stars and the right rate.
-        // A 객관식 answer picked in under a second is a guess: no stars, no goal, no right rate.
-        val guessed = mode == StudyMode.CHOICE && answerMs in 1 until GUESS_MS
+        // A 객관식 answer picked faster than the 찍기 limit (설정, default 1초) is a guess: no stars, no goal, no right rate.
+        val guessed = mode == StudyMode.CHOICE && answerMs in 1 until settings.guessMs
         if (guessed && answer != Answer.UNKNOWN) celebrate("너무 빨라요! 뜻을 읽고 골라요 🙂", sound = false)
         if (mode != StudyMode.CARD) {
             answerLog.add(
@@ -796,8 +796,6 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     }
 
     companion object {
-        const val NEW_PER_DAY = 20
-        /** 객관식 answers faster than this count as guesses. */
         const val GUESS_MS = 1000L
 
         /** New words in 오늘 학습: the daily word goal, or [NEW_PER_DAY] without one. */

@@ -525,6 +525,9 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                         Labeled("이 시간 동안 화면을 안 건드리면 학습 시간이 멈춰요") {
                             NumberChoice(idle, Opt.idle, "초", 600, min = 5) { idle = it; settings.idleSeconds = it }
                         }
+                        Spacer(Modifier.height(12.dp))
+                        Text("찍기 막기", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                        GuessLimitField(settings)
                         Text(
                             "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
                                 "틀리면 간격이 절반으로 줄고 오늘 다시 나와요.",
@@ -799,4 +802,38 @@ private fun UpdateCard() {
         }
     }
     offer?.let { UpdateDialog(it) { offer = null } }
+}
+
+/** 객관식 찍기 limit in seconds (0.1s steps, 0 = off); saved as it is typed. */
+@Composable
+private fun GuessLimitField(settings: StudySettings) {
+    var text by remember { mutableStateOf(StudySettings.secondsText(settings.guessMs)) }
+    val tenths = text.toDoubleOrNull()?.let { Math.round(it * 10).toInt() }
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("객관식을 이 시간보다 빨리 고르면 정답으로 안 쳐요", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+        OutlinedTextField(
+            value = text,
+            onValueChange = { v ->
+                // Digits and one dot, at most one place after it (e.g. 1.5).
+                val clean = v.filter { it.isDigit() || it == '.' }
+                val dot = clean.indexOf('.')
+                text = (if (dot < 0) clean else clean.substring(0, dot + 1) + clean.substring(dot + 1).replace(".", "").take(1)).take(4)
+                text.toDoubleOrNull()?.let { settings.guessTenths = Math.round(it * 10).toInt().coerceIn(0, 100) }
+            },
+            suffix = { Text("초") },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+            modifier = Modifier.width(110.dp),
+        )
+    }
+    Text(
+        when {
+            tenths == null -> "숫자를 써 주세요 (예: 1, 1.5, 2)"
+            tenths <= 0 -> "0초: 꺼져 있어요. 아무리 빨리 골라도 정답으로 쳐요"
+            else -> "너무 빨리 고르면 물고기·목표·정답률에 안 들어가고, 낚시에서는 0m예요. 0을 쓰면 꺼져요"
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+    )
 }

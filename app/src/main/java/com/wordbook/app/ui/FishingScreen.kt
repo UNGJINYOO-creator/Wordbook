@@ -390,7 +390,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         answered = correct
         val ms = System.currentTimeMillis() - questionAt
         // A 객관식 answer in under a second is a guess: it gives no time.
-        val guessed = mode == StudyMode.CHOICE && ms < StudyViewModel.GUESS_MS
+        val guessed = mode == StudyMode.CHOICE && ms < settings.guessMs
         total++
         if (correct) {
             right++

@@ -53,6 +53,12 @@ class StudySettings(context: Context) {
         set(v) = prefs.edit().putInt("sessionSize", v).apply()
 
     /** The study timer pauses after this many seconds without a touch. */
+    /** 객관식 answers faster than this (tenths of a second) are guesses and don't count; 0 = off. */
+    var guessTenths: Int
+        get() = prefs.getInt("guessTenths", 10)
+        set(v) = prefs.edit().putInt("guessTenths", v).apply()
+    val guessMs: Long get() = guessTenths * 100L
+
     var idleSeconds: Int
         get() = prefs.getInt("idleSeconds", 20)
         set(v) = prefs.edit().putInt("idleSeconds", v).apply()
@@ -283,7 +289,9 @@ class StudySettings(context: Context) {
     var recentDays: Int
         get() = prefs.getInt("recentDays", 7)
         set(v) = prefs.edit().putInt("recentDays", v).apply()
-}
 
-/** The mix the giant battle used before it could be chosen. */
-val GIANT_MIX_DEFAULT = listOf(60, 25, 0, 15)
+    companion object {
+        /** 1000 → "1", 1500 → "1.5". */
+        fun secondsText(ms: Long): String = if (ms % 1000 == 0L) "${ms / 1000}" else "${ms / 1000}.${ms % 1000 / 100}"
+    }
+}
