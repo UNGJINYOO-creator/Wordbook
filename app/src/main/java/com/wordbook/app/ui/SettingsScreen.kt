@@ -79,6 +79,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     var restored by remember { mutableStateOf(false) }
     var settingPin by remember { mutableStateOf(false) }
+    var settingPattern by remember { mutableStateOf(false) }
+    var hasPattern by remember { mutableStateOf(settings.hasPattern) }
+    var useFinger by remember { mutableStateOf(settings.useBiometric) }
+    val fingerReady = remember { Biometric.available(context) }
     var wizard by remember { mutableStateOf(false) }
     // Bumped when the wizard closes, so every row reads the settings again.
     var refresh by remember { mutableIntStateOf(0) }
@@ -113,13 +117,19 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
     // Locks again whenever the tab is left, since this state is forgotten then.
     var unlocked by remember { mutableStateOf(!settings.hasPin) }
     if (!unlocked) {
-        PinLock(check = settings::checkPin, onUnlocked = { unlocked = true })
+        SettingsLock(settings, onUnlocked = { unlocked = true })
         return
     }
     if (settingPin) {
         NewPinDialog(
             onDismiss = { settingPin = false },
             onDone = { pin -> settings.setPin(pin); hasPin = true; settingPin = false; saved() },
+        )
+    }
+    if (settingPattern) {
+        NewPatternDialog(
+            onDismiss = { settingPattern = false },
+            onDone = { dots -> settings.setPattern(dots); hasPattern = true; settingPattern = false; saved() },
         )
     }
     if (wizard) {
@@ -325,8 +335,24 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             NumberChoice(fishTries, Opt.tries, "번", 20, min = 0) { fishTries = it; settings.fishTries = it }
                         }
                         GiantMixEditor(settings)
+                        // +/- per answer stay open: these are what a parent tunes most.
+                        key(fishReset) {
+                            val changed = { fishLevel = settings.fishLevel() }
+                            Text("✅ 맞히면 끌어오는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                            FishNumber("객관식", "m", settings.fishRight, 0, 60) { settings.fishRight = it; changed() }
+                            FishNumber("빈칸·듣고 쓰기", "m", settings.fishRightTyping, 0, 60) { settings.fishRightTyping = it; changed() }
+                            FishNumber("3개 연속 맞히면 더", "m", settings.fishCombo, 0, 60) { settings.fishCombo = it; changed() }
+                            Text("❌ 틀리면 멀어지는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                            FishNumber("객관식", "m", settings.fishWrong, 0, 60) { settings.fishWrong = it; changed() }
+                            FishNumber("빈칸·듣고 쓰기", "m", settings.fishWrongTyping, 0, 60) { settings.fishWrongTyping = it; changed() }
+                            Text(
+                                "숫자를 지우고 새로 쓰면 바로 저장돼요. 틀릴 때를 크게, 맞힐 때를 작게 하면 어려워져요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                        }
                         TextButton(onClick = { fishDetail = !fishDetail }) {
-                            Text(if (fishDetail) "▾ 세부 거리 접기" else "▸ 세부 거리 직접 조정")
+                            Text(if (fishDetail) "▾ 시작 거리·도망 속도 접기" else "▸ 시작 거리·도망 속도 직접 조정")
                         }
                         if (fishDetail) key(fishReset) {
                             Text(
@@ -344,8 +370,6 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 settings.fishGoal = it
                                 settings.fishStart = (it - start).coerceAtLeast(1); changed()
                             }
-                            FishNumber("맞히면 끌어오는 거리 (빈칸·듣고 쓰기 +2m)", "m", settings.fishRight, 1, 60) { settings.fishRight = it; changed() }
-                            FishNumber("틀리면 멀어지는 거리", "m", settings.fishWrong, 0, 60) { settings.fishWrong = it; changed() }
                             FishNumber("처음: 10초마다 도망가는 거리", "m", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it; changed() }
                             FishNumber("가까울 때: 10초마다 도망가는 거리", "m", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it; changed() }
                         }
@@ -353,7 +377,8 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 }
                 Group(
                     "👨‍👩‍👧 비밀번호와 보상",
-                    (if (hasPin) "비밀번호 켬" else "비밀번호 없음") + " · 보상 ${rewardCount}개",
+                    (if (!hasPin) "비밀번호 없음" else listOfNotNull("비밀번호", "패턴".takeIf { hasPattern }, "지문".takeIf { useFinger }).joinToString("·") + " 켬") +
+                        " · 보상 ${rewardCount}개",
                     open == "parent", { toggle("parent") },
                 ) {
                     Body {
@@ -366,7 +391,40 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                         Row {
                             TextButton(onClick = { settingPin = true }) { Text(if (hasPin) "비밀번호 바꾸기" else "비밀번호 설정") }
                             if (hasPin) {
-                                TextButton(onClick = { settings.setPin(null); hasPin = false; saved() }) { Text("비밀번호 끄기") }
+                                TextButton(onClick = {
+                                    settings.clearLock(); hasPin = false; hasPattern = false; useFinger = false; saved()
+                                }) { Text("비밀번호 끄기") }
+                            }
+                        }
+                        if (hasPin) {
+                            Text("패턴", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                            Text(
+                                if (hasPattern) "설정을 열 때 패턴을 그려요 (비밀번호로도 열 수 있어요)" else "비밀번호 대신 점을 이어 그려서 열 수 있어요",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            Row {
+                                TextButton(onClick = { settingPattern = true }) { Text(if (hasPattern) "패턴 바꾸기" else "패턴 정하기") }
+                                if (hasPattern) {
+                                    TextButton(onClick = { settings.setPattern(null); hasPattern = false; saved() }) { Text("패턴 끄기") }
+                                }
+                            }
+                            if (fingerReady) {
+                                SwitchRow("지문으로 열기", "설정을 열 때 지문 창이 먼저 떠요", useFinger) { on ->
+                                    if (on) {
+                                        // Check once that this phone's fingerprint really works before switching it on.
+                                        Biometric.ask(context, "지문 확인", onSuccess = { settings.useBiometric = true; useFinger = true; saved() })
+                                    } else {
+                                        settings.useBiometric = false; useFinger = false; saved()
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    "지문: 이 기기에 등록된 지문이 없어요. 폰 설정에서 지문을 먼저 등록하면 켤 수 있어요.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.padding(top = 8.dp),
+                                )
                             }
                         }
                         Labeled("보상 쿠폰", "아이가 단어를 외워 낚은 물고기로 받을 수 있는 보상이에요. 쿠폰은 복습·통계 탭에서 받아요.") {
@@ -548,13 +606,17 @@ private fun PinField(value: String, onChange: (String) -> Unit, label: String, m
     )
 }
 
-/** Shown instead of the settings while a password is set and not yet entered. */
+/** Shown instead of the settings while a password is set: pattern or fingerprint when switched on, PIN always works. */
 @Composable
-private fun PinLock(check: (String) -> Boolean, onUnlocked: () -> Unit) {
+private fun SettingsLock(settings: StudySettings, onUnlocked: () -> Unit) {
+    val context = LocalContext.current
+    val finger = remember { settings.useBiometric && Biometric.available(context) }
+    var usePin by remember { mutableStateOf(!settings.hasPattern) }
     var pin by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf(false) }
-    val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    var error by remember { mutableStateOf<String?>(null) }
+    val askFinger = { Biometric.ask(context, "설정 열기", onSuccess = onUnlocked) }
+    // The fingerprint prompt comes up by itself; closing it leaves the pattern or PIN.
+    LaunchedEffect(Unit) { if (finger) askFinger() }
     Column(
         Modifier.fillMaxSize().padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -562,22 +624,40 @@ private fun PinLock(check: (String) -> Boolean, onUnlocked: () -> Unit) {
     ) {
         Text("🔒", style = MaterialTheme.typography.displayMedium)
         Spacer(Modifier.height(16.dp))
-        Text("설정은 비밀번호가 필요해요", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(24.dp))
-        PinField(
-            value = pin,
-            onChange = {
-                pin = it
-                error = false
-                if (it.length == 4) {
-                    if (check(it)) onUnlocked() else { error = true; pin = "" }
-                }
-            },
-            label = "비밀번호 4자리",
-            modifier = Modifier.focusRequester(focus),
+        Text(
+            if (usePin) "설정은 비밀번호가 필요해요" else "패턴을 그려 설정을 열어요",
+            style = MaterialTheme.typography.titleLarge,
         )
-        if (error) {
-            Text("비밀번호가 달라요", color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
+        Spacer(Modifier.height(24.dp))
+        if (usePin) {
+            val focus = remember { FocusRequester() }
+            LaunchedEffect(Unit) { if (!finger) runCatching { focus.requestFocus() } }
+            PinField(
+                value = pin,
+                onChange = {
+                    pin = it
+                    error = null
+                    if (it.length == 4) {
+                        if (settings.checkPin(it)) onUnlocked() else { error = "비밀번호가 달라요"; pin = "" }
+                    }
+                },
+                label = "비밀번호 4자리",
+                modifier = Modifier.focusRequester(focus),
+            )
+        } else {
+            PatternPad(onDone = { dots ->
+                val ok = settings.checkPattern(dots)
+                if (ok) onUnlocked() else error = "패턴이 달라요"
+                ok
+            })
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp)) }
+        Spacer(Modifier.height(16.dp))
+        if (finger) TextButton(onClick = askFinger) { Text("👆 지문으로 열기") }
+        if (settings.hasPattern) {
+            TextButton(onClick = { usePin = !usePin; error = null; pin = "" }) {
+                Text(if (usePin) "패턴으로 열기" else "비밀번호로 열기")
+            }
         }
     }
 }

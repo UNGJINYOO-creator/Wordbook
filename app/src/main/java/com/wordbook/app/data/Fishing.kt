@@ -106,6 +106,9 @@ class Fishing(context: Context) {
     val goal: Double get() = maxOf(settings.fishGoal, settings.fishStart + 10).toDouble()
     val right: Double get() = settings.fishRight.toDouble()
     val wrong: Double get() = settings.fishWrong.toDouble()
+    val rightTyping: Double get() = settings.fishRightTyping.toDouble()
+    val wrongTyping: Double get() = settings.fishWrongTyping.toDouble()
+    val comboBonus: Double get() = settings.fishCombo.toDouble()
 
     /** How fast the line runs out: faster as the fish gets close, since it fights harder. */
     fun drainPerSecond(seconds: Double): Double {
@@ -118,10 +121,6 @@ class Fishing(context: Context) {
     fun best(fish: Fish): Double = prefs.getFloat("best_${fish.key}", 0f).toDouble()
 
     companion object {
-        /** Spelling and dictation take longer to answer, so they give 2 seconds more. */
-        const val TYPING_EXTRA = 2.0
-        /** Every 3 right in a row reels in this much more. */
-        const val COMBO_BONUS = 3.0
         const val CATCH_STARS = 10
         /** Extra stars for a catch in the 새 바다 (new words only). */
         const val NEW_SEA_BONUS = 5

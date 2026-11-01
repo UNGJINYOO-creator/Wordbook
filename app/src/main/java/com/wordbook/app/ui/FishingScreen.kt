@@ -398,8 +398,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
                 popUp("너무 빨라요! 0m")
             } else {
                 combo++
-                val bonus = fishing.right + (if (mode == StudyMode.CHOICE) 0.0 else Fishing.TYPING_EXTRA) +
-                    (if (combo % 3 == 0) Fishing.COMBO_BONUS else 0.0)
+                val bonus = (if (mode == StudyMode.CHOICE) fishing.right else fishing.rightTyping) +
+                    (if (combo % 3 == 0) fishing.comboBonus else 0.0)
                 seconds += bonus
                 popUp((if (combo % 3 == 0) "🔥 릴 감기! " else "🎣 ") + "${bonus.toInt()}m 끌어왔어요!")
                 if (settings.soundEffects) {
@@ -408,10 +408,11 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             }
         } else {
             combo = 0
-            seconds -= fishing.wrong
+            val lost = if (mode == StudyMode.CHOICE) fishing.wrong else fishing.wrongTyping
+            seconds -= lost
             missed += w
             pullId++
-            popUp("😱 물고기가 도망치고 있어요! +${fishing.wrong.toInt()}m")
+            popUp("😱 물고기가 도망치고 있어요! +${lost.toInt()}m")
         }
         answerLog.add(AnswerEntry(System.currentTimeMillis(), w.id, w.text, w.pos, mode, correct, false, if (correct) "" else response, ms))
         if (!guessed) {
@@ -660,9 +661,9 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit, onLog: () -> Unit) {
         steps = dailySteps,
         rules = listOf(
             "🐟 물고기는 ${(f.goal - f.start).toInt()}m 앞에서 시작해요. 가만히 있으면 조금씩 도망가요",
-            "✅ 맞히면 ${f.right.toInt()}m 끌어와요 (빈칸·듣고 쓰기는 ${(f.right + Fishing.TYPING_EXTRA).toInt()}m)",
-            "🔥 3개 연속 맞히면 '릴 감기!' ${Fishing.COMBO_BONUS.toInt()}m 더",
-            "❌ 틀리면 ${f.wrong.toInt()}m 멀어져요. 너무 빨리 찍으면 0m",
+            "✅ 맞히면 ${f.right.toInt()}m 끌어와요 (빈칸·듣고 쓰기는 ${f.rightTyping.toInt()}m)",
+            "🔥 3개 연속 맞히면 '릴 감기!' ${f.comboBonus.toInt()}m 더",
+            "❌ 틀리면 ${f.wrong.toInt()}m 멀어져요 (빈칸·듣고 쓰기는 ${f.wrongTyping.toInt()}m). 너무 빨리 찍으면 0m",
             "🧵 ${f.goal.toInt()}m까지 멀어지면 줄이 끊어져요. 가까워질수록 물고기가 세게 버텨요",
             "🎯 낚으면 선물 물고기 ${Fishing.CATCH_STARS}마리! (방금 배운 단어로 하면 ${Fishing.CATCH_STARS + Fishing.NEW_SEA_BONUS}마리)" + f.triesNote,
             "✨ 많이 맞히고 빨리 낚을수록 희귀한 물고기가 잘 걸려요",

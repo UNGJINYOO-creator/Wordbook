@@ -1030,7 +1030,7 @@ private fun CoverDialog(deck: DeckSummary, level: Int, onDismiss: () -> Unit, on
     )
 }
 
-/** Asks for the settings password before a step that can't be undone. */
+/** Asks for the settings password (or pattern / fingerprint when switched on) before a step that can't be undone. */
 @Composable
 fun PinConfirmDialog(
     text: String,
@@ -1039,27 +1039,50 @@ fun PinConfirmDialog(
     onConfirm: () -> Unit,
     confirmText: String = "삭제",
 ) {
+    val context = LocalContext.current
+    val lock = remember { com.wordbook.app.data.StudySettings(context) }
+    val finger = remember { lock.useBiometric && Biometric.available(context) }
+    var usePin by remember { mutableStateOf(!lock.hasPattern) }
     var pin by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text)
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { v -> pin = v.filter { it.isDigit() }.take(4); error = false },
-                    label = { Text("비밀번호 4자리") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                )
-                if (error) Text("비밀번호가 달라요", color = MaterialTheme.colorScheme.error)
+                if (usePin) {
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { v -> pin = v.filter { it.isDigit() }.take(4); error = null },
+                        label = { Text("비밀번호 4자리") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    )
+                } else {
+                    Text("패턴을 그리면 바로 진행돼요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                    PatternPad(size = 200.dp, onDone = { dots ->
+                        val ok = lock.checkPattern(dots)
+                        if (ok) onConfirm() else error = "패턴이 달라요"
+                        ok
+                    })
+                }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                if (finger) {
+                    TextButton(onClick = { Biometric.ask(context, "부모님 확인", onSuccess = onConfirm) }) { Text("👆 지문으로 확인") }
+                }
+                if (lock.hasPattern) {
+                    TextButton(onClick = { usePin = !usePin; error = null; pin = "" }) {
+                        Text(if (usePin) "패턴으로 확인" else "비밀번호로 확인")
+                    }
+                }
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (check(pin)) onConfirm() else { error = true; pin = "" } }, enabled = pin.length == 4) {
-                Text(confirmText)
+            if (usePin) {
+                TextButton(onClick = { if (check(pin)) onConfirm() else { error = "비밀번호가 달라요"; pin = "" } }, enabled = pin.length == 4) {
+                    Text(confirmText)
+                }
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },

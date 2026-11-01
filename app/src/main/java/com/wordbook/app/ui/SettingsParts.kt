@@ -126,23 +126,29 @@ fun SwitchRow(title: String, desc: String? = null, checked: Boolean, onChange: (
 }
 
 /** Ready-made fishing difficulty; distances in metres (the line snaps at 200m). */
-class FishLevel(val name: String, val start: Int, val right: Int, val wrong: Int, val drainStart: Int, val drainEnd: Int)
+class FishLevel(
+    val name: String, val start: Int, val right: Int, val wrong: Int, val drainStart: Int, val drainEnd: Int,
+    val rightTyping: Int = right + 2, val wrongTyping: Int = wrong, val combo: Int = 3,
+)
 
 val FishLevels = listOf(
     FishLevel("쉬움", 80, 6, 2, 3, 8),
     FishLevel("보통", 100, 5, 3, 5, 12),
     FishLevel("어려움", 120, 4, 4, 7, 15),
+    FishLevel("아주 어려움", 130, 3, 6, 9, 18, rightTyping = 5, wrongTyping = 5, combo = 2),
 )
 
 fun StudySettings.applyFish(level: FishLevel) {
     // Stored as the old time values: distance = fishGoal - time.
     fishGoal = 200; fishStart = 200 - level.start
     fishRight = level.right; fishWrong = level.wrong
+    fishRightTyping = level.rightTyping; fishWrongTyping = level.wrongTyping; fishCombo = level.combo
     fishDrainStart = level.drainStart; fishDrainEnd = level.drainEnd
 }
 
 fun StudySettings.fishLevel(): FishLevel? = FishLevels.firstOrNull {
     fishGoal == 200 && fishGoal - fishStart == it.start && fishRight == it.right && fishWrong == it.wrong &&
+        fishRightTyping == it.rightTyping && fishWrongTyping == it.wrongTyping && fishCombo == it.combo &&
         fishDrainStart == it.drainStart && fishDrainEnd == it.drainEnd
 }
 

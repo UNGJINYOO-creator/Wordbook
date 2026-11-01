@@ -130,6 +130,17 @@ class StudySettings(context: Context) {
     var fishWrong: Int
         get() = prefs.getInt("fishWrong", 3)
         set(v) = prefs.edit().putInt("fishWrong", v).apply()
+    /** 빈칸·듣고 쓰기 take longer to answer, so they have their own +/-; unset = 객관식 +2m / same −. */
+    var fishRightTyping: Int
+        get() = prefs.getInt("fishRightTyping", fishRight + 2)
+        set(v) = prefs.edit().putInt("fishRightTyping", v).apply()
+    var fishWrongTyping: Int
+        get() = prefs.getInt("fishWrongTyping", fishWrong)
+        set(v) = prefs.edit().putInt("fishWrongTyping", v).apply()
+    /** Extra metres on every 3rd right answer in a row ('릴 감기'). */
+    var fishCombo: Int
+        get() = prefs.getInt("fishCombo", 3)
+        set(v) = prefs.edit().putInt("fishCombo", v).apply()
     /** How many tenths of a second the line loses each second, at the start and close to the catch. */
     var fishDrainStart: Int
         get() = prefs.getInt("fishDrainStart", 5)
@@ -212,6 +223,29 @@ class StudySettings(context: Context) {
     }
 
     fun checkPin(pin: String): Boolean = hash(pin) == pinHash
+
+    /** SHA-256 of the settings pattern (dots 0..8 in drawing order), or "" when there is none. Needs a PIN too. */
+    var patternHash: String
+        get() = prefs.getString("patternHash", "") ?: ""
+        set(v) = prefs.edit().putString("patternHash", v).apply()
+
+    val hasPattern: Boolean get() = hasPin && patternHash.isNotEmpty()
+
+    fun setPattern(dots: List<Int>?) {
+        patternHash = dots?.let { hash("pattern:" + it.joinToString("-")) } ?: ""
+    }
+
+    fun checkPattern(dots: List<Int>): Boolean = hasPattern && hash("pattern:" + dots.joinToString("-")) == patternHash
+
+    /** Fingerprint (or face) may open the settings instead of the PIN; only used where the phone has one set up. */
+    var useBiometric: Boolean
+        get() = hasPin && prefs.getBoolean("useBiometric", false)
+        set(v) = prefs.edit().putBoolean("useBiometric", v).apply()
+
+    /** Turning the PIN off also turns the pattern and fingerprint off, since the PIN is their fallback. */
+    fun clearLock() {
+        setPin(null); setPattern(null); useBiometric = false
+    }
 
     private fun hash(pin: String): String =
         java.security.MessageDigest.getInstance("SHA-256").digest("wordbook:$pin".toByteArray())
