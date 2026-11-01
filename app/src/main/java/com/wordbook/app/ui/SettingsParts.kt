@@ -158,14 +158,23 @@ fun RewardEditor(game: Game, onChange: () -> Unit = {}) {
     var rewards by remember { mutableStateOf(game.rewards) }
     var name by remember { mutableStateOf("") }
     var cost by remember { mutableStateOf("50") }
+    // Which reward the fields below are changing; null = adding a new one.
+    var editing by remember { mutableStateOf<Int?>(null) }
     Column {
         rewards.forEachIndexed { i, r ->
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("🎟 ${r.name}", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                Text(
+                    "🎟 ${r.name}",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (editing == i) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
                 Text("🐟 ${r.cost}마리", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                TextButton(onClick = { editing = i; name = r.name; cost = r.cost.toString() }) { Text("수정") }
                 TextButton(onClick = {
                     rewards = rewards.filterIndexed { j, _ -> j != i }
                     game.rewards = rewards
+                    if (editing != null) { editing = null; name = ""; cost = "50" }
                     onChange()
                 }) { Text("삭제") }
             }
@@ -191,15 +200,22 @@ fun RewardEditor(game: Game, onChange: () -> Unit = {}) {
                 modifier = Modifier.width(76.dp),
             )
         }
-        TextButton(
-            onClick = {
-                rewards = rewards + Reward(name.trim(), cost.toInt())
-                game.rewards = rewards
-                name = ""
-                onChange()
-            },
-            enabled = name.isNotBlank() && (cost.toIntOrNull() ?: 0) > 0,
-        ) { Text("＋ 보상 추가") }
+        Row {
+            TextButton(
+                onClick = {
+                    val r = Reward(name.trim(), cost.toInt())
+                    val e = editing
+                    rewards = if (e != null && e in rewards.indices) rewards.mapIndexed { j, old -> if (j == e) r else old } else rewards + r
+                    game.rewards = rewards
+                    editing = null; name = ""; cost = "50"
+                    onChange()
+                },
+                enabled = name.isNotBlank() && (cost.toIntOrNull() ?: 0) > 0,
+            ) { Text(if (editing != null) "✔ 고친 내용 저장" else "＋ 보상 추가") }
+            if (editing != null) {
+                TextButton(onClick = { editing = null; name = ""; cost = "50" }) { Text("취소") }
+            }
+        }
         Text(
             "단어 하나를 외울 때마다(그날 처음 맞힐 때) 물고기 1마리를 낚아요. 하루에 보통 20~40마리 모여요.",
             style = MaterialTheme.typography.bodySmall,

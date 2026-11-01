@@ -156,7 +156,7 @@ class Game(context: Context) {
         set(v) = prefs.edit().putString(
             "rewards",
             JSONArray(v.map { JSONObject().put("name", it.name).put("cost", it.cost) }).toString(),
-        ).apply()
+        ).putLong("rewardsAt", System.currentTimeMillis()).apply() // the newest list wins in the family sync
 
     var coupons: List<Coupon>
         get() = runCatching {

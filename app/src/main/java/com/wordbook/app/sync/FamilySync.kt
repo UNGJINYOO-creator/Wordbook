@@ -322,6 +322,16 @@ object PrefCodec {
         return out
     }
 
+    /** Coupons from both devices, one per claim time; used on either device = used. */
+    fun mergeCoupons(a: String, b: String): String {
+        val all = (runCatching { JSONArray(a) }.getOrNull()?.let { x -> (0 until x.length()).map { x.getJSONObject(it) } }.orEmpty() +
+            runCatching { JSONArray(b) }.getOrNull()?.let { x -> (0 until x.length()).map { x.getJSONObject(it) } }.orEmpty())
+        val merged = all.groupBy { it.optLong("at") to it.optString("name") }.values.map { same ->
+            JSONObject(same.first().toString()).put("used", same.any { it.optBoolean("used") })
+        }.sortedByDescending { it.optLong("at") }
+        return JSONArray(merged).toString()
+    }
+
     /** Key by key: a newer "date" or "resetAt" wins the whole file; otherwise bigger numbers, either flag, both sets. */
     fun merge(local: JSONObject, remote: JSONObject): JSONObject {
         val ld = local.optJSONArray("date")?.optString(1)
@@ -336,7 +346,16 @@ object PrefCodec {
             val r = remote.getJSONArray(k)
             val l = local.optJSONArray(k)
             if (l == null || l.getString(0) != r.getString(0)) { out.put(k, r); return@forEach }
-            val merged = when (r.getString(0)) {
+            val merged = when {
+                // The reward list the parent edited last wins, so a deleted or changed reward doesn't come back.
+                k == "rewards" -> {
+                    val lt = local.optJSONArray("rewardsAt")?.optLong(1) ?: 0L
+                    val rt = remote.optJSONArray("rewardsAt")?.optLong(1) ?: 0L
+                    if (rt > lt) r else l
+                }
+                k == "coupons" -> JSONArray().put("s").put(mergeCoupons(l.getString(1), r.getString(1)))
+                else -> null
+            } ?: when (r.getString(0)) {
                 "b" -> JSONArray().put("b").put(l.getBoolean(1) || r.getBoolean(1))
                 "i" -> JSONArray().put("i").put(maxOf(l.getInt(1), r.getInt(1)))
                 "l" -> JSONArray().put("l").put(maxOf(l.getLong(1), r.getLong(1)))

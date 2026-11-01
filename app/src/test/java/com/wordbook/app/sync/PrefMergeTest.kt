@@ -68,4 +68,19 @@ class PrefMergeTest {
         assertEquals("2026-10-26", PrefCodec.merge(local, remote).str("sent"))
         assertEquals("2026-10-26", PrefCodec.merge(remote, local).str("sent"))
     }
+
+    @Test fun lastEditedRewardListWinsEvenWhenShorter() {
+        val local = obj("rewards" to s("[{\"name\":\"게임\",\"cost\":50}]"), "rewardsAt" to l(200))
+        val remote = obj("rewards" to s("[{\"name\":\"게임\",\"cost\":50},{\"name\":\"과자\",\"cost\":30}]"), "rewardsAt" to l(100))
+        assertEquals(local.str("rewards"), PrefCodec.merge(local, remote).str("rewards"))
+        assertEquals(local.str("rewards"), PrefCodec.merge(remote, local).str("rewards"))
+    }
+
+    @Test fun usedCouponStaysUsed() {
+        val unused = "[{\"name\":\"게임\",\"at\":1,\"used\":false}]"
+        val used = "[{\"name\":\"게임\",\"at\":1,\"used\":true}]"
+        val out = JSONArray(PrefCodec.merge(obj("coupons" to s(used)), obj("coupons" to s(unused))).str("coupons"))
+        assertEquals(1, out.length())
+        assertEquals(true, out.getJSONObject(0).getBoolean("used"))
+    }
 }
