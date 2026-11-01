@@ -58,6 +58,9 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.CollectionsBookmark
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -104,6 +107,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.wordbook.app.data.AppDatabase
 import com.wordbook.app.data.DailyStats
 import com.wordbook.app.data.Deck
+import com.wordbook.app.data.DeckMerge
+import androidx.room.withTransaction
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.material.icons.automirrored.filled.CallMerge
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import com.wordbook.app.data.DeckSummary
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Levels
@@ -134,7 +144,8 @@ fun deckEmoji(deck: DeckSummary): String = deck.emoji.ifEmpty { DeckEmojis[(deck
 enum class DeckSort(val label: String) { RECENT("최근 학습순"), NAME("이름순"), PROGRESS("진도 낮은순") }
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
-    private val dao = AppDatabase.get(app).wordDao()
+    private val db = AppDatabase.get(app)
+    private val dao = db.wordDao()
     private val stats = DailyStats(app)
     val settings = StudySettings(app)
     private val prefs = app.getSharedPreferences("home", Context.MODE_PRIVATE)
@@ -240,6 +251,32 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteDeck(id: Long) = viewModelScope.launch {
         dao.unlinkChildren(id)
         dao.deleteDeck(id)
+    }
+
+    private suspend fun mergePlan(target: Long, sources: List<Long>) =
+        DeckMerge.plan(target, dao.getOwnWords(target), sources.filter { it != target }.flatMap { dao.getOwnWords(it) })
+
+    /** How many words would be left out of a merge because the same spelling is already there. */
+    suspend fun mergeDuplicates(target: Long, sources: List<Long>): Int = mergePlan(target, sources).delete.size
+
+    /** 단어장 하나로 합치기: every word of [sources] moves into [target] with its progress; the emptied decks go. */
+    fun merge(target: Long, sources: List<Long>) = viewModelScope.launch {
+        val from = sources.filter { it != target }
+        if (from.isEmpty()) return@launch
+        db.withTransaction {
+            val targetDeck = dao.getDeck(target) ?: return@withTransaction
+            val plan = mergePlan(target, from)
+            dao.deleteWords(plan.delete)
+            dao.updateWords(plan.update)
+            var studied = targetDeck.lastStudiedAt
+            from.forEach { id ->
+                dao.getDeck(id)?.let { studied = maxOf(studied, it.lastStudiedAt) }
+                // Decks gathered in a merged 종합단어장 move to the target if it is one, otherwise they stand alone.
+                dao.moveChildren(id, if (targetDeck.isCollection) target else 0)
+                dao.deleteDeck(id)
+            }
+            dao.getDeck(target)?.let { dao.updateDeck(it.copy(lastStudiedAt = studied)) }
+        }
     }
 
     val collections = dao.observeCollections()
@@ -373,6 +410,12 @@ fun HomeScreen(
     var deckToLink by remember { mutableStateOf<DeckSummary?>(null) }
     var showNewCollection by rememberSaveable { mutableStateOf(false) }
     val collections by vm.collections.collectAsStateWithLifecycle()
+    // 합치기: pick two or more decks on the home grid, then choose which one keeps its name.
+    var selecting by rememberSaveable { mutableStateOf(false) }
+    val selected = remember { mutableStateListOf<Long>() }
+    var showMerge by remember { mutableStateOf(false) }
+    fun stopSelecting() { selecting = false; selected.clear() }
+    BackHandler(enabled = selecting) { stopSelecting() }
     LaunchedEffect(Unit) { vm.refresh() }
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
@@ -399,7 +442,24 @@ fun HomeScreen(
         AddRequest.kind = null
     }
 
-    Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
+    Scaffold(
+        contentWindowInsets = WindowInsets(0),
+        bottomBar = {
+            if (selecting) {
+                Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 8.dp) {
+                    Row(Modifier.fillMaxWidth().padding(16.dp, 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            if (selected.size < 2) "합칠 단어장을 2개 이상 골라요" else "${selected.size}개 골랐어요",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { stopSelecting() }) { Text("취소") }
+                        Button(onClick = { showMerge = true }, enabled = selected.size >= 2) { Text("합치기") }
+                    }
+                }
+            }
+        },
+    ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -524,11 +584,14 @@ fun HomeScreen(
                 item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
                     Row(Modifier.padding(start = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "단어장 ${decks.size}개",
+                            if (selecting) "합칠 단어장을 눌러서 골라요" else "단어장 ${decks.size}개",
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.outline,
+                            color = if (selecting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                             modifier = Modifier.weight(1f),
                         )
+                        if (!selecting && decks.size >= 2) {
+                            TextButton(onClick = { guard { selecting = true } }) { Text("합치기") }
+                        }
                         Box {
                             TextButton(onClick = { sortOpen = true }) { Text("${sort.label} ▾") }
                             DropdownMenu(expanded = sortOpen, onDismissRequest = { sortOpen = false }) {
@@ -549,11 +612,15 @@ fun HomeScreen(
                         onLink = { guard { deckToLink = deck } },
                         collectionName = collections.firstOrNull { it.id == deck.collectionId }?.name,
                         onDelete = { deckToDelete = deck },
+                        onMerge = if (decks.size >= 2) ({ guard { selecting = true; if (deck.id !in selected) selected += deck.id } }) else null,
+                        selecting = selecting,
+                        selected = deck.id in selected,
+                        onToggle = { if (deck.id in selected) selected -= deck.id else selected += deck.id },
                     )
                 }
                 item(key = "hint", span = { GridItemSpan(maxLineSpan) }) {
                     Text(
-                        "단어장을 누르면 바로 학습해요 · 목록은 오른쪽 위 '목록' · 길게 누르면 이름·표지 바꾸기, 삭제",
+                        "단어장을 누르면 바로 학습해요 · 목록은 오른쪽 위 '목록' · 길게 누르면 이름·표지 바꾸기, 합치기, 삭제",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.padding(top = 4.dp, start = 4.dp),
@@ -630,6 +697,23 @@ fun HomeScreen(
             onDismiss = { deckToLink = null },
             dismissText = "취소",
         )
+    }
+    if (showMerge) {
+        val chosen = decks.filter { it.id in selected }
+        if (chosen.size < 2) {
+            showMerge = false
+        } else {
+            MergeDialog(
+                decks = chosen,
+                duplicates = { target -> vm.mergeDuplicates(target, chosen.map { it.id }) },
+                onDismiss = { showMerge = false },
+                onConfirm = { target ->
+                    vm.merge(target, chosen.map { it.id })
+                    showMerge = false
+                    stopSelecting()
+                },
+            )
+        }
     }
     deckToRename?.let { deck ->
         TextInputDialog(
@@ -903,6 +987,10 @@ private fun DeckTile(
     onLink: () -> Unit,
     collectionName: String?,
     onDelete: () -> Unit,
+    onMerge: (() -> Unit)? = null,
+    selecting: Boolean = false,
+    selected: Boolean = false,
+    onToggle: () -> Unit = {},
 ) {
     var menu by remember { mutableStateOf(false) }
     val progress = if (deck.wordCount == 0) 0f else deck.knownCount / deck.wordCount.toFloat()
@@ -913,12 +1001,25 @@ private fun DeckTile(
                 .heightIn(min = 168.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(DeckColors[deckColorIndex(deck)])
-                .combinedClickable(onClick = if (deck.wordCount > 0) onStudy else onOpen, onLongClick = { menu = true })
+                .then(
+                    if (selected) Modifier.border(3.dp, com.wordbook.app.ui.theme.Sea.Ink, RoundedCornerShape(18.dp)) else Modifier,
+                )
+                .combinedClickable(
+                    onClick = if (selecting) onToggle else if (deck.wordCount > 0) onStudy else onOpen,
+                    onLongClick = if (selecting) onToggle else ({ menu = true }),
+                )
                 .padding(14.dp),
         ) {
             Row(verticalAlignment = Alignment.Top) {
                 Text(deckEmoji(deck), fontSize = 30.sp, modifier = Modifier.weight(1f))
-                if (deck.wordCount > 0) {
+                if (selecting) {
+                    Icon(
+                        if (selected) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                        contentDescription = if (selected) "골랐음" else "안 골랐음",
+                        tint = com.wordbook.app.ui.theme.Sea.Ink,
+                        modifier = Modifier.size(30.dp),
+                    )
+                } else if (deck.wordCount > 0) {
                     Text(
                         "목록 ›",
                         color = com.wordbook.app.ui.theme.Sea.Ink,
@@ -962,6 +1063,9 @@ private fun DeckTile(
             DropdownMenuItem(text = { Text("단어 목록·편집") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, null) }, onClick = { menu = false; onOpen() })
             DropdownMenuItem(text = { Text("이름 바꾸기") }, leadingIcon = { Icon(Icons.Default.Edit, null) }, onClick = { menu = false; onRename() })
             DropdownMenuItem(text = { Text("표지 바꾸기") }, leadingIcon = { Icon(Icons.Default.Palette, null) }, onClick = { menu = false; onStyle() })
+            if (onMerge != null) {
+                DropdownMenuItem(text = { Text("다른 단어장과 합치기") }, leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, null) }, onClick = { menu = false; onMerge() })
+            }
             if (!deck.isCollection) {
                 DropdownMenuItem(
                     text = { Text(if (deck.collectionId > 0) "종합단어장 바꾸기·빼기" else "종합단어장에 넣기") },
@@ -976,6 +1080,59 @@ private fun DeckTile(
             )
         }
     }
+}
+
+/**
+ * Asks which of the picked decks the others go into (the biggest by default) and says what happens:
+ * words move with their progress, the same spelling is kept once, the emptied decks are removed.
+ */
+@Composable
+private fun MergeDialog(
+    decks: List<DeckSummary>,
+    duplicates: suspend (target: Long) -> Int,
+    onDismiss: () -> Unit,
+    onConfirm: (target: Long) -> Unit,
+) {
+    var target by remember { mutableLongStateOf(decks.maxBy { it.wordCount }.id) }
+    var dup by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(target) { dup = null; dup = duplicates(target) }
+    val targetName = decks.first { it.id == target }.name
+    val others = decks.filter { it.id != target }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("단어장 합치기") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("어느 단어장으로 합칠까요?", style = MaterialTheme.typography.titleSmall)
+                decks.forEach { d ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { target = d.id }.padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(selected = target == d.id, onClick = { target = d.id })
+                        Text("${deckEmoji(d)} ${d.name} (${d.wordCount}개)", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    others.joinToString(", ") { "'${it.name}'" } + "의 단어가 '$targetName'(으)로 들어가요. " +
+                        "외운 기록과 복습 날짜는 그대로 따라가고, 빈 단어장은 없어져요.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    when (val n = dup) {
+                        null -> "겹치는 단어를 찾는 중…"
+                        0 -> "겹치는 단어는 없어요."
+                        else -> "두 곳에 다 있는 단어 ${n}개는 더 많이 공부한 쪽 하나만 남겨요."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+            }
+        },
+        confirmButton = { Button(onClick = { onConfirm(target) }, enabled = dup != null) { Text("합치기") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
 }
 
 /** Picks a cover colour and emoji; the colour is saved 1-based. */

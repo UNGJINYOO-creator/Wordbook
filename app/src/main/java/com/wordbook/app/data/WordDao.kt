@@ -105,4 +105,15 @@ interface WordDao {
 
     @Query("DELETE FROM decks WHERE id = :id")
     suspend fun deleteDeck(id: Long)
+
+    /** Only the deck's own words, without those of decks linked to a 종합단어장. */
+    @Query("SELECT * FROM words WHERE deckId = :deckId")
+    suspend fun getOwnWords(deckId: Long): List<Word>
+
+    @Delete
+    suspend fun deleteWords(words: List<Word>)
+
+    /** Decks linked to [from] move to [to]; [to] itself (or a plain deck as [to] = 0) is unlinked. */
+    @Query("UPDATE decks SET collectionId = CASE WHEN id = :to THEN 0 ELSE :to END WHERE collectionId = :from")
+    suspend fun moveChildren(from: Long, to: Long)
 }
