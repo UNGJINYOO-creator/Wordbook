@@ -17,19 +17,13 @@ object WordExtractor {
     @Volatile var lastLines: List<OcrLine> = emptyList()
         private set
 
-    private suspend fun dictionary(context: Context): Set<String> =
+    /** The English spelling list (assets/words.txt). */
+    suspend fun dictionary(context: Context): Set<String> =
         dictionary ?: withContext(Dispatchers.IO) {
             context.assets.open("words.txt").bufferedReader().useLines { it.toHashSet() }
         }.also { dictionary = it }
 
-    /** Accepts dictionary words and common inflections (plurals, -ed, -ing...). */
-    private fun isWord(dict: Set<String>, w: String): Boolean {
-        if (w in dict) return true
-        val stems = listOf("s", "es", "ed", "d", "ing", "ly", "er", "est")
-            .filter { w.length > it.length + 2 && w.endsWith(it) }
-            .map { w.dropLast(it.length) }
-        return stems.any { it in dict || "${it}e" in dict }
-    }
+    private fun isWord(dict: Set<String>, w: String) = SpellFix.isWord(dict, w)
 
     /** Size of the last photo as the recognizer saw it (after rotation), for cutting word strips out of it. */
     @Volatile var lastSize: Pair<Int, Int> = 0 to 0

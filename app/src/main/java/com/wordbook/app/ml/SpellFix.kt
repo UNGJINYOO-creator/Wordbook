@@ -28,4 +28,13 @@ object SpellFix {
             }
         }
     }
+
+    /** A dictionary word or a common inflection of one (plurals, -ed, -ing...). */
+    fun isWord(dict: Set<String>, w: String): Boolean {
+        if (w in dict) return true
+        val stems = listOf("s", "es", "ed", "d", "ing", "ly", "er", "est")
+            .filter { w.length > it.length + 2 && w.endsWith(it) }
+            .map { w.dropLast(it.length) }
+        return stems.any { it in dict || "${it}e" in dict }
+    }
 }

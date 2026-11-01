@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.MoreVert
@@ -172,6 +173,8 @@ fun DeckScreen(
     var showOptions by rememberSaveable { mutableStateOf(false) }
     var showRename by rememberSaveable { mutableStateOf(false) }
     var showDelete by rememberSaveable { mutableStateOf(false) }
+    var showCheck by rememberSaveable { mutableStateOf(false) }
+    if (showCheck) DeckCheckDialog(vm.deckId, onDismiss = { showCheck = false })
     // With a password set, changing words asks for it once per visit so the child can't edit cards.
     var unlocked by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -213,6 +216,12 @@ fun DeckScreen(
                                 text = { Text("이름 바꾸기") },
                                 leadingIcon = { Icon(Icons.Default.Edit, null) },
                                 onClick = { menuOpen = false; guard { showRename = true } },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("단어장 점검 (오타·뜻)") },
+                                leadingIcon = { Icon(Icons.Default.Spellcheck, null) },
+                                enabled = words.isNotEmpty(),
+                                onClick = { menuOpen = false; guard { showCheck = true } },
                             )
                             DropdownMenuItem(
                                 text = { Text("내보내기") },

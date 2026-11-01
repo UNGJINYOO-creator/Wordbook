@@ -197,6 +197,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                     SecondaryButton("📒 빈 단어장", { onAdd(AddKind.DECK) }, Modifier.weight(1f))
                     SecondaryButton("📚 종합단어장", { onAdd(AddKind.COLLECTION) }, Modifier.weight(1f))
                 }
+                Spacer(Modifier.height(8.dp))
+                var showCheck by remember { mutableStateOf(false) }
+                if (showCheck) DeckCheckDialog(null, onDismiss = { showCheck = false })
+                SecondaryButton("🔍 전체 단어장 점검 (오타·뜻)", { showCheck = true }, Modifier.fillMaxWidth())
             }
             Text(
                 "아래 항목을 누르면 펼쳐져요. 바꾸면 바로 반영돼요. 다 고친 뒤 아래 💾 설정 저장을 누르면 연결된 다른 기기에도 보내요.",
