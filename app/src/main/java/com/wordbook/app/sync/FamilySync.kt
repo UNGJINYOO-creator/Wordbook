@@ -27,9 +27,9 @@ object FamilySync {
      * Preference files that follow the child; "study" is the settings (텔레그램 too), "alerts" and "digest"
      * keep the parents' messages from going out twice. Device-only files (deck sort, seeding) stay out.
      */
-    private val PREF_FILES = listOf("game", "giant", "fishing", "daily", "history", "wrongNote", "masterCheck", "study", "alerts", "digest", "guides")
+    private val PREF_FILES = listOf("game", "giant", "fishing", "daily", "history", "wrongNote", "masterCheck", "study", "alerts", "digest", "guides", "rewards")
     /** Files merged key by key against the last synced copy: whichever device changed a key wins it. */
-    private val BY_CHANGE = setOf("study", "alerts", "guides")
+    private val BY_CHANGE = setOf("study", "alerts", "guides", "rewards")
 
     private fun prefs(context: Context) = context.applicationContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
 

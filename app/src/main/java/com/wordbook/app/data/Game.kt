@@ -148,15 +148,23 @@ class Game(context: Context) {
         return false
     }
 
+    /**
+     * Rewards live in their own file, synced "whoever changed it wins", so an older app on the other
+     * device (which only knows the old game/rewards key) can't bring back a deleted or changed reward.
+     */
+    private val rewardPrefs = context.applicationContext.getSharedPreferences("rewards", Context.MODE_PRIVATE)
+
     var rewards: List<Reward>
         get() = runCatching {
-            val a = JSONArray(prefs.getString("rewards", "[]"))
+            val a = JSONArray(rewardPrefs.getString("list", null) ?: prefs.getString("rewards", "[]"))
             (0 until a.length()).map { a.getJSONObject(it).let { o -> Reward(o.getString("name"), o.getInt("cost")) } }
         }.getOrDefault(emptyList())
-        set(v) = prefs.edit().putString(
-            "rewards",
-            JSONArray(v.map { JSONObject().put("name", it.name).put("cost", it.cost) }).toString(),
-        ).putLong("rewardsAt", System.currentTimeMillis()).apply() // the newest list wins in the family sync
+        set(v) {
+            val json = JSONArray(v.map { JSONObject().put("name", it.name).put("cost", it.cost) }).toString()
+            rewardPrefs.edit().putString("list", json).apply()
+            // Old key kept for older app versions on the other device; the newest list wins there too.
+            prefs.edit().putString("rewards", json).putLong("rewardsAt", System.currentTimeMillis()).apply()
+        }
 
     var coupons: List<Coupon>
         get() = runCatching {
