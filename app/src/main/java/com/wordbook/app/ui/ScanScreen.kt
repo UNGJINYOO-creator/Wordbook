@@ -41,6 +41,20 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.material3.Surface
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,7 +85,21 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-class Candidate(val text: String, meaning: String, pos: String, selected: Boolean, val alreadySaved: Boolean) {
+class Candidate(
+    val id: Int,
+    text: String,
+    meaning: String,
+    pos: String,
+    selected: Boolean,
+    val alreadySaved: Boolean,
+    /** The spelling read from the photo when it was fixed, else "". */
+    val original: String = "",
+    /** Which photo it came from (index into the picked photos), -1 = none. */
+    val photo: Int = -1,
+    /** Put back from the 뺀 단어 list: its spelling still has to be checked. */
+    val rescued: Boolean = false,
+) {
+    var text by mutableStateOf(text)
     var meaning by mutableStateOf(meaning)
     var pos by mutableStateOf(pos)
     var selected by mutableStateOf(selected)
@@ -83,8 +111,14 @@ class Candidate(val text: String, meaning: String, pos: String, selected: Boolea
     /** Opened and confirmed by the user, so no longer highlighted. */
     var reviewed by mutableStateOf(false)
     /** Shown in yellow: the meaning was replaced, has an alternative, or is missing. */
-    val needsCheck: Boolean get() = !reviewed && (suggestion != null || source.startsWith("번역") || meaning.isBlank())
+    val needsCheck: Boolean get() = !reviewed && (rescued || suggestion != null || source.startsWith("번역") || meaning.isBlank())
 }
+
+/** A headword left out for a strange spelling, shown in the 뺀 단어 list with its photo strip. */
+class DroppedCandidate(val id: Int, val word: com.wordbook.app.ml.DroppedWord, val photo: Int)
+
+/** Where the words of one photo are, for the whole-photo view. */
+class PhotoSpots(val uri: Uri, val width: Int, val height: Int, val spots: List<PhotoCrops.Spot>)
 
 class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val db = AppDatabase.get(app)
@@ -105,6 +139,13 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         SimpleDateFormat("M월 d일 HH:mm 단어장", Locale.KOREA).format(Date())
     )
     val candidates = mutableStateListOf<Candidate>()
+    /** Headwords left out for a strange spelling; one can be put back with [rescue]. */
+    val dropped = mutableStateListOf<DroppedCandidate>()
+    /** The photo strip of each word and left-out word, by id. */
+    val crops = mutableStateMapOf<Int, ImageBitmap>()
+    /** Every photo with where its words are, for 사진 전체 보기. */
+    var photos by mutableStateOf(listOf<PhotoSpots>())
+        private set
 
     init {
         viewModelScope.launch { run() }
@@ -112,20 +153,26 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     private suspend fun run() {
         // Several photos are read one by one; a word found on more than one keeps its first meaning.
-        val extracted = mutableListOf<com.wordbook.app.ml.ExtractedWord>()
+        val extracted = mutableListOf<Pair<com.wordbook.app.ml.ExtractedWord, Int>>()
+        val droppedWords = mutableListOf<Pair<com.wordbook.app.ml.DroppedWord, Int>>()
+        val sizes = mutableMapOf<Int, Pair<Int, Int>>()
         val lines = mutableListOf<com.wordbook.app.ml.OcrLine>()
         var failed = 0
         uris.forEachIndexed { i, uri ->
             if (uris.size > 1) status = "사진 ${i + 1}/${uris.size}에서 영어 단어를 찾는 중…"
             try {
-                extracted += WordExtractor.extract(getApplication(), uri)
+                val r = WordExtractor.extract(getApplication(), uri)
+                extracted += r.words.map { it to i }
+                droppedWords += r.dropped.map { it to i }
+                sizes[i] = WordExtractor.lastSize
                 lines += WordExtractor.lastLines
             } catch (e: Exception) {
                 failed++
             }
         }
         rawLines = lines
-        val words = extracted.distinctBy { it.text.lowercase() }
+        val words = extracted.distinctBy { it.first.text.lowercase() }
+        var nextId = 0
         if (failed == uris.size) {
             busy = false
             status = "사진을 읽지 못했어요."
@@ -139,9 +186,31 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         // A photo makes its own new deck, so every word goes in even if another deck has it.
         // Adding to an existing deck leaves out only the words that deck already has.
         val saved = if (targetDeckId >= 0) dao.getWords(targetDeckId).map { it.text.lowercase() }.toSet() else emptySet()
-        candidates.addAll(words.map {
-            Candidate(it.text, it.meaning, it.pos, selected = it.text !in saved, alreadySaved = it.text in saved)
+        val boxes = mutableMapOf<Int, com.wordbook.app.ml.ExtractedWord>()
+        candidates.addAll(words.map { (w, photo) ->
+            val id = nextId++
+            boxes[id] = w
+            Candidate(id, w.text, w.meaning, w.pos, selected = w.text !in saved, alreadySaved = w.text in saved, original = w.original, photo = photo)
         })
+        val foundTexts = candidates.map { it.text }.toSet()
+        dropped.addAll(droppedWords.filter { it.first.text.lowercase() !in foundTexts }.distinctBy { it.first.text.lowercase() }
+            .map { (d, photo) -> DroppedCandidate(nextId++, d, photo) })
+        // A strip of the photo under each word, to check the spelling and the meaning against the book.
+        status = "단어마다 사진 조각 만드는 중…"
+        photos = uris.indices.mapNotNull { i ->
+            val (w, h) = sizes[i] ?: return@mapNotNull null
+            PhotoSpots(
+                uris[i], w, h,
+                candidates.filter { it.photo == i }.mapNotNull { c ->
+                    boxes[c.id]?.wordBox?.let { PhotoCrops.Spot(c.id.toString(), it, boxes[c.id]?.meaningBox) }
+                } + dropped.filter { it.photo == i }.map { PhotoCrops.Spot(it.id.toString(), it.word.box, null, dropped = true) },
+            )
+        }
+        photos.forEach { p ->
+            val (bmp, scale) = PhotoCrops.open(getApplication(), p.uri, p.width, p.height) ?: return@forEach
+            PhotoCrops.cut(bmp, scale, p.spots).forEach { (k, v) -> crops[k.toInt()] = v }
+            bmp.recycle()
+        }
         val fromPhoto = candidates.count { !MeaningCheck.suspicious(it.meaning) }
         val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)"
 
@@ -183,6 +252,27 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     }
 
     fun setAll(selected: Boolean) = candidates.forEach { it.selected = selected }
+
+    /** Puts a left-out word back in the list; its spelling and meaning are checked in the edit dialog. */
+    fun rescue(d: DroppedCandidate): Candidate {
+        dropped.remove(d)
+        val c = Candidate(
+            d.id, d.word.text.lowercase(), d.word.meaning, MeaningCheck.posFromMeaning(d.word.meaning),
+            selected = true, alreadySaved = false, photo = d.photo, rescued = true,
+        )
+        c.source = if (d.word.meaning.isBlank()) "" else "사진"
+        candidates.add(c)
+        return c
+    }
+
+    /** The whole photo with found words in green and left-out ones in red. */
+    suspend fun photoMap(index: Int): ImageBitmap? {
+        val p = photos.getOrNull(index) ?: return null
+        val (bmp, scale) = PhotoCrops.open(getApplication(), p.uri, p.width, p.height) ?: return null
+        val out = PhotoCrops.map(bmp, scale, p.spots)
+        bmp.recycle()
+        return out
+    }
 
     val collections = dao.observeCollections()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -242,7 +332,12 @@ fun ScanScreen(
         )
     }
     var editing by remember { mutableStateOf<Candidate?>(null) }
-    editing?.let { c -> CandidateDialog(c, onDismiss = { editing = null }) }
+    editing?.let { c -> CandidateDialog(c, vm.crops[c.id], onDismiss = { editing = null }) }
+    // 사진 전체 보기: which photo is open (index), -1 = none.
+    var mapOf by remember { mutableStateOf(-1) }
+    if (mapOf >= 0) PhotoMapDialog(mapOf, vm.photos.size, vm::photoMap, onDismiss = { mapOf = -1 })
+    var showAllStrips by remember { mutableStateOf(false) }
+    var showDropped by remember { mutableStateOf(false) }
     savedDeckId?.let { id ->
         AlertDialog(
             onDismissRequest = { savedDeckId = null; onHome() },
@@ -302,18 +397,43 @@ fun ScanScreen(
                 TextButton(onClick = { vm.setAll(true) }) { Text("전체 선택") }
                 TextButton(onClick = { vm.setAll(false) }) { Text("전체 해제") }
             }
+            if (!vm.busy) {
+                // 저장 전 요약: what goes in, what still needs a look, what was fixed or left out.
+                val parts = listOfNotNull(
+                    "넣을 단어 ${selectedCount}개",
+                    vm.candidates.count { it.needsCheck }.takeIf { it > 0 }?.let { "확인 필요 ${it}개" },
+                    vm.candidates.count { it.original.isNotEmpty() }.takeIf { it > 0 }?.let { "스펠링 고침 ${it}개" },
+                    vm.dropped.size.takeIf { it > 0 }?.let { "뺀 단어 ${it}개" },
+                )
+                Text(
+                    parts.joinToString(" · "),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+            Row(Modifier.padding(horizontal = 8.dp)) {
+                if (vm.crops.isNotEmpty()) {
+                    TextButton(onClick = { showAllStrips = !showAllStrips }) {
+                        Text(if (showAllStrips) "사진 조각 접기" else "모든 단어 사진 보기")
+                    }
+                }
+                if (vm.photos.isNotEmpty()) {
+                    TextButton(onClick = { mapOf = 0 }) { Text("사진 전체 보기") }
+                }
+            }
             HorizontalDivider()
             var showRaw by remember { mutableStateOf(false) }
             if (vm.candidates.any { it.needsCheck }) {
                 Text(
-                    "노란 줄은 사진 속 뜻이 깨졌거나 번역과 달라서 확인이 필요한 단어예요. 탭해서 고쳐 주세요.",
+                    "노란 줄은 사진 속 뜻이 깨졌거나 번역과 달라서 확인이 필요한 단어예요. 아래 사진 조각과 비교하고 탭해서 고쳐 주세요. (파란 칸 = 영어, 초록 칸 = 뜻)",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
             LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(vm.candidates, key = { _, c -> c.text }) { _, c ->
+                itemsIndexed(vm.candidates, key = { _, c -> c.id }) { _, c ->
                     Row(
                         Modifier.fillMaxWidth()
                             .background(if (c.needsCheck) CheckYellow else Color.Transparent)
@@ -334,14 +454,41 @@ fun ScanScreen(
                             }
                             val notes = listOfNotNull(
                                 if (c.needsCheck) "확인해 주세요" else null,
+                                if (c.original.isNotEmpty()) "스펠링 고침: ${c.original} → ${c.text}" else null,
+                                if (c.rescued) "스펠링을 사진과 비교해 주세요" else null,
                                 c.source.takeIf { it.isNotEmpty() }?.let { "뜻: $it" },
                                 if (c.alreadySaved) "이 단어장에 이미 있어요" else null,
                             )
                             if (notes.isNotEmpty()) {
                                 Text(notes.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                             }
+                            val strip = vm.crops[c.id]
+                            if (strip != null && (showAllStrips || c.needsCheck || c.original.isNotEmpty())) {
+                                PhotoStrip(strip, Modifier.padding(top = 6.dp)) { mapOf = c.photo.coerceAtLeast(0) }
+                            }
                         }
                         Icon(Icons.Default.Edit, "수정", tint = MaterialTheme.colorScheme.outline, modifier = Modifier.padding(horizontal = 8.dp))
+                    }
+                }
+                if (vm.dropped.isNotEmpty()) {
+                    item(key = "dropped") {
+                        TextButton(onClick = { showDropped = !showDropped }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                            Text((if (showDropped) "▾ " else "▸ ") + "스펠링이 이상해서 뺀 단어 ${vm.dropped.size}개")
+                        }
+                    }
+                    if (showDropped) {
+                        items(vm.dropped.toList(), key = { "d${it.id}" }) { d ->
+                            Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(d.word.text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.error)
+                                        if (d.word.meaning.isNotBlank()) Text(d.word.meaning, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    OutlinedButton(onClick = { editing = vm.rescue(d) }) { Text("살리기") }
+                                }
+                                vm.crops[d.id]?.let { PhotoStrip(it, Modifier.padding(top = 4.dp)) { mapOf = d.photo } }
+                            }
+                        }
                     }
                 }
                 item {
@@ -365,21 +512,94 @@ fun ScanScreen(
 
 private val CheckYellow = Color(0x33FFC107)
 
-/** Edits one found word: meaning, part of speech, the alternative meaning, and whether to save it. */
+/** A word's row cut out of the photo; tapping it opens the whole photo. */
 @Composable
-private fun CandidateDialog(c: Candidate, onDismiss: () -> Unit) {
+private fun PhotoStrip(strip: ImageBitmap, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Image(
+        strip,
+        contentDescription = "사진에서 이 단어가 있던 줄",
+        contentScale = ContentScale.FillWidth,
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick),
+    )
+}
+
+/** One photo at a time with found words framed in green and left-out ones in red; pinch to zoom. */
+@Composable
+private fun PhotoMapDialog(start: Int, count: Int, load: suspend (Int) -> ImageBitmap?, onDismiss: () -> Unit) {
+    var index by remember { mutableStateOf(start) }
+    var image by remember { mutableStateOf<ImageBitmap?>(null) }
+    var loading by remember { mutableStateOf(true) }
+    var zoom by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+    LaunchedEffect(index) { loading = true; image = null; zoom = 1f; offset = androidx.compose.ui.geometry.Offset.Zero; image = load(index); loading = false }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize().padding(12.dp), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (count > 1) "사진 ${index + 1}/$count" else "사진 전체",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (count > 1) {
+                        TextButton(onClick = { index-- }, enabled = index > 0) { Text("◀") }
+                        TextButton(onClick = { index++ }, enabled = index < count - 1) { Text("▶") }
+                    }
+                    TextButton(onClick = onDismiss) { Text("닫기") }
+                }
+                Text(
+                    "초록 칸 = 찾은 단어, 빨간 칸 = 스펠링이 이상해서 뺀 단어 · 두 손가락으로 크게 볼 수 있어요",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline,
+                )
+                Box(
+                    Modifier.fillMaxWidth().weight(1f).padding(top = 8.dp).clip(RoundedCornerShape(8.dp))
+                        .pointerInput(index) {
+                            detectTransformGestures { _, pan, z, _ ->
+                                zoom = (zoom * z).coerceIn(1f, 6f)
+                                offset = if (zoom == 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan
+                            }
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    val img = image
+                    when {
+                        img != null -> Image(
+                            img, contentDescription = "사진 전체",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                scaleX = zoom; scaleY = zoom; translationX = offset.x; translationY = offset.y
+                            },
+                        )
+                        loading -> CircularProgressIndicator()
+                        else -> Text("사진을 열지 못했어요.")
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Edits one found word: spelling, meaning, part of speech, the alternative meaning, and whether to save it. */
+@Composable
+private fun CandidateDialog(c: Candidate, strip: ImageBitmap?, onDismiss: () -> Unit) {
+    var text by remember { mutableStateOf(c.text) }
     var meaning by remember { mutableStateOf(c.meaning) }
     var pos by remember { mutableStateOf(c.pos) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(c.text)
+                Text(text)
                 PosChips(pos) { pos = it }
             }
         },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                strip?.let {
+                    Image(it, contentDescription = "사진에서 이 단어가 있던 줄", contentScale = ContentScale.FillWidth, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)))
+                }
+                OutlinedTextField(text, { text = it }, label = { Text("스펠링") }, singleLine = true)
                 if (c.source.isNotEmpty()) {
                     Text("지금 뜻: ${c.source}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 }
@@ -405,6 +625,7 @@ private fun CandidateDialog(c: Candidate, onDismiss: () -> Unit) {
                     c.meaning = meaning.trim()
                 }
                 c.pos = pos
+                text.trim().takeIf { it.isNotEmpty() }?.let { c.text = it }
                 c.selected = true
                 c.reviewed = true
                 onDismiss()

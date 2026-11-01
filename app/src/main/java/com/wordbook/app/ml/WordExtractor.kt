@@ -31,9 +31,14 @@ object WordExtractor {
         return stems.any { it in dict || "${it}e" in dict }
     }
 
-    suspend fun extract(context: Context, uri: Uri): List<ExtractedWord> {
+    /** Size of the last photo as the recognizer saw it (after rotation), for cutting word strips out of it. */
+    @Volatile var lastSize: Pair<Int, Int> = 0 to 0
+        private set
+
+    suspend fun extract(context: Context, uri: Uri): PairResult {
         val dict = dictionary(context)
         val image = InputImage.fromFilePath(context, uri)
+        lastSize = image.width to image.height
         val recognizer = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
         val lines = try {
             recognizer.process(image).await().textBlocks.flatMap { block ->
@@ -46,6 +51,6 @@ object WordExtractor {
             recognizer.close()
         }
         lastLines = lines.sortedWith(compareBy({ it.top }, { it.left }))
-        return VocabPairer(correct = { SpellFix.fix(dict, it) }) { isWord(dict, it) }.pair(lines)
+        return VocabPairer(correct = { SpellFix.fix(dict, it) }) { isWord(dict, it) }.pairWithDropped(lines)
     }
 }

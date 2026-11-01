@@ -10,7 +10,22 @@ data class ExtractedWord(
     val meaning: String,
     /** "명", "동", "형", "부" or "" when unknown. */
     val pos: String = "",
+    /** The spelling as read from the photo when it was fixed ("domitory"), else "". */
+    val original: String = "",
+    /** Where the headword's line is in the photo (null for words taken out of a sentence). */
+    val wordBox: Box? = null,
+    /** Where the meaning was found when it's on a line of its own. */
+    val meaningBox: Box? = null,
 )
+
+/** A headword left out because its spelling isn't a real word and couldn't be fixed. */
+data class DroppedWord(val text: String, val meaning: String, val box: Box)
+
+/** A rectangle in photo pixels. */
+data class Box(val left: Int, val top: Int, val right: Int, val bottom: Int)
+
+/** Words found on a page, and the headwords left out for a strange spelling. */
+data class PairResult(val words: List<ExtractedWord>, val dropped: List<DroppedWord>)
 
 /** One OCR text line. Plain Kotlin (no Android types) so the pairing logic is unit-testable. */
 data class OcrLine(
@@ -23,6 +38,7 @@ data class OcrLine(
     val confidence: Float = 1f,
 ) {
     val height get() = bottom - top
+    val box get() = Box(left, top, right, bottom)
 }
 
 /**
@@ -79,7 +95,9 @@ class VocabPairer(
 
     private class Entry(val line: OcrLine, val english: List<String>, val korean: String?, val pos: String = "")
 
-    fun pair(raw: List<OcrLine>): List<ExtractedWord> {
+    fun pair(raw: List<OcrLine>): List<ExtractedWord> = pairWithDropped(raw).words
+
+    fun pairWithDropped(raw: List<OcrLine>): PairResult {
         val lines = raw.map { it.copy(text = phoneticRegex.replace(numberingRegex.replace(it.text, ""), " ").trim()) }
             .filter { it.text.isNotEmpty() && it.height > 0 }
 
@@ -101,7 +119,7 @@ class VocabPairer(
             // Korean that starts the line (meaning lines), not Korean trailing an English sentence.
             wordRegex.findAll(l.text.substring(0, h.range.first)).none()
         }
-        if (entries.isEmpty()) return emptyList()
+        if (entries.isEmpty()) return PairResult(emptyList(), emptyList())
 
         // 1. Big type only.
         val ref = percentile(entries.map { it.line.height }, 0.9)
@@ -129,11 +147,12 @@ class VocabPairer(
         }
 
         val result = linkedMapOf<String, ExtractedWord>()
-        fun add(text: String, meaning: String, pos: String = "") {
+        val dropped = mutableListOf<DroppedWord>()
+        fun add(text: String, meaning: String, pos: String = "", original: String = "", wordBox: Box? = null, meaningBox: Box? = null) {
             val key = text.lowercase()
             val existing = result[key]
             if (existing == null || (existing.meaning.isBlank() && meaning.isNotBlank())) {
-                result[key] = ExtractedWord(key, meaning, pos)
+                result[key] = ExtractedWord(key, meaning, pos, original, wordBox, meaningBox)
             }
         }
 
@@ -143,12 +162,21 @@ class VocabPairer(
             val words = e.english
                 .map { w -> if (isWord(w.lowercase())) w else correct(w.lowercase()) ?: w }
                 .filter { isWord(it.lowercase()) }
-            if (words.isEmpty()) continue
-            if (e.english.size <= MAX_PHRASE_WORDS && words.size == e.english.size) {
-                val meaning = e.korean?.takeIf { it.isNotBlank() }
-                    ?: findMeaning(e.line, koreanLines, used)?.let { cleanMeaning(it.text) }
-                    ?: ""
-                add(words.joinToString(" "), meaning, e.pos)
+            val short = e.english.size <= MAX_PHRASE_WORDS
+            if (short && words.size == e.english.size) {
+                val meaningLine = if (e.korean.isNullOrBlank()) findMeaning(e.line, koreanLines, used) else null
+                val meaning = e.korean?.takeIf { it.isNotBlank() } ?: meaningLine?.let { cleanMeaning(it.text) } ?: ""
+                val text = words.joinToString(" ")
+                val read = e.english.joinToString(" ")
+                add(text, meaning, e.pos, if (text.lowercase() != read.lowercase()) read.lowercase() else "", e.line.box, meaningLine?.box)
+            } else if (words.isEmpty()) {
+                // A headword with a strange spelling: left out, but listed so it can be checked against the photo.
+                if (short && e.english.joinToString("").length >= 2) {
+                    // Only a meaning on the same row, so the next word's meaning below isn't taken.
+                    val meaningLine = if (e.korean.isNullOrBlank()) findMeaning(e.line, koreanLines, used, sameRowOnly = true) else null
+                    val meaning = e.korean?.takeIf { it.isNotBlank() } ?: meaningLine?.let { cleanMeaning(it.text) } ?: ""
+                    dropped += DroppedWord(e.english.joinToString(" "), meaning, e.line.box)
+                }
             } else {
                 // A sentence: collect its study-worthy words.
                 words.map { it.lowercase() }.filter { it.length >= 2 && it !in stopWords }.forEach { add(it, "") }
@@ -156,9 +184,11 @@ class VocabPairer(
         }
         val words = result.values.toList()
         val cleaned = MeaningCheck.cleanPage(words.map { it.meaning })
-        return words.mapIndexed { i, w ->
+        val out = words.mapIndexed { i, w ->
             w.copy(meaning = cleaned[i].meaning, pos = w.pos.ifEmpty { cleaned[i].pos.ifEmpty { MeaningCheck.posFromEnglish(w.text) } })
         }
+        val kept = out.map { it.text }.toSet()
+        return PairResult(out, dropped.filter { it.text.lowercase() !in kept }.distinctBy { it.text.lowercase() })
     }
 
     private fun looksLikeHeadword(e: Entry, korean: List<OcrLine>): Boolean =
@@ -175,10 +205,10 @@ class VocabPairer(
         bracketBadgeRegex.replace(s.trim(), "").trim().trim(':', '-', '=', '·', ',').trim()
 
     /** 4. Korean line on the same row to the right (nearest), else directly below and left-aligned. */
-    private fun findMeaning(e: OcrLine, korean: List<OcrLine>, used: MutableSet<OcrLine>): OcrLine? {
+    private fun findMeaning(e: OcrLine, korean: List<OcrLine>, used: MutableSet<OcrLine>, sameRowOnly: Boolean = false): OcrLine? {
         val free = korean.filter { it !in used }
         val sameRow = free.filter { sameRowRight(e, it) }.minByOrNull { it.left - e.right }
-        val pick = sameRow ?: free.filter { k ->
+        val pick = sameRow ?: if (sameRowOnly) null else free.filter { k ->
             val gap = k.top - e.bottom
             gap >= -e.height / 3 && gap < e.height && abs(k.left - e.left) < 2 * e.height
         }.minByOrNull { it.top - e.bottom }

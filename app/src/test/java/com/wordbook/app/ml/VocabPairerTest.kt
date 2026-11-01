@@ -135,4 +135,21 @@ class VocabPairerTest {
         val result = pairer.pair(listOf(line("intnet", 40, 100, 200, 130), line("screen", 40, 140, 200, 170)))
         assertEquals(listOf("screen"), result.map { it.text })
     }
+
+    @Test
+    fun fixedSpellingKeepsWhatWasReadAndStrangeOnesAreListed() {
+        val dict = dictionary + setOf("dormitory")
+        val result = VocabPairer(correct = { w -> SpellFix.fix(dict, w) }) { it in dict }.pairWithDropped(
+            listOf(
+                line("domitory 기숙사", 40, 100, 300, 130),
+                line("xqzvt 이상한 뜻", 40, 140, 300, 170),
+                line("connect 연결하다", 40, 180, 300, 210),
+            )
+        )
+        assertEquals(listOf("dormitory", "connect"), result.words.map { it.text })
+        assertEquals("domitory", result.words[0].original)
+        assertEquals("", result.words[1].original)
+        assertEquals(Box(40, 100, 300, 130), result.words[0].wordBox)
+        assertEquals(listOf("xqzvt" to "이상한 뜻"), result.dropped.map { it.text to it.meaning })
+    }
 }
