@@ -796,7 +796,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     }
 
     companion object {
-        const val GUESS_MS = 1000L
+        const val NEW_PER_DAY = 20
 
         /** New words in 오늘 학습: the daily word goal, or [NEW_PER_DAY] without one. */
         fun newPerDay(settings: StudySettings) = settings.dailyWords.takeIf { it > 0 } ?: NEW_PER_DAY
