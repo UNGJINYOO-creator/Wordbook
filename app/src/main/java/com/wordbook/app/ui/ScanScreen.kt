@@ -76,6 +76,7 @@ import com.wordbook.app.data.Word
 import androidx.room.withTransaction
 import com.wordbook.app.ml.EnKoTranslator
 import com.wordbook.app.ml.MeaningCheck
+import com.wordbook.app.ml.Dictionary
 import com.wordbook.app.ml.WordExtractor
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.SharingStarted
@@ -108,10 +109,15 @@ class Candidate(
     /** Alternative meaning offered on a button: the translation, or the photo's text if it was replaced. */
     var suggestion by mutableStateOf<String?>(null)
     var suggestionSource by mutableStateOf("")
+    /** The part of speech that goes with [suggestion] ("" = keep the current one). */
+    var suggestionPos by mutableStateOf("")
+    /** The photo and the 낚아보카 사전 agree: the alternative is only offered, the word isn't highlighted. */
+    var confident by mutableStateOf(false)
     /** Opened and confirmed by the user, so no longer highlighted. */
     var reviewed by mutableStateOf(false)
     /** Shown in yellow: the meaning was replaced, has an alternative, or is missing. */
-    val needsCheck: Boolean get() = !reviewed && (rescued || suggestion != null || source.startsWith("번역") || meaning.isBlank())
+    val needsCheck: Boolean get() =
+        !reviewed && (rescued || (suggestion != null && !confident) || source.startsWith("번역") || meaning.isBlank())
 }
 
 /** A headword left out for a strange spelling, shown in the 뺀 단어 list with its photo strip. */
@@ -214,20 +220,50 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         val fromPhoto = candidates.count { !MeaningCheck.suspicious(it.meaning) }
         val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)"
 
+        // 낚아보카 사전 first: when the photo says the same, the reviewed meaning (and its part of speech) goes in;
+        // when they clearly differ, the book's meaning stays highlighted with the dictionary's next to it.
+        status = "낚아보카 사전으로 뜻 확인 중…"
+        val dict = runCatching { Dictionary.get(getApplication()) }.getOrNull()
+        val checked = mutableSetOf<Int>()
+        candidates.forEach { c ->
+            val v = dict?.check(c.text, c.meaning, c.pos) ?: return@forEach
+            checked += c.id
+            c.meaning = v.meaning
+            c.pos = v.pos
+            c.source = v.note
+            if (v.sure) {
+                c.confident = true
+                c.suggestion = v.alternative
+                c.suggestionSource = "사진"
+                c.suggestionPos = ""
+            } else {
+                val (m, p) = v.alternative!!.split('|').let { it[0] to it.getOrElse(1) { "" } }
+                c.suggestion = m
+                c.suggestionSource = "사전"
+                c.suggestionPos = p
+            }
+        }
+        if (candidates.all { it.id in checked }) {
+            busy = false
+            status = "찾았어요: $found. 저장할 단어를 고르세요."
+            return
+        }
+
         status = "번역 모델 준비 중… (처음 한 번만 다운로드해요)"
         try {
             EnKoTranslator.ensureModel()
         } catch (e: Exception) {
             busy = false
             status = "$found. 번역 모델을 받지 못해 비어 있는 뜻은 직접 입력해 주세요."
-            candidates.filter { MeaningCheck.looksGarbled(it.meaning) }.forEach { it.meaning = ""; it.source = "" }
+            candidates.filter { it.id !in checked && MeaningCheck.looksGarbled(it.meaning) }.forEach { it.meaning = ""; it.source = "" }
             return
         }
         // Second check on every word: a broken photo meaning is replaced by the translation
         // (the photo text stays available on a button); a clean one is kept, with the
         // translation offered when the two don't share any syllable.
-        candidates.forEachIndexed { i, c ->
-            status = "뜻 확인 중… ${i + 1}/${candidates.size}"
+        val rest = candidates.filter { it.id !in checked }
+        rest.forEachIndexed { i, c ->
+            status = "사전에 없는 단어 뜻 확인 중… ${i + 1}/${rest.size}"
             // Translate as the same part of speech as the book (connect -> 연결하다, not 연결).
             val translated = runCatching { EnKoTranslator.translateAs(c.text, c.pos) }.getOrDefault("")
             if (MeaningCheck.suspicious(c.meaning)) {
@@ -401,6 +437,7 @@ fun ScanScreen(
                 // 저장 전 요약: what goes in, what still needs a look, what was fixed or left out.
                 val parts = listOfNotNull(
                     "넣을 단어 ${selectedCount}개",
+                    vm.candidates.count { it.source.startsWith("사전") }.takeIf { it > 0 }?.let { "사전 뜻 ${it}개" },
                     vm.candidates.count { it.needsCheck }.takeIf { it > 0 }?.let { "확인 필요 ${it}개" },
                     vm.candidates.count { it.original.isNotEmpty() }.takeIf { it > 0 }?.let { "스펠링 고침 ${it}개" },
                     vm.dropped.size.takeIf { it > 0 }?.let { "뺀 단어 ${it}개" },
@@ -606,7 +643,7 @@ private fun CandidateDialog(c: Candidate, strip: ImageBitmap?, onDismiss: () -> 
                 OutlinedTextField(meaning, { meaning = it }, label = { Text("뜻") }, maxLines = 3)
                 c.suggestion?.let { s ->
                     Text("${c.suggestionSource} 뜻", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                    SecondaryButton(s, { meaning = s })
+                    SecondaryButton(s, { meaning = s; if (c.suggestionPos.isNotEmpty()) pos = c.suggestionPos })
                 }
             }
         },
@@ -615,10 +652,11 @@ private fun CandidateDialog(c: Candidate, strip: ImageBitmap?, onDismiss: () -> 
                 if (meaning.trim() != c.meaning) {
                     if (c.suggestion == meaning) {
                         // Swapped to the alternative: keep the old one as the alternative.
+                        val oldFrom = listOf("사전", "사진", "번역").firstOrNull { c.source.startsWith(it) } ?: "직접 입력"
                         c.suggestion = c.meaning
-                        val s = c.suggestionSource
-                        c.suggestionSource = if (s == "번역") "사진" else "번역"
-                        c.source = s
+                        c.suggestionPos = c.pos
+                        c.source = c.suggestionSource
+                        c.suggestionSource = oldFrom
                     } else {
                         c.source = "직접 입력"
                     }

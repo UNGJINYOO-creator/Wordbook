@@ -141,4 +141,35 @@ object MeaningCheck {
         val sb = hangul.findAll(b).map { it.value }.toSet()
         return sa.isNotEmpty() && sb.isNotEmpty() && sa.intersect(sb).isEmpty()
     }
+
+    // Endings that change the part of speech but not what the word means: 연결하다 / 연결시키다 / 연결.
+    private val endings = listOf("시키다", "하게", "하는", "되다", "하다", "적인", "스럽다", "스러운", "롭다", "로운", "히", "한", "의", "된", "다")
+
+    /** The core of one Korean meaning: no brackets, no spaces, no "~", no common ending. */
+    private fun core(m: String): String {
+        var r = m.replace(Regex("\\([^)]*\\)|\\[[^\\]]*]"), "").replace(Regex("[\\s~·]"), "")
+        for (e in endings) if (r.length > e.length + 1 && r.endsWith(e)) { r = r.dropLast(e.length); break }
+        return r
+    }
+
+    private fun items(m: String): List<String> =
+        m.split(',', ';', '/').map { core(it) }.filter { it.isNotEmpty() }
+
+    private fun oneOff(a: String, b: String): Boolean =
+        a.length == b.length && a.length >= 3 && a.indices.count { a[it] != b[it] } == 1
+
+    /**
+     * True if the photo's meaning and a dictionary meaning say the same thing: one of their items is equal,
+     * contains the other, shares a two-syllable piece, or is one syllable off (a misread letter).
+     */
+    fun similar(photo: String, dictionary: String): Boolean {
+        val a = items(photo)
+        val b = items(dictionary)
+        return a.any { x ->
+            b.any { y ->
+                x == y || (minOf(x.length, y.length) >= 2 && (x.contains(y) || y.contains(x))) || oneOff(x, y) ||
+                    x.windowed(2).any { it.all { c -> hangul.matches(c.toString()) } && y.contains(it) }
+            }
+        }
+    }
 }
