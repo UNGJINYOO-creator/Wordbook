@@ -706,6 +706,7 @@ private fun SyncEditor() {
     var typed by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var synced by remember { mutableIntStateOf(0) }
     val sync = {
         busy = true
         status = "맞추는 중…"
@@ -713,6 +714,7 @@ private fun SyncEditor() {
             val error = com.wordbook.app.sync.FamilySync.run(context)
             status = error?.let { "동기화하지 못했어요: $it" } ?: "다 맞췄어요 ✅"
             busy = false
+            synced++
         }
     }
     Text(
@@ -755,6 +757,7 @@ private fun SyncEditor() {
             TextButton(enabled = !busy, onClick = { sync() }) { Text("🔄 지금 맞추기") }
             TextButton(onClick = { com.wordbook.app.sync.FamilySync.disconnect(context); code = null; status = null }) { Text("연결 끊기") }
         }
+        SyncStatusCard(synced) { if (!busy) sync() }
     }
     (status ?: com.wordbook.app.sync.FamilySync.lastError(context)?.let { "지난번 동기화 오류: $it" })?.let {
         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)

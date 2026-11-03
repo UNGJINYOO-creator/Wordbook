@@ -139,8 +139,8 @@ private fun AppContent() {
                                             }
                                         },
                                         icon = {
-                                            // A new build waits in 설정: just a small dot, no window.
-                                            if (tab.route == "settings" && com.wordbook.app.net.Updater.available.value != null) {
+                                            // A new build waits in 설정, or the family's devices don't match: just a small dot, no window.
+                                            if (tab.route == "settings" && (com.wordbook.app.net.Updater.available.value != null || com.wordbook.app.sync.DeviceDot.attention.value)) {
                                                 androidx.compose.material3.BadgedBox(badge = { androidx.compose.material3.Badge() }) { Icon(tab.icon, contentDescription = null) }
                                             } else {
                                                 Icon(tab.icon, contentDescription = null)

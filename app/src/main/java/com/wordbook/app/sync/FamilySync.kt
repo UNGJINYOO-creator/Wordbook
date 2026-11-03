@@ -45,11 +45,25 @@ object FamilySync {
     fun connect(context: Context, code: String) {
         prefs(context).edit().clear().putString("code", code.uppercase().filter { it.isLetterOrDigit() }).apply()
         hashFile(context).delete()
+        DeviceStatus.clear(context)
     }
 
     fun disconnect(context: Context) {
         prefs(context).edit().clear().apply()
         hashFile(context).delete()
+        DeviceStatus.clear(context)
+    }
+
+    /** Takes a device that is no longer used off the 연동 상태 list (it comes back if it syncs again). */
+    suspend fun hideDevice(context: Context, id: String): String? {
+        val code = code(context) ?: return null
+        return lock.withLock {
+            runCatching {
+                val store = Firestore(context)
+                store.write(code, listOf(Triple("devices", id, mapOf("hidden" to true, "updatedAt" to System.currentTimeMillis()))))
+                DeviceStatus.save(context, store.changed(code, "devices", 0))
+            }.exceptionOrNull()?.let { it.message ?: it.toString() }
+        }
     }
 
     private fun hashFile(context: Context) = File(context.filesDir, "sync_hashes.json")
@@ -235,6 +249,13 @@ object FamilySync {
 
         store.write(code, out)
         hashFile(context).writeText(hashes.toString())
+        // This device's card for 연동 상태 확인, then everyone's cards for the 설정 screen. Written on its
+        // own, so a problem here never stops the real sync.
+        runCatching {
+            val card = DeviceStatus.card(context, words, decks, now)
+            store.write(code, listOf(Triple("devices", card.id, DeviceStatus.toDoc(card, now))))
+            DeviceStatus.save(context, store.changed(code, "devices", 0))
+        }.onFailure { android.util.Log.d("WBSync", "devices: ${it.message}") }
         p.edit().putLong("lastPull", maxOf(maxSeen, if (out.isEmpty()) maxSeen else now).coerceAtMost(startedAt + 60_000)).apply()
     }
 }
