@@ -186,7 +186,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                     .padding(16.dp),
             ) {
                 Text("➕ 단어 추가", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("사진·스크린샷으로 단어를 넣거나 단어장을 만들어요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+                Text("사진·스크린샷이나 복사한 단어 목록으로 단어를 넣거나 단어장을 만들어요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     SecondaryButton("📷 사진 찍기", { onAdd(AddKind.CAMERA) }, Modifier.weight(1f))
@@ -197,6 +197,8 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                     SecondaryButton("📒 빈 단어장", { onAdd(AddKind.DECK) }, Modifier.weight(1f))
                     SecondaryButton("📚 종합단어장", { onAdd(AddKind.COLLECTION) }, Modifier.weight(1f))
                 }
+                Spacer(Modifier.height(8.dp))
+                SecondaryButton("📋 붙여넣기로 여러 단어장 한 번에", { onAdd(AddKind.PASTE) }, Modifier.fillMaxWidth())
                 Spacer(Modifier.height(8.dp))
                 var showCheck by remember { mutableStateOf(false) }
                 if (showCheck) DeckCheckDialog(null, onDismiss = { showCheck = false })

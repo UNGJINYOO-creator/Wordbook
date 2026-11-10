@@ -52,6 +52,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Palette
@@ -409,6 +410,7 @@ fun HomeScreen(
     var deckToStyle by remember { mutableStateOf<DeckSummary?>(null) }
     var deckToLink by remember { mutableStateOf<DeckSummary?>(null) }
     var showNewCollection by rememberSaveable { mutableStateOf(false) }
+    var showPaste by rememberSaveable { mutableStateOf(false) }
     val collections by vm.collections.collectAsStateWithLifecycle()
     // 합치기: pick two or more decks on the home grid, then choose which one keeps its name.
     var selecting by rememberSaveable { mutableStateOf(false) }
@@ -437,6 +439,7 @@ fun HomeScreen(
             AddKind.ALBUM -> pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             AddKind.DECK -> showNewDeck = true
             AddKind.COLLECTION -> showNewCollection = true
+            AddKind.PASTE -> showPaste = true
             null -> {}
         }
         AddRequest.kind = null
@@ -649,6 +652,10 @@ fun HomeScreen(
                     showAdd = false
                     pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                 }
+                SheetItem(Icons.Default.ContentPaste, "붙여넣기로 한 번에", "복사한 단어 목록을 붙여넣어요. 단어장 여러 개도 한 번에") {
+                    showAdd = false
+                    showPaste = true
+                }
                 SheetItem(Icons.Default.CreateNewFolder, "빈 단어장 만들기", "단어를 직접 입력할게요") {
                     showAdd = false
                     showNewDeck = true
@@ -659,6 +666,17 @@ fun HomeScreen(
                 }
             }
         }
+    }
+    if (showPaste) {
+        PasteImportDialog(
+            targetDeckId = null,
+            onDismiss = { showPaste = false },
+            onSaved = { first, count ->
+                showPaste = false
+                vm.refresh()
+                if (count == 1) onOpenDeck(first)
+            },
+        )
     }
     if (showNewDeck) {
         TextInputDialog(
@@ -1246,7 +1264,7 @@ fun PinConfirmDialog(
     )
 }
 
-enum class AddKind { CAMERA, ALBUM, DECK, COLLECTION }
+enum class AddKind { CAMERA, ALBUM, DECK, COLLECTION, PASTE }
 
 /** A way of adding words picked in the settings, carried out by the home screen. */
 object AddRequest {

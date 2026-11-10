@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Keyboard
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DropdownMenu
@@ -168,6 +169,7 @@ fun DeckScreen(
     val studyCount = active.count { !it.mastered }.takeIf { it > 0 } ?: active.size
 
     var showAdd by rememberSaveable { mutableStateOf(false) }
+    var showPaste by rememberSaveable { mutableStateOf(false) }
     var showManual by rememberSaveable { mutableStateOf(false) }
     var showStudy by rememberSaveable { mutableStateOf(false) }
     var showOptions by rememberSaveable { mutableStateOf(false) }
@@ -351,6 +353,10 @@ fun DeckScreen(
                     showAdd = false
                     showManual = true
                 }
+                SheetItem(Icons.Default.ContentPaste, "붙여넣기로 여러 개", "복사한 단어 목록을 붙여넣어 한 번에 넣어요") {
+                    showAdd = false
+                    showPaste = true
+                }
             }
         }
     }
@@ -366,6 +372,13 @@ fun DeckScreen(
                 showStudy = false
                 onStudy(vm.deckId, scope, encodeModes(modes), staged)
             },
+        )
+    }
+    if (showPaste) {
+        PasteImportDialog(
+            targetDeckId = vm.deckId,
+            onDismiss = { showPaste = false },
+            onSaved = { _, _ -> showPaste = false },
         )
     }
     if (showManual) {
