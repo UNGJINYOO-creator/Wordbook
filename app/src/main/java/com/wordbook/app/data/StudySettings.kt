@@ -37,6 +37,7 @@ enum class BlankLevel(val label: String) { AUTO("자동"), EASY("쉬움"), NORMA
 
 /** App-wide study settings, kept in SharedPreferences. */
 class StudySettings(context: Context) {
+    private val appContext = context.applicationContext
     private val prefs = context.applicationContext.getSharedPreferences("study", Context.MODE_PRIVATE)
 
     var mode: StudyMode
@@ -227,6 +228,9 @@ class StudySettings(context: Context) {
         set(v) = prefs.edit().putString("pinHash", v).apply()
 
     val hasPin: Boolean get() = pinHash.isNotEmpty()
+
+    /** Whether locked actions ask for the password here: never on a phone in 테스트 모드 (see [TestMode]). */
+    val askLock: Boolean get() = hasPin && !TestMode.isOn(appContext)
 
     fun setPin(pin: String?) {
         pinHash = pin?.let(::hash) ?: ""
