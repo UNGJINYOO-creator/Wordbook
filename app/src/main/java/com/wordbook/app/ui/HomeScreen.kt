@@ -187,6 +187,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var fishOpen by mutableStateOf(false)
         private set
+    /** 테스트 모드 on this phone (no password, games always open); shown as a note on the home screen. */
+    var testMode by mutableStateOf(false)
+        private set
     private val wrongNote = WrongNote(app)
     var goalWords by mutableIntStateOf(0)
         private set
@@ -217,8 +220,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         wrongCount = wrongNote.ids.size
         val timeLeft = settings.dailyGoalMinutes > 0 && stats.studyMs < settings.dailyGoalMinutes * 60_000L
         val wordsLeft = settings.dailyGoalMinutes <= 0 && settings.dailyWords > 0 && stats.learnedCount < settings.dailyWords
-        fishOpen = !timeLeft && !wordsLeft && fishing.triesLeft > 0
+        val test = com.wordbook.app.data.TestMode.isOn(getApplication())
+        testMode = test
+        fishOpen = test || (!timeLeft && !wordsLeft && fishing.triesLeft > 0)
         fishLine = when {
+            test -> "🛠 테스트 모드: 언제든 열려요"
             timeLeft || wordsLeft -> "🔒 오늘 목표를 채우면 열려요"
             fishing.caughtToday -> "오늘 ${fishing.caughtFishToday} 낚았어요! 🎣"
             fishing.triesLeft <= 0 -> "내일 또 낚으러 와요 🎣"
@@ -401,7 +407,7 @@ fun HomeScreen(
     var unlocked by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
     val guard: (() -> Unit) -> Unit = { action ->
-        if (!vm.settings.hasPin || unlocked) action() else pending = action
+        if (!vm.settings.askLock || unlocked) action() else pending = action
     }
     var showNewDeck by rememberSaveable { mutableStateOf(false) }
     var sortOpen by remember { mutableStateOf(false) }
@@ -484,6 +490,9 @@ fun HomeScreen(
                         layout(constraints.maxWidth, p.height - overlap) { p.place(-side, 0) }
                     },
                 )
+            }
+            if (vm.testMode) item(key = "testMode", span = { GridItemSpan(maxLineSpan) }) {
+                TestBadge("🛠 이 폰은 테스트 모드예요 (비밀번호 없음 · 낚시 무제한) · 설정에서 끌 수 있어요")
             }
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
                 TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.level, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
@@ -768,7 +777,7 @@ fun HomeScreen(
     }
     deckToDelete?.let { deck ->
         // With a settings password, deleting a deck asks for it too, so a child can't delete one by accident.
-        if (vm.settings.hasPin) {
+        if (vm.settings.askLock) {
             PinConfirmDialog(
                 text = "'${deck.name}' 단어장과 단어 ${deck.wordCount}개를 삭제하려면 비밀번호를 입력하세요.",
                 check = vm.settings::checkPin,

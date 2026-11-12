@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -59,6 +60,7 @@ import com.wordbook.app.data.Reminder
 import com.wordbook.app.data.Sfx
 import com.wordbook.app.data.StudyMode
 import com.wordbook.app.data.StudySettings
+import com.wordbook.app.data.TestMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -115,7 +117,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
         )
     }
     // Locks again whenever the tab is left, since this state is forgotten then.
-    var unlocked by remember { mutableStateOf(!settings.hasPin) }
+    var unlocked by remember { mutableStateOf(!settings.askLock) }
     if (!unlocked) {
         SettingsLock(settings, onUnlocked = { unlocked = true })
         return
@@ -388,6 +390,22 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                     open == "parent", { toggle("parent") },
                 ) {
                     Body {
+                        var testOn by remember { mutableStateOf(TestMode.isOn(context)) }
+                        var testKeep by remember { mutableStateOf(TestMode.keepsRecords(context)) }
+                        SwitchRow(
+                            "🛠 이 폰 테스트 모드",
+                            "부모님 폰에서 시험해 볼 때 켜요. 이 폰만 비밀번호를 묻지 않고, 오늘의 낚시는 목표·횟수 제한 없이 열리고, 원정 최종전도 미리 해볼 수 있어요. 아이 폰에는 옮겨 가지 않아요 (동기화·백업 안 됨)",
+                            testOn,
+                        ) { on -> TestMode.set(context, on); testOn = on; saved() }
+                        if (testOn) {
+                            SwitchRow(
+                                "테스트 낚시도 기록 남기기",
+                                if (testKeep) "낚은 물고기·선물·도감·작살이 진짜로 저장돼요 (가족 동기화로 아이 기록에도 들어가요)"
+                                else "꺼 두면 연습이라 물고기·기록·도감·정답 기록이 하나도 안 남아요 (추천)",
+                                testKeep,
+                            ) { keep -> TestMode.setKeepsRecords(context, keep); testKeep = keep; saved() }
+                        }
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
                         Text("비밀번호", style = MaterialTheme.typography.bodyLarge)
                         Text(
                             if (hasPin) "설정을 열 때 비밀번호 4자리를 물어봐요" else "아이가 설정을 바꾸지 못하게 비밀번호를 걸 수 있어요",

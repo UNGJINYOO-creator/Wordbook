@@ -104,6 +104,11 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     private val answerLog = AnswerLog(app)
     private val game = Game(app)
     val fishing = Fishing(app)
+    /** 테스트 모드 on this phone: no goal or try limits, and (unless the parent keeps records) a practice game that saves nothing. */
+    val testMode: Boolean get() = com.wordbook.app.data.TestMode.isOn(getApplication())
+    /** Set when a game starts: this game is practice, so its fish, records and answers are not saved. */
+    var practice by mutableStateOf(false)
+        private set
     private val audio = app.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager
     private val sfx = com.wordbook.app.data.Sfx(app)
     private val tone = runCatching { android.media.ToneGenerator(android.media.AudioManager.STREAM_MUSIC, 60) }.getOrNull()
@@ -238,6 +243,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         val goalWords = settings.dailyWords
         lockReason = when {
             pool.size < 4 -> "단어가 4개 이상 있어야 낚시를 할 수 있어요"
+            testMode -> null
             goalMinutes > 0 && stats.studyMs < goalMinutes * 60_000L ->
                 "오늘 학습 시간 ${goalMinutes}분을 채우면 열려요 (지금 ${stats.studyMs / 60_000}분)"
             goalMinutes <= 0 && goalWords > 0 && stats.learnedCount < goalWords ->
@@ -251,9 +257,10 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         refreshLock()
         if (lockReason != null) return
         giantMode = false
+        practice = com.wordbook.app.data.TestMode.practice(getApplication())
         newSea = inNewSea && newSeaWords.isNotEmpty()
         questions = if (newSea) newSeaWords else pool
-        fishing.useTry()
+        if (!testMode) fishing.useTry()
         triesLeft = fishing.triesLeft
         fish = unknownFish()
         seconds = fishing.start
@@ -264,8 +271,10 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     fun startGiant() {
         val g = giant ?: return
         val f = g.fish ?: return
-        if (!g.ready) return
+        if (!g.ready && !testMode) return
         giantMode = true
+        // A final battle before the 100 squares are full is only a test run, never saved.
+        practice = com.wordbook.app.data.TestMode.practice(getApplication()) || !g.ready
         newSea = false
         questions = g.words.filter { !it.excluded && it.meaning.isNotBlank() }.ifEmpty { g.words }
         fish = Fish(null, 3, f.emoji, f.name, f.minKg, f.maxKg)
@@ -414,8 +423,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             pullId++
             popUp("😱 물고기가 도망치고 있어요! +${lost.toInt()}m")
         }
-        answerLog.add(AnswerEntry(System.currentTimeMillis(), w.id, w.text, w.pos, mode, correct, false, if (correct) "" else response, ms))
-        if (!guessed) {
+        if (!practice) answerLog.add(AnswerEntry(System.currentTimeMillis(), w.id, w.text, w.pos, mode, correct, false, if (correct) "" else response, ms))
+        if (!guessed && !practice) {
             wrongNote.record(w.id, correct)
             stats.recordAnswer(w.text, correct)
         }
@@ -440,7 +449,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun finishGame() {
         durationMs = System.currentTimeMillis() - startedAt
-        stats.addStudyMs(durationMs, "FISHING")
+        if (!practice) stats.addStudyMs(durationMs, "FISHING")
         word = null
     }
 
@@ -455,7 +464,14 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         harpoon = null
         kg = Fishing.weight(fish, quality)
         seaCompleted = false
+        newRecord = false
         val g = giant
+        if (practice) {
+            // 테스트 모드 연습: show the catch, save nothing.
+            caughtGiant = if (giantMode) g?.fish else null
+            if (settings.soundEffects) tone?.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
+            return
+        }
         if (giantMode && g != null) {
             giantStore.recordCatch(g.index, kg)
             caughtGiant = g.fish
@@ -483,6 +499,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         seconds = 0.0
         phase = FishPhase.LOST
         finishGame()
+        if (practice) return
         if (giantMode) {
             giantStore.reviewNeeded = true
             giantReview = true
@@ -514,7 +531,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         // Leaving mid-game counts as letting the fish go; the time still counts as study.
-        if (phase == FishPhase.PLAYING) {
+        if (phase == FishPhase.PLAYING && !practice) {
             durationMs = System.currentTimeMillis() - startedAt
             stats.addStudyMs(durationMs, "FISHING")
         }
@@ -681,6 +698,10 @@ private fun Intro(vm: FishingViewModel, onBook: () -> Unit, onLog: () -> Unit) {
         SeaPicker(vm)
         Spacer(Modifier.height(16.dp))
         val reason = vm.lockReason
+        if (vm.testMode) {
+            TestBadge(if (com.wordbook.app.data.TestMode.keepsRecords(LocalContext.current)) "🛠 테스트 모드: 목표·횟수 제한 없이 열려요 (기록은 남아요)" else "🛠 테스트 모드: 목표·횟수 제한 없이 열려요 (연습이라 기록 안 남아요)")
+            Spacer(Modifier.height(8.dp))
+        }
         if (reason != null) {
             Text(
                 "🔒 $reason",
@@ -893,6 +914,7 @@ private fun Result(vm: FishingViewModel, won: Boolean, onBack: () -> Unit, onBoo
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(24.dp))
+        if (vm.practice) TestBadge("🛠 테스트 연습이라 물고기·기록·도감은 안 남았어요")
         Text(if (won) vm.fish.emoji else "🌊", fontSize = 80.sp)
         Spacer(Modifier.height(8.dp))
         val giantFish = vm.caughtGiant
@@ -1081,6 +1103,10 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
             )
             else -> Text("단어를 외우고 오늘의 낚시에 성공하면 칸이 채워져요", color = com.wordbook.app.ui.theme.Sea.Ink, style = MaterialTheme.typography.bodyMedium)
         }
+        if (!g.ready && vm.testMode) {
+            Spacer(Modifier.height(10.dp))
+            SecondaryButton("🛠 최종전 미리 해보기 (테스트, 기록 안 남음)", { vm.startGiant() })
+        }
     }
 }
 
@@ -1178,4 +1204,17 @@ private fun GiantReview(vm: FishingViewModel, tts: TextToSpeech?) {
         Spacer(Modifier.height(16.dp))
         PrimaryButton("다 봤어요! 다시 도전 🏆", vm::finishReview)
     }
+}
+
+/** A small yellow note shown while this phone is in 테스트 모드. */
+@Composable
+fun TestBadge(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF6B4E00),
+        textAlign = TextAlign.Center,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).background(Color(0xFFFFF3C4), RoundedCornerShape(10.dp)).padding(8.dp),
+    )
 }
