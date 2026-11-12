@@ -7,11 +7,15 @@ enum class StudyMode(val label: String, val description: String) {
     LIST("단어장 보기", "단어와 뜻을 목록으로 먼저 훑어봐요"),
     STAGED("단계별 (추천)", "카드 → 4지선다 → 빈칸 → 듣고 쓰기 순서로 자동으로 어려워져요"),
     CARD("뜻 카드", "카드를 보고 뜻을 떠올리기"),
-    CHOICE("4지선다", "뜻을 보고 단어 4개 중에서 고르기"),
+    CHOICE("4지선다 (단어 고르기)", "뜻을 보고 영단어 4개 중에서 고르기"),
+    MEANING_CHOICE("4지선다 (뜻 고르기)", "영단어를 보고 뜻 4개 중에서 고르기"),
     SPELLING("빈칸 스펠링", "몇 글자가 빠진 단어 채우기"),
     DICTATION("듣고 쓰기", "발음을 듣고 스펠링 쓰기"),
     MIXED("섞기", "여러 방식을 무작위로"),
 }
+
+/** Both 4지선다 kinds: pick the word for a meaning, or the meaning for a word. */
+val StudyMode.isChoice: Boolean get() = this == StudyMode.CHOICE || this == StudyMode.MEANING_CHOICE
 
 /** Which of a deck's cards a session takes, from the 학습 시작 sheet. */
 enum class StudyScope { ALL, UNKNOWN, STARRED }
@@ -19,12 +23,12 @@ enum class StudyScope { ALL, UNKNOWN, STARRED }
 /** The ways to study, from easiest to hardest. */
 /** Ready-made step orders for the 묶음 buttons. */
 val ModePresets = listOf(
-    "처음 외울 때" to listOf(StudyMode.LIST, StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION),
+    "처음 외울 때" to listOf(StudyMode.LIST, StudyMode.CARD, StudyMode.MEANING_CHOICE, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION),
     "복습" to listOf(StudyMode.CHOICE, StudyMode.DICTATION),
     "빠르게" to listOf(StudyMode.CARD),
 )
 
-val QuizModes = listOf(StudyMode.LIST, StudyMode.CARD, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION)
+val QuizModes = listOf(StudyMode.LIST, StudyMode.CARD, StudyMode.MEANING_CHOICE, StudyMode.CHOICE, StudyMode.SPELLING, StudyMode.DICTATION)
 
 /** What the 패스 button in 듣고 쓰기 does. */
 enum class DictationPass(val label: String) { WORD("이번 단어만"), SESSION("이번 학습 내내") }

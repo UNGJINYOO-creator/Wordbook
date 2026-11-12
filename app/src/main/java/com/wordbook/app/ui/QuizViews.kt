@@ -97,7 +97,6 @@ fun ChoiceQuiz(
         Spacer(Modifier.height(20.dp))
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             choices.forEach { c ->
-                val label = if (reverse) c.meaning else c.text
                 val colors = when {
                     answered != null && c.id == word.id ->
                         ButtonDefaults.outlinedButtonColors(containerColor = RightGreen, contentColor = Color.White)
@@ -114,7 +113,11 @@ fun ChoiceQuiz(
                     shape = ButtonShape,
                     border = null,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
-                ) { Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 2, textAlign = TextAlign.Center) }
+                ) {
+                    // 뜻 고르기: each option shows its meaning with the part-of-speech badge (동사, 형용사…).
+                    if (reverse) PosMeaning(c.pos, c.meaning, fontSize = 17.sp, badgeSize = 12.sp)
+                    else Text(c.text, style = MaterialTheme.typography.titleMedium, maxLines = 2, textAlign = TextAlign.Center)
+                }
             }
         }
         AutoAdvance(answered, onNext)

@@ -121,6 +121,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.input.pointer.PointerEventPass
 import com.wordbook.app.data.Srs
 import com.wordbook.app.data.StudyMode
+import com.wordbook.app.data.isChoice
 import com.wordbook.app.data.StudySettings
 import com.wordbook.app.data.AnswerEntry
 import com.wordbook.app.data.AnswerLog
@@ -166,7 +167,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     /** Ways of studying checked for this session on the deck screen; otherwise the settings ones. */
     private val modes: List<StudyMode> =
         if (handle.get<Boolean>("test") == true) {
-            settings.modes.filter { it == StudyMode.CHOICE || it == StudyMode.SPELLING || it == StudyMode.DICTATION }
+            settings.modes.filter { it.isChoice || it == StudyMode.SPELLING || it == StudyMode.DICTATION }
                 .ifEmpty { listOf(StudyMode.CHOICE, StudyMode.SPELLING) }
         } else decodeModes(handle.get<String>("mode")) ?: settings.modes
     private val staged: Boolean =
@@ -555,17 +556,24 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             m = StudyMode.CHOICE
             modeNote = "외웠어요 확인 문제예요"
         }
+        // 뜻 고르기 needs a meaning to show, and three other words with a different meaning.
+        val otherMeanings = others.filter { it.meaning.isNotBlank() && mainMeaning(it) != mainMeaning(word) }
+        if (m == StudyMode.MEANING_CHOICE && (word.meaning.isBlank() || otherMeanings.size < 3)) m = StudyMode.CHOICE
         if (m == StudyMode.CHOICE && others.size < 3) m = StudyMode.CARD
         if (m != StudyMode.CARD && word.text.length < 2) m = StudyMode.CARD
         mode = m
-        if (m == StudyMode.CHOICE) {
+        if (m.isChoice) {
             // Prefer wrong options with the same part of speech so the answer isn't obvious.
+            val others = if (m == StudyMode.MEANING_CHOICE) otherMeanings.distinctBy { mainMeaning(it) } else others
             val same = others.filter { it.pos == word.pos && word.pos.isNotEmpty() }.shuffled()
             val wrong = (same + others.shuffled()).distinctBy { it.id }.take(3)
             choices = (wrong + word).shuffled()
         }
         if (m == StudyMode.SPELLING) pattern = if (fullSpelling) allBlanks(word) else makePattern(word)
     }
+
+    /** The first meaning ("연결하다" of "연결하다, 잇다 / 연결"), to keep two options from reading the same. */
+    private fun mainMeaning(word: Word) = word.meaning.substringBefore(" / ").substringBefore(",").trim()
 
     private fun allBlanks(word: Word) = word.text.map { if (it.isLetter()) '_' else it }.joinToString("")
 
@@ -648,7 +656,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         canUndo = !test
         // Card swipes are the child's own word, so only quiz answers count for stars and the right rate.
         // A 객관식 answer picked faster than the 찍기 limit (설정, default 1초) is a guess: no stars, no goal, no right rate.
-        val guessed = mode == StudyMode.CHOICE && answerMs in 1 until settings.guessMs
+        val guessed = mode.isChoice && answerMs in 1 until settings.guessMs
         if (guessed && answer != Answer.UNKNOWN) celebrate("너무 빨라요! 뜻을 읽고 골라요 🙂", sound = false)
         if (mode != StudyMode.CARD) {
             answerLog.add(
@@ -965,10 +973,10 @@ fun StudyScreen(
                         // key() resets swipe offset, flip animation and typed text for each new question.
                         key(vm.turn) {
                             when (vm.mode) {
-                                StudyMode.CHOICE -> ChoiceQuiz(
+                                StudyMode.CHOICE, StudyMode.MEANING_CHOICE -> ChoiceQuiz(
                                     word = word,
                                     choices = vm.choices,
-                                    reverse = vm.backFirst,
+                                    reverse = vm.mode == StudyMode.MEANING_CHOICE || vm.backFirst,
                                     answered = vm.answered,
                                     pickedId = vm.pickedId,
                                     onPick = vm::pick,

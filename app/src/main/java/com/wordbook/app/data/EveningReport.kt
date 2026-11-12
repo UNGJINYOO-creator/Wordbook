@@ -69,7 +69,7 @@ object EveningReport {
     }
 
     private val posNames = mapOf("명" to "명사", "동" to "동사", "형" to "형용사", "부" to "부사")
-    private val modeNames = mapOf(StudyMode.CHOICE to "객관식", StudyMode.SPELLING to "빈칸", StudyMode.DICTATION to "듣고 쓰기")
+    private val modeNames = mapOf(StudyMode.CHOICE to "객관식", StudyMode.MEANING_CHOICE to "뜻 고르기", StudyMode.SPELLING to "빈칸", StudyMode.DICTATION to "듣고 쓰기")
     private fun pct(right: Int, n: Int) = if (n == 0) 0 else right * 100 / n
 
     /** About fifteen lines: the day in three, the weak spots, then 낚시·원정·시험 summed up. */
@@ -105,7 +105,7 @@ object EveningReport {
             .map { l -> l.first().text to l.count { !it.correct } }
             .filter { it.second >= 2 }.sortedByDescending { it.second }
         val guessMs = StudySettings(context).guessMs
-        val guesses = if (guessMs <= 0) 0 else answers.count { it.mode == StudyMode.CHOICE && it.ms in 1 until guessMs }
+        val guesses = if (guessMs <= 0) 0 else answers.count { it.mode.isChoice && it.ms in 1 until guessMs }
         val worry = listOfNotNull(
             weakest(byPos)?.let { "${it.first} 정답률 ${it.second}%" },
             missedMany.takeIf { it.isNotEmpty() }?.let { l ->
@@ -127,10 +127,10 @@ object EveningReport {
                     val weak = weakest(byMode)
                     add("✍️ 방식별: " + byMode.joinToString(" · ") { "${it.first} ${it.second}%" + if (it == weak) " ⚠️" else "" })
                 }
-                val pairs = answers.filter { !it.correct && it.mode == StudyMode.CHOICE && it.response.isNotBlank() }
+                val pairs = answers.filter { !it.correct && it.mode.isChoice && it.response.isNotBlank() }
                     .groupingBy { "${it.text}↔${it.response}" }.eachCount().entries.sortedByDescending { it.value }
                 if (pairs.isNotEmpty()) add("🔀 헷갈린 짝: " + pairs.take(2).joinToString(", ") { it.key })
-                val typos = answers.filter { !it.correct && it.mode != StudyMode.CHOICE && EveningSummary.isRealTypo(it.response, it.text) }
+                val typos = answers.filter { !it.correct && !it.mode.isChoice && EveningSummary.isRealTypo(it.response, it.text) }
                     .distinctBy { it.wordId }
                 if (typos.isNotEmpty()) add("🔤 틀린 스펠링: " + typos.take(3).joinToString(", ") { "${it.response.trim()}→${it.text}" })
             }
