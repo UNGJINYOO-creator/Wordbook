@@ -66,7 +66,7 @@ data class WeeklyReport(
             "대" to "대명사", "전" to "전치사", "접" to "접속사", "조" to "조동사",
         )
         private val kindNames = mapOf(
-            "CARD" to "뜻 카드", "CHOICE" to "객관식", "SPELLING" to "빈칸 철자", "DICTATION" to "듣고 쓰기",
+            "CARD" to "뜻 카드", "CHOICE" to "객관식", "MEANING_CHOICE" to "뜻 고르기", "SPELLING" to "빈칸 철자", "DICTATION" to "듣고 쓰기",
             "LIST" to "단어장 보기", "FISHING" to "낚시 게임",
         )
         private val weekdays = listOf("일", "월", "화", "수", "목", "금", "토")
@@ -106,7 +106,7 @@ data class WeeklyReport(
         fun reasonOf(e: AnswerEntry): Pair<String, String> {
             val r = e.response.trim()
             return when (e.mode) {
-                StudyMode.CHOICE -> when {
+                StudyMode.CHOICE, StudyMode.MEANING_CHOICE -> when {
                     r.isEmpty() -> MEANING to "뜻을 못 골랐어요"
                     looksAlike(r, e.text) -> SIMILAR to "${r}와 헷갈렸어요"
                     else -> MEANING to "${r}의 뜻으로 골랐어요"

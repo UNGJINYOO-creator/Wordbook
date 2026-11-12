@@ -21,6 +21,8 @@ class WeeklyReportTest {
         assertEquals(WeeklyReport.SIMILAR, WeeklyReport.reasonOf(wrong(StudyMode.CHOICE, "affect", "effect")).first)
         assertEquals("effect와 헷갈렸어요", WeeklyReport.reasonOf(wrong(StudyMode.CHOICE, "affect", "effect")).second)
         assertEquals(WeeklyReport.MEANING, WeeklyReport.reasonOf(wrong(StudyMode.CHOICE, "rarely", "often")).first)
+        assertEquals(WeeklyReport.MEANING, WeeklyReport.reasonOf(wrong(StudyMode.MEANING_CHOICE, "rarely", "often")).first)
+        assertEquals(WeeklyReport.SIMILAR, WeeklyReport.reasonOf(wrong(StudyMode.MEANING_CHOICE, "affect", "effect")).first)
         assertEquals(WeeklyReport.SPELLING, WeeklyReport.reasonOf(wrong(StudyMode.SPELLING, "receive", "recieve")).first)
         assertEquals(WeeklyReport.SPELLING, WeeklyReport.reasonOf(wrong(StudyMode.DICTATION, "familiar", "familar")).first)
         assertEquals(WeeklyReport.LISTENING, WeeklyReport.reasonOf(wrong(StudyMode.DICTATION, "although", "all go")).first)
