@@ -539,3 +539,72 @@ fun GiantMixEditor(settings: StudySettings) {
         }
     }
 }
+
+/** The Gemini key for reading photos with AI; kept encrypted on this phone only. */
+@Composable
+fun AiEditor(onChange: () -> Unit = {}) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    var saved by remember { mutableStateOf(com.wordbook.app.ml.AiKey.get(context)) }
+    var enabled by remember { mutableStateOf(com.wordbook.app.ml.AiKey.enabled(context)) }
+    var typed by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    Column {
+        Text(
+            "사진을 찍으면 구글 제미나이(AI)가 단어장 페이지를 보고 큰 표제어와 뜻, 품사를 골라 줘요. " +
+                "무료 키로 하루 20장쯤은 정확한 모델이, 그다음은 가벼운 모델이 읽어요. " +
+                "인터넷이 없거나 사용량을 다 쓰면 예전 방식으로 자동으로 읽어요. 뜻은 지금처럼 사전으로 한 번 더 확인해요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        if (saved.isNotBlank()) {
+            SwitchRow("AI로 사진 읽기", "끄면 키는 그대로 두고 예전 방식으로 읽어요", enabled) { on ->
+                com.wordbook.app.ml.AiKey.setEnabled(context, on); enabled = on; onChange()
+            }
+            Text(
+                "키 저장됨 (끝자리 …${saved.takeLast(4)}) · 이 기기에만 암호화해서 저장돼요",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(vertical = 4.dp),
+            )
+        }
+        OutlinedTextField(
+            value = typed,
+            onValueChange = { typed = it.trim() },
+            label = { Text(if (saved.isBlank()) "제미나이 API 키 붙여넣기" else "새 키로 바꾸기") },
+            singleLine = true,
+            visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        )
+        TextButton(onClick = {
+            val key = typed
+            scope.launch {
+                status = "키 확인 중…"
+                val error = com.wordbook.app.ml.GeminiVision.testKey(key)
+                if (error == null && !com.wordbook.app.ml.AiKey.set(context, key)) {
+                    status = "이 기기에서 키를 안전하게 저장하지 못했어요"
+                } else if (error == null) {
+                    com.wordbook.app.ml.AiKey.setEnabled(context, true)
+                    saved = com.wordbook.app.ml.AiKey.get(context)
+                    enabled = true
+                    typed = ""
+                    status = "✅ 키가 맞아요. 이제 사진을 AI가 읽어요"
+                    onChange()
+                } else {
+                    status = error
+                }
+            }
+        }, enabled = typed.length > 10) { Text("🔑 키 확인하고 저장") }
+        TextButton(onClick = { uri.openUri("https://aistudio.google.com/apikey") }) { Text("🌐 무료 키 받으러 가기 (Google AI Studio)") }
+        if (saved.isNotBlank()) {
+            TextButton(onClick = {
+                com.wordbook.app.ml.AiKey.set(context, "")
+                saved = ""
+                status = "키를 지웠어요"
+                onChange()
+            }) { Text("🗑 키 지우기") }
+        }
+        status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+    }
+}
