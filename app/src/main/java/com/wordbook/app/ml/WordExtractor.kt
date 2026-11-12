@@ -29,6 +29,16 @@ object WordExtractor {
     @Volatile var lastSize: Pair<Int, Int> = 0 to 0
         private set
 
+    /**
+     * How the last photo was read, for the scan screen: "" for the on-device reader, else a note such as
+     * "AI가 읽었어요" or why the AI couldn't be used.
+     */
+    @Volatile var lastNote: String = ""
+        private set
+    /** True when the AI read the last photo. */
+    @Volatile var lastByAi: Boolean = false
+        private set
+
     suspend fun extract(context: Context, uri: Uri): PairResult {
         val dict = dictionary(context)
         val image = InputImage.fromFilePath(context, uri)
@@ -45,6 +55,41 @@ object WordExtractor {
             recognizer.close()
         }
         lastLines = lines.sortedWith(compareBy({ it.top }, { it.left }))
-        return VocabPairer(correct = { SpellFix.fix(dict, it) }) { isWord(dict, it) }.pairWithDropped(lines)
+        val local = VocabPairer(correct = { SpellFix.fix(dict, it) }) { isWord(dict, it) }.pairWithDropped(lines)
+        lastByAi = false
+        lastNote = ""
+        if (!AiKey.ready(context)) return local
+        return try {
+            readWithAi(context, uri, image.width, image.height, local, lines)
+        } catch (e: Exception) {
+            lastNote = "AI가 읽다가 문제가 생겨서 기존 방식으로 읽었어요."
+            local
+        }
+    }
+
+    private suspend fun readWithAi(context: Context, uri: Uri, width: Int, height: Int, local: PairResult, lines: List<OcrLine>): PairResult {
+        // The AI reads the page; the on-device lines above still give where each word is in the photo.
+        val photo = com.wordbook.app.ui.PhotoCrops.open(context, uri, width, height, 2048)?.first
+        if (photo == null) {
+            lastNote = "사진을 AI에 보낼 수 없어서 기존 방식으로 읽었어요."
+            return local
+        }
+        val jpeg = withContext(Dispatchers.Default) { try { GeminiVision.encode(photo) } finally { photo.recycle() } }
+        return when (val r = GeminiVision.read(AiKey.get(context), jpeg)) {
+            is GeminiVision.Outcome.Words -> {
+                if (r.words.isEmpty()) {
+                    lastNote = "AI가 표제어를 찾지 못해서 기존 방식으로 읽었어요."
+                    local
+                } else {
+                    lastByAi = true
+                    lastNote = if (r.model.contains("lite")) "AI(라이트)가 읽었어요" else "AI가 읽었어요"
+                    PairResult(AiMerge.merge(r.words, local, lines), emptyList())
+                }
+            }
+            is GeminiVision.Outcome.Failed -> {
+                lastNote = if ("기존 방식" in r.reason) r.reason else "${r.reason} 기존 방식으로 읽었어요."
+                local
+            }
+        }
     }
 }

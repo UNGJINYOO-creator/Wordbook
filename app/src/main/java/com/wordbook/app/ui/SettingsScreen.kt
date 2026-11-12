@@ -233,6 +233,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 var fishDetail by remember { mutableStateOf(false) }
                 var fishReset by remember { mutableIntStateOf(0) }
                 var rewardCount by remember { mutableIntStateOf(game.rewards.size) }
+                var aiOn by remember { mutableStateOf(com.wordbook.app.ml.AiKey.ready(context)) }
                 var hand by remember { mutableIntStateOf(settings.handSize) }
                 var leave by remember { mutableIntStateOf(settings.knownToLeave) }
                 var repeatMissed by remember { mutableStateOf(settings.repeatMissed) }
@@ -455,6 +456,13 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             RewardEditor(game) { rewardCount = game.rewards.size; saved() }
                         }
                     }
+                }
+                Group(
+                    "🤖 AI 사진 인식",
+                    if (aiOn) "켜짐 · 제미나이" else "꺼짐 · 기존 방식",
+                    open == "ai", { toggle("ai") },
+                ) {
+                    Body { AiEditor { aiOn = com.wordbook.app.ml.AiKey.ready(context) } }
                 }
                 Group(
                     "📨 텔레그램 알림",

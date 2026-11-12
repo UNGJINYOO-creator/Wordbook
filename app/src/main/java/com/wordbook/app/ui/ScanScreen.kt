@@ -164,18 +164,23 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         val sizes = mutableMapOf<Int, Pair<Int, Int>>()
         val lines = mutableListOf<com.wordbook.app.ml.OcrLine>()
         var failed = 0
+        val notes = mutableListOf<String>()
+        val ai = com.wordbook.app.ml.AiKey.ready(getApplication())
         uris.forEachIndexed { i, uri ->
-            if (uris.size > 1) status = "사진 ${i + 1}/${uris.size}에서 영어 단어를 찾는 중…"
+            val which = if (uris.size > 1) "사진 ${i + 1}/${uris.size}" else "사진"
+            status = if (ai) "AI가 $which 속 단어를 읽는 중… (10~30초)" else "${which}에서 영어 단어를 찾는 중…"
             try {
                 val r = WordExtractor.extract(getApplication(), uri)
                 extracted += r.words.map { it to i }
                 droppedWords += r.dropped.map { it to i }
                 sizes[i] = WordExtractor.lastSize
                 lines += WordExtractor.lastLines
+                WordExtractor.lastNote.takeIf { it.isNotEmpty() }?.let { notes += it }
             } catch (e: Exception) {
                 failed++
             }
         }
+        val engine = notes.distinct().joinToString(" ")
         rawLines = lines
         val words = extracted.distinctBy { it.first.text.lowercase() }
         var nextId = 0
@@ -186,7 +191,7 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         }
         if (words.isEmpty()) {
             busy = false
-            status = "영어 단어를 찾지 못했어요. 글자가 잘 보이게 다시 찍어 보세요."
+            status = "영어 단어를 찾지 못했어요. 글자가 잘 보이게 다시 찍어 보세요." + (if (engine.isNotEmpty()) " ($engine)" else "")
             return
         }
         // A photo makes its own new deck, so every word goes in even if another deck has it.
@@ -218,7 +223,7 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
             bmp.recycle()
         }
         val fromPhoto = candidates.count { !MeaningCheck.suspicious(it.meaning) }
-        val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)"
+        val found = "단어 ${candidates.size}개 (사진 속 뜻 ${fromPhoto}개)" + (if (engine.isNotEmpty()) " · $engine" else "")
 
         // 낚아보카 사전 first: when the photo says the same, the reviewed meaning (and its part of speech) goes in;
         // when they clearly differ, the book's meaning stays highlighted with the dictionary's next to it.
