@@ -117,12 +117,27 @@ fun LockCardSettings(on: Boolean, hide: Boolean, onOn: (Boolean) -> Unit, onHide
             )
         }
         Text(
-            "알림창엔 있는데 잠금화면에만 안 보이면, 휴대폰 설정 → 잠금화면 → 알림에서\n" +
-                "① 알림 켜기  ② 보기 스타일 '상세 정보' (삼성은 처음에 '아이콘만'인 경우가 많아요)\n" +
-                "③ '내용 숨기기'는 끄기  를 확인해 주세요. 카드를 밀어서 지워도 1시간 안에 다시 나와요.",
+            "알림창엔 있는데 잠금화면에만 안 보이면 (삼성 갤럭시)\n" +
+                "① 휴대폰 설정 → 알림 → 잠금화면 알림 → 켜기\n" +
+                "② 같은 화면에서 '알림 내용 숨기기'는 끄고, '무음 알림 표시'는 켜기 (있을 때만)\n" +
+                "③ 보기 스타일이 '아이콘만'이면 '상세 정보'(또는 '카드')로\n" +
+                "④ 아래 '단어 카드 알림 종류 열기' → '무음'이 아니라 '소리/알림'으로, 잠금화면 '표시'\n" +
+                "메뉴 이름은 폰마다 조금 달라요. 설정 맨 위 🔍 검색에 '잠금화면 알림'을 쳐도 나와요.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 8.dp),
+        )
+        SecondaryButton(
+            "🔔 단어 카드 알림 종류 열기",
+            {
+                context.startActivity(
+                    Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .putExtra(Settings.EXTRA_CHANNEL_ID, LockCard.CHANNEL)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            },
+            Modifier.fillMaxWidth().padding(top = 6.dp),
         )
         SecondaryButton("🔔 이 앱 알림 설정 열기", openSettings, Modifier.fillMaxWidth().padding(top = 6.dp))
     }

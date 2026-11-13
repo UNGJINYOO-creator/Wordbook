@@ -28,7 +28,7 @@ import java.time.LocalDate
  */
 object LockCard {
     // "lockcard2": the first channel was shown as a silent notification, which many lock screens hide.
-    private const val CHANNEL = "lockcard2"
+    const val CHANNEL = "lockcard2"
     private const val NOTIFY_ID = 7301
     const val ACTION_ANSWER = "com.wordbook.app.LOCKCARD_ANSWER"
     const val ACTION_REFRESH = "com.wordbook.app.LOCKCARD_REFRESH"
