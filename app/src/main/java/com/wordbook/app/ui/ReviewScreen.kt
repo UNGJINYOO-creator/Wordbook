@@ -353,7 +353,7 @@ private fun RewardPanel(vm: ReviewViewModel) {
         }
         if (vm.rewards.isEmpty()) {
             Text(
-                "부모님이 설정 → 보상 쿠폰에서 보상을 정하면 여기서 낚은 물고기로 쿠폰을 받을 수 있어요.",
+                "부모님이 설정 → 게임과 보상 → 보상 쿠폰에서 보상을 정하면 여기서 낚은 물고기로 쿠폰을 받을 수 있어요.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.outline,
             )

@@ -93,7 +93,7 @@ object Backup {
         val settings = StudySettings(context)
         return Telegram.sendDocument(
             settings.telegramToken, settings.telegramChatId, fileName(), toBytes(context),
-            "💾 낚아보카 백업이에요. 새 휴대폰에서는 이 파일을 받아 설정 > 백업 > 불러오기를 누르세요.",
+            "💾 낚아보카 백업이에요. 새 휴대폰에서는 이 파일을 받아 설정 > 부모님 관리 > 동기화·백업 > 불러오기를 누르세요.",
         )
     }
 }

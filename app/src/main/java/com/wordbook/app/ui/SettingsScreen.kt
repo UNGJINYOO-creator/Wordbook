@@ -1,6 +1,7 @@
 package com.wordbook.app.ui
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -22,7 +23,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +50,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
@@ -79,6 +85,22 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
     var backupStatus by remember { mutableStateOf<String?>(null) }
     // Only one group is open at a time, so the screen stays short.
     var open by rememberSaveable { mutableStateOf<String?>(null) }
+    // Settings home shows 3 tiles; a tile opens its page. Plain remember: coming back to the tab starts on the home again.
+    var page by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = page != null) { page = null; open = null }
+    // Changes are kept at once; when the settings tab is left and something changed, send it to the family's other devices.
+    val prefSnapshot = { listOf("study", "alerts", "rewards").joinToString("|") { context.getSharedPreferences(it, android.content.Context.MODE_PRIVATE).all.toString() } }
+    val before = remember { prefSnapshot() }
+    DisposableEffect(Unit) {
+        onDispose {
+            if (prefSnapshot() != before) {
+                val app = context.applicationContext
+                kotlinx.coroutines.CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob()).launch {
+                    com.wordbook.app.sync.FamilySync.run(app)
+                }
+            }
+        }
+    }
     var restored by remember { mutableStateOf(false) }
     var settingPin by remember { mutableStateOf(false) }
     var settingPattern by remember { mutableStateOf(false) }
@@ -143,72 +165,54 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
     }
     val toggle = { name: String -> open = if (open == name) null else name }
 
+    val pageTitle = when (page) {
+        "study" -> "📚 공부 설정"
+        "game" -> "🎣 게임과 보상"
+        "parent" -> "👨‍👩‍👧 부모님 관리"
+        else -> "설정"
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             AppTopBar(
                 containerColor = MaterialTheme.colorScheme.surface,
-                title = { Text("설정", style = MaterialTheme.typography.headlineMedium) },
+                title = { Text(pageTitle, style = if (page == null) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleLarge) },
+                navigationIcon = {
+                    if (page != null) {
+                        IconButton(onClick = { page = null; open = null }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                        }
+                    }
+                },
             )
         },
         // Every change is kept the moment it is made; 저장 confirms it, folds the groups and sends it to the family's other device.
         bottomBar = {
-            Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
-                Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    PrimaryButton("💾 설정 저장", {
-                        open = null
-                        Toast.makeText(context, "설정을 모두 저장했어요 👍", Toast.LENGTH_SHORT).show()
-                        scope.launch(Dispatchers.IO) { com.wordbook.app.sync.FamilySync.run(context.applicationContext) }
-                    })
+            if (page != null) {
+                Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 6.dp) {
+                    Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        PrimaryButton("💾 설정 저장", {
+                            open = null
+                            Toast.makeText(context, "설정을 모두 저장했어요 👍", Toast.LENGTH_SHORT).show()
+                            scope.launch(Dispatchers.IO) { com.wordbook.app.sync.FamilySync.run(context.applicationContext) }
+                        })
+                    }
                 }
             }
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState())) {
-            Column(
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
-                    .clickable { wizard = true }
-                    .padding(16.dp),
-            ) {
-                Text("🧭 설정 길잡이로 한 번에 정하기", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+        val scroll = rememberScrollState()
+        // Each page starts at its top.
+        LaunchedEffect(page) { scroll.scrollTo(0) }
+        Column(Modifier.fillMaxSize().padding(padding).verticalScroll(scroll)) {
+            if (page != null) {
                 Text(
-                    "모든 설정을 팝업으로 한 장씩 차례로 정해요. ⭐ 추천 설정을 한 번에 맞출 수도 있어요.",
+                    "항목을 누르면 펼쳐져요. 바꾸면 바로 저장되고, 설정을 나가거나 💾 설정 저장을 누르면 연결된 다른 기기에도 보내요.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
             }
-            Column(
-                Modifier
-                    .padding(horizontal = 16.dp, vertical = 5.dp)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(16.dp))
-                    .padding(16.dp),
-            ) {
-                Text("➕ 단어 추가", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("넣을 단어장(기존 또는 새로)을 먼저 고르고, 사진·붙여넣기·직접 입력 중에서 골라요", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
-                Spacer(Modifier.height(8.dp))
-                PrimaryButton("➕ 단어 추가하기", { onAdd(AddKind.ADD) }, Modifier.fillMaxWidth())
-                Spacer(Modifier.height(12.dp))
-                Text("단어장 관리", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.outline)
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SecondaryButton("📒 빈 단어장", { onAdd(AddKind.DECK) }, Modifier.weight(1f))
-                    SecondaryButton("📚 종합단어장", { onAdd(AddKind.COLLECTION) }, Modifier.weight(1f))
-                }
-                Spacer(Modifier.height(8.dp))
-                var showCheck by remember { mutableStateOf(false) }
-                if (showCheck) DeckCheckDialog(null, onDismiss = { showCheck = false })
-                SecondaryButton("🔍 전체 단어장 점검 (오타·뜻)", { showCheck = true }, Modifier.fillMaxWidth())
-            }
-            Text(
-                "아래 항목을 누르면 펼쳐져요. 바꾸면 바로 반영돼요. 다 고친 뒤 아래 💾 설정 저장을 누르면 연결된 다른 기기에도 보내요.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            )
             key(refresh) {
                 var dailyWords by remember { mutableIntStateOf(settings.dailyWords) }
                 var goal by remember { mutableIntStateOf(settings.dailyGoalMinutes) }
@@ -240,340 +244,440 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 var lockOn by remember { mutableStateOf(com.wordbook.app.data.LockCard.enabled(context)) }
                 var lockHide by remember { mutableStateOf(com.wordbook.app.data.LockCard.hideMeaning(context)) }
 
-                UpdateCard()
-                Group(
-                    "🎯 하루 목표",
-                    listOf(
-                        if (dailyWords > 0) "단어 ${dailyWords}개" else "단어 목표 없음",
-                        if (goal > 0) "${goal}분" else "시간 목표 없음",
-                        "알림 ${Opt.reminderLabel(reminderHour)}",
-                    ).joinToString(" · "),
-                    open == "goal", { toggle("goal") },
-                ) {
-                    Body {
-                        Labeled("하루 외울 단어", "객관식·빈칸·듣고 쓰기에서 맞힌 단어만 세요. 오늘 학습에 새 단어도 이만큼 나와요.") {
-                            NumberChoice(dailyWords, Opt.dailyWords, "개", 300, min = 0) { dailyWords = it; settings.dailyWords = it }
-                        }
-                        Labeled("하루 최소 학습 시간", "채우면 오늘 목표 달성, 텔레그램으로 결과가 가요") {
-                            NumberChoice(goal, Opt.minutes, "분", 180, min = 0) { goal = it; settings.dailyGoalMinutes = it }
-                        }
-                        Labeled("저녁 알림", "이 시간까지 목표를 못 채우면 알림을 띄워요. 직접 칸은 24시간제 (예: 18)") {
-                            NumberChoice(reminderHour, Opt.reminder, "시", 23, min = 0) {
-                                reminderHour = it; settings.reminderHour = it; Reminder.schedule(context)
-                            }
-                        }
-                    }
+                if (page == null) {
+                    SettingsHome(
+                        onAdd = onAdd,
+                        onWizard = { wizard = true },
+                        onPage = { page = it; open = null },
+                        studySummary = listOf(
+                            if (dailyWords > 0) "하루 ${dailyWords}개" else null,
+                            if (goal > 0) "${goal}분" else null,
+                            modes.joinToString("→") { it.label },
+                        ).filterNotNull().joinToString(" · "),
+                        gameSummary = "낚시 ${fishLevel?.name ?: "직접 조정"} · " + (if (fishTries > 0) "하루 ${fishTries}번" else "횟수 무제한") + " · 보상 ${rewardCount}개",
+                        parentSummary = listOf(
+                            if (hasPin) "잠금 켬" else "잠금 없음",
+                            if (settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()) "텔레그램 연결" else "텔레그램 없음",
+                            if (aiOn) "AI 켬" else "AI 끔",
+                        ).joinToString(" · ") + " · 동기화·백업 · 초기화 · 업데이트",
+                    )
                 }
-                Group(
-                    "📚 학습 방법",
-                    modes.joinToString(" → ") { it.label } + " · " + (if (size > 0) "${size}장씩" else "전부"),
-                    open == "study", { toggle("study") },
-                ) {
-                    Body {
-                        Text("학습 순서", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            "켜 둔 단계가 위에서부터 순서대로 진행돼요. ▲▼로 순서를 바꿀 수 있어요",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    ModePicker(modes, staged) { m, st ->
-                        modes = m; staged = st; settings.modes = m; settings.staged = st
-                    }
-                    Body {
-                        Labeled("빈칸 난이도", "자동은 잘 외운 단어일수록 빈칸이 늘어나요") {
-                            Choice(blank, BlankLevel.entries.map { it to it.label }) { blank = it; settings.blankLevel = it }
-                        }
-                        if (StudyMode.DICTATION in modes) {
-                            Labeled("듣고 쓰기에서 '패스'를 누르면 빈칸으로", "소리가 꺼져 있으면 듣고 쓰기는 자동으로 빈칸 문제로 바뀌어요") {
-                                Choice(pass, DictationPass.entries.map { it to it.label }) { pass = it; settings.dictationPass = it }
+                if (page == "study") {
+                    Group(
+                        "🎯 하루 목표",
+                        listOf(
+                            if (dailyWords > 0) "단어 ${dailyWords}개" else "단어 목표 없음",
+                            if (goal > 0) "${goal}분" else "시간 목표 없음",
+                            "알림 ${Opt.reminderLabel(reminderHour)}",
+                        ).joinToString(" · "),
+                        open == "goal", { toggle("goal") },
+                    ) {
+                        Body {
+                            Labeled("하루 외울 단어", "객관식·빈칸·듣고 쓰기에서 맞힌 단어만 세요. 오늘 학습에 새 단어도 이만큼 나와요.") {
+                                NumberChoice(dailyWords, Opt.dailyWords, "개", 300, min = 0) { dailyWords = it; settings.dailyWords = it }
                             }
-                        }
-                        Labeled("한 번에 학습할 카드") {
-                            NumberChoice(size, Opt.session, "장", 999, min = 0) { size = it; settings.sessionSize = it }
-                        }
-                        Labeled("시험 문제 수") {
-                            NumberChoice(testSize, Opt.test, "문제", 200) { testSize = it; settings.testSize = it }
-                        }
-                    }
-                }
-                Group(
-                    "🃏 카드와 소리",
-                    listOf(
-                        if (shuffle) "섞기" else "알파벳 순",
-                        "글자 " + (Opt.textScale.firstOrNull { it.first == textScale }?.second ?: "보통"),
-                        if (autoSpeak) "발음 켬" else "발음 끔",
-                    ).joinToString(" · "),
-                    open == "card", { toggle("card") },
-                ) {
-                    Body {
-                        SwitchRow("카드 섞기", "학습할 때마다 순서를 무작위로 (끄면 알파벳 순)", shuffle) { shuffle = it; settings.shuffle = it }
-                        SwitchRow("뒷면 먼저", "뜻을 먼저 보고 영어 단어 떠올리기", backFirst) { backFirst = it; settings.backFirst = it }
-                        Labeled("글자 크기") {
-                            Choice(textScale, Opt.textScale) { textScale = it; settings.textScale = it }
-                        }
-                        SwitchRow("발음 자동 재생", "카드가 나올 때마다 발음을 들려줘요", autoSpeak) { autoSpeak = it; settings.autoSpeak = it }
-                        SwitchRow("효과음", "콤보·레벨 업 때 소리를 내요", soundEffects) { soundEffects = it; settings.soundEffects = it }
-                        if (soundEffects) {
-                            Labeled("콤보 소리 (누르면 들어 봐요)") {
-                                Choice(comboSound, Sfx.names.mapIndexed { i, n -> i to n }) {
-                                    comboSound = it; settings.comboSound = it; sfx.combo(it, 3)
+                            Labeled("하루 최소 학습 시간", "채우면 오늘 목표 달성, 텔레그램으로 결과가 가요") {
+                                NumberChoice(goal, Opt.minutes, "분", 180, min = 0) { goal = it; settings.dailyGoalMinutes = it }
+                            }
+                            Labeled("저녁 알림", "이 시간까지 목표를 못 채우면 알림을 띄워요. 직접 칸은 24시간제 (예: 18)") {
+                                NumberChoice(reminderHour, Opt.reminder, "시", 23, min = 0) {
+                                    reminderHour = it; settings.reminderHour = it; Reminder.schedule(context)
                                 }
                             }
                         }
                     }
-                }
-                Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide), open == "lock", { toggle("lock") }) {
-                    Body { LockCardSettings(lockOn, lockHide, { lockOn = it }, { lockHide = it }) }
-                }
-                Group(
-                    "🎣 단어 낚시 게임",
-                    "난이도 ${fishLevel?.name ?: "직접 조정"} · " + (if (fishTries > 0) "하루 ${fishTries}번" else "횟수 무제한"),
-                    open == "fish", { toggle("fish") },
-                ) {
-                    Body {
-                        Text(
-                            "오늘 목표를 채우면 열리는 낚시 게임이에요. 맞히면 물고기를 끌어오고, 틀리거나 가만히 있으면 멀어져요.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Labeled("난이도") {
-                            Choice(fishLevel, FishLevels.map { it to it.name }) { level ->
-                                fishLevel = level; level?.let(settings::applyFish); fishReset++
-                            }
-                        }
-                        Labeled("하루 도전 횟수") {
-                            NumberChoice(fishTries, Opt.tries, "번", 20, min = 0) { fishTries = it; settings.fishTries = it }
-                        }
-                        GiantMixEditor(settings)
-                        // +/- per answer stay open: these are what a parent tunes most.
-                        key(fishReset) {
-                            val changed = { fishLevel = settings.fishLevel() }
-                            Text("✅ 맞히면 끌어오는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                            FishNumber("객관식", "m", settings.fishRight, 0, 60) { settings.fishRight = it; changed() }
-                            FishNumber("빈칸·듣고 쓰기", "m", settings.fishRightTyping, 0, 60) { settings.fishRightTyping = it; changed() }
-                            FishNumber("3개 연속 맞히면 더", "m", settings.fishCombo, 0, 60) { settings.fishCombo = it; changed() }
-                            Text("❌ 틀리면 멀어지는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                            FishNumber("객관식", "m", settings.fishWrong, 0, 60) { settings.fishWrong = it; changed() }
-                            FishNumber("빈칸·듣고 쓰기", "m", settings.fishWrongTyping, 0, 60) { settings.fishWrongTyping = it; changed() }
+                    Group(
+                        "📚 학습 방법",
+                        modes.joinToString(" → ") { it.label } + " · " + (if (size > 0) "${size}장씩" else "전부"),
+                        open == "study", { toggle("study") },
+                    ) {
+                        Body {
+                            Text("학습 순서", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "숫자를 지우고 새로 쓰면 바로 저장돼요. 틀릴 때를 크게, 맞힐 때를 작게 하면 어려워져요.",
+                                "켜 둔 단계가 위에서부터 순서대로 진행돼요. ▲▼로 순서를 바꿀 수 있어요",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
                         }
-                        TextButton(onClick = { fishDetail = !fishDetail }) {
-                            Text(if (fishDetail) "▾ 시작 거리·도망 속도 접기" else "▸ 시작 거리·도망 속도 직접 조정")
+                        ModePicker(modes, staged) { m, st ->
+                            modes = m; staged = st; settings.modes = m; settings.staged = st
                         }
-                        if (fishDetail) key(fishReset) {
+                        Body {
+                            Labeled("빈칸 난이도", "자동은 잘 외운 단어일수록 빈칸이 늘어나요") {
+                                Choice(blank, BlankLevel.entries.map { it to it.label }) { blank = it; settings.blankLevel = it }
+                            }
+                            if (StudyMode.DICTATION in modes) {
+                                Labeled("듣고 쓰기에서 '패스'를 누르면 빈칸으로", "소리가 꺼져 있으면 듣고 쓰기는 자동으로 빈칸 문제로 바뀌어요") {
+                                    Choice(pass, DictationPass.entries.map { it to it.label }) { pass = it; settings.dictationPass = it }
+                                }
+                            }
+                            Labeled("한 번에 학습할 카드") {
+                                NumberChoice(size, Opt.session, "장", 999, min = 0) { size = it; settings.sessionSize = it }
+                            }
+                            Labeled("시험 문제 수") {
+                                NumberChoice(testSize, Opt.test, "문제", 200) { testSize = it; settings.testSize = it }
+                            }
+                        }
+                    }
+                    Group(
+                        "🃏 카드와 소리",
+                        listOf(
+                            if (shuffle) "섞기" else "알파벳 순",
+                            "글자 " + (Opt.textScale.firstOrNull { it.first == textScale }?.second ?: "보통"),
+                            if (autoSpeak) "발음 켬" else "발음 끔",
+                        ).joinToString(" · "),
+                        open == "card", { toggle("card") },
+                    ) {
+                        Body {
+                            SwitchRow("카드 섞기", "학습할 때마다 순서를 무작위로 (끄면 알파벳 순)", shuffle) { shuffle = it; settings.shuffle = it }
+                            SwitchRow("뒷면 먼저", "뜻을 먼저 보고 영어 단어 떠올리기", backFirst) { backFirst = it; settings.backFirst = it }
+                            Labeled("글자 크기") {
+                                Choice(textScale, Opt.textScale) { textScale = it; settings.textScale = it }
+                            }
+                            SwitchRow("발음 자동 재생", "카드가 나올 때마다 발음을 들려줘요", autoSpeak) { autoSpeak = it; settings.autoSpeak = it }
+                            SwitchRow("효과음", "콤보·레벨 업 때 소리를 내요", soundEffects) { soundEffects = it; settings.soundEffects = it }
+                            if (soundEffects) {
+                                Labeled("콤보 소리 (누르면 들어 봐요)") {
+                                    Choice(comboSound, Sfx.names.mapIndexed { i, n -> i to n }) {
+                                        comboSound = it; settings.comboSound = it; sfx.combo(it, 3)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide), open == "lock", { toggle("lock") }) {
+                        Body { LockCardSettings(lockOn, lockHide, { lockOn = it }, { lockHide = it }) }
+                    }
+                    Group(
+                        "⚙️ 학습 고급",
+                        "카드 ${hand}장씩 돌리기 · 최근 단어 ${recentShare}% · ${idle}초 멈춤",
+                        open == "advanced", { toggle("advanced") },
+                    ) {
+                        Body {
+                            Text("카드 반복", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                             Text(
-                                "맞혀서 끌어오는 거리가 도망가는 거리보다 넉넉해야 낚을 수 있어요.",
+                                "카드 몇 장을 돌려 가며 보다가, 충분히 맞힌 카드는 빠지고 다음 카드가 들어와요",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
-                            val changed = { fishLevel = settings.fishLevel() }
-                            // Stored as the old time values: distance = fishGoal - time, so the line snaps at fishGoal metres.
-                            FishNumber("시작 거리", "m", settings.fishGoal - settings.fishStart, 5, 1190) {
-                                settings.fishStart = (settings.fishGoal - it).coerceAtLeast(1); changed()
+                            Labeled("한 번에 돌리는 카드") {
+                                NumberChoice(hand, Opt.hand, "장", 100) { hand = it; settings.handSize = it }
                             }
-                            FishNumber("이만큼 멀어지면 줄이 끊어져요", "m", settings.fishGoal, 20, 1200) {
-                                val start = settings.fishGoal - settings.fishStart
-                                settings.fishGoal = it
-                                settings.fishStart = (it - start).coerceAtLeast(1); changed()
+                            Labeled("헷갈려요 몇 번이면 빠질까요?", "외웠어요는 1번이면 빠져요") {
+                                NumberChoice(leave, Opt.leave, "번", 9) { leave = it; settings.knownToLeave = it }
                             }
-                            FishNumber("처음: 10초마다 도망가는 거리", "m", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it; changed() }
-                            FishNumber("가까울 때: 10초마다 도망가는 거리", "m", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it; changed() }
+                            SwitchRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
+                                repeatMissed = it; settings.repeatMissed = it
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text("종합단어장", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "최근 넣은 단어를 얼마나 내고, 나머지는 복습할 때가 된 것과 자주 틀린 단어로 채워요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            Labeled("최근 추가 단어 비율", "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제") {
+                                NumberChoice(recentShare, Opt.recentShare, "%", 100) { recentShare = it; settings.recentShare = it }
+                            }
+                            Labeled("며칠 안에 넣은 단어를 '최근'으로 볼까요?") {
+                                NumberChoice(recentDays, Opt.recentDays, "일", 60) { recentDays = it; settings.recentDays = it }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text("타이머 멈춤", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            Labeled("이 시간 동안 화면을 안 건드리면 학습 시간이 멈춰요") {
+                                NumberChoice(idle, Opt.idle, "초", 600, min = 5) { idle = it; settings.idleSeconds = it }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text("찍기 막기", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            GuessLimitField(settings)
+                            Text(
+                                "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
+                                    "틀리면 간격이 절반으로 줄고 오늘 다시 나와요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(top = 12.dp),
+                            )
                         }
                     }
                 }
-                Group(
-                    "👨‍👩‍👧 비밀번호와 보상",
-                    (if (!hasPin) "비밀번호 없음" else listOfNotNull("비밀번호", "패턴".takeIf { hasPattern }, "지문".takeIf { useFinger }).joinToString("·") + " 켬") +
-                        " · 보상 ${rewardCount}개",
-                    open == "parent", { toggle("parent") },
-                ) {
-                    Body {
-                        var testOn by remember { mutableStateOf(TestMode.isOn(context)) }
-                        var testKeep by remember { mutableStateOf(TestMode.keepsRecords(context)) }
-                        SwitchRow(
-                            "🛠 이 폰 테스트 모드",
-                            "부모님 폰에서 시험해 볼 때 켜요. 이 폰만 비밀번호를 묻지 않고, 오늘의 낚시는 목표·횟수 제한 없이 열리고, 원정 최종전도 미리 해볼 수 있어요. 아이 폰에는 옮겨 가지 않아요 (동기화·백업 안 됨)",
-                            testOn,
-                        ) { on -> TestMode.set(context, on); testOn = on; saved() }
-                        if (testOn) {
-                            SwitchRow(
-                                "테스트 낚시도 기록 남기기",
-                                if (testKeep) "낚은 물고기·선물·도감·작살이 진짜로 저장돼요 (가족 동기화로 아이 기록에도 들어가요)"
-                                else "꺼 두면 연습이라 물고기·기록·도감·정답 기록이 하나도 안 남아요 (추천)",
-                                testKeep,
-                            ) { keep -> TestMode.setKeepsRecords(context, keep); testKeep = keep; saved() }
-                        }
-                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                        Text("비밀번호", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            if (hasPin) "설정을 열 때 비밀번호 4자리를 물어봐요" else "아이가 설정을 바꾸지 못하게 비밀번호를 걸 수 있어요",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Row {
-                            TextButton(onClick = { settingPin = true }) { Text(if (hasPin) "비밀번호 바꾸기" else "비밀번호 설정") }
-                            if (hasPin) {
-                                TextButton(onClick = {
-                                    settings.clearLock(); hasPin = false; hasPattern = false; useFinger = false; saved()
-                                }) { Text("비밀번호 끄기") }
+                if (page == "game") {
+                    Group(
+                        "🎣 단어 낚시 게임",
+                        "난이도 ${fishLevel?.name ?: "직접 조정"} · " + (if (fishTries > 0) "하루 ${fishTries}번" else "횟수 무제한"),
+                        open == "fish", { toggle("fish") },
+                    ) {
+                        Body {
+                            Text(
+                                "오늘 목표를 채우면 열리는 낚시 게임이에요. 맞히면 물고기를 끌어오고, 틀리거나 가만히 있으면 멀어져요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            Labeled("난이도") {
+                                Choice(fishLevel, FishLevels.map { it to it.name }) { level ->
+                                    fishLevel = level; level?.let(settings::applyFish); fishReset++
+                                }
+                            }
+                            Labeled("하루 도전 횟수") {
+                                NumberChoice(fishTries, Opt.tries, "번", 20, min = 0) { fishTries = it; settings.fishTries = it }
+                            }
+                            GiantMixEditor(settings)
+                            // The numbers stay folded: picking 난이도 is enough for most days.
+                            TextButton(onClick = { fishDetail = !fishDetail }) {
+                                Text(if (fishDetail) "▾ 숫자 직접 조정 접기" else "▸ 숫자 직접 조정 (끌어오는 거리·도망 속도)")
+                            }
+                            if (fishDetail) key(fishReset) {
+                                val changed = { fishLevel = settings.fishLevel() }
+                                Text("✅ 맞히면 끌어오는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                                FishNumber("객관식", "m", settings.fishRight, 0, 60) { settings.fishRight = it; changed() }
+                                FishNumber("빈칸·듣고 쓰기", "m", settings.fishRightTyping, 0, 60) { settings.fishRightTyping = it; changed() }
+                                FishNumber("3개 연속 맞히면 더", "m", settings.fishCombo, 0, 60) { settings.fishCombo = it; changed() }
+                                Text("❌ 틀리면 멀어지는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                                FishNumber("객관식", "m", settings.fishWrong, 0, 60) { settings.fishWrong = it; changed() }
+                                FishNumber("빈칸·듣고 쓰기", "m", settings.fishWrongTyping, 0, 60) { settings.fishWrongTyping = it; changed() }
+                                Text(
+                                    "숫자를 지우고 새로 쓰면 바로 저장돼요. 틀릴 때를 크게, 맞힐 때를 작게 하면 어려워져요.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                            }
+                            if (fishDetail) key(fishReset) {
+                                Text(
+                                    "맞혀서 끌어오는 거리가 도망가는 거리보다 넉넉해야 낚을 수 있어요.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                                val changed = { fishLevel = settings.fishLevel() }
+                                // Stored as the old time values: distance = fishGoal - time, so the line snaps at fishGoal metres.
+                                FishNumber("시작 거리", "m", settings.fishGoal - settings.fishStart, 5, 1190) {
+                                    settings.fishStart = (settings.fishGoal - it).coerceAtLeast(1); changed()
+                                }
+                                FishNumber("이만큼 멀어지면 줄이 끊어져요", "m", settings.fishGoal, 20, 1200) {
+                                    val start = settings.fishGoal - settings.fishStart
+                                    settings.fishGoal = it
+                                    settings.fishStart = (it - start).coerceAtLeast(1); changed()
+                                }
+                                FishNumber("처음: 10초마다 도망가는 거리", "m", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it; changed() }
+                                FishNumber("가까울 때: 10초마다 도망가는 거리", "m", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it; changed() }
                             }
                         }
-                        if (hasPin) {
-                            Text("패턴", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
+                    }
+                    Group("🎁 보상 쿠폰", if (rewardCount > 0) "보상 ${rewardCount}개" else "아직 보상이 없어요", open == "reward", { toggle("reward") }) {
+                        Body {
+                            Labeled("보상 목록", "아이가 단어를 외워 낚은 물고기로 받을 수 있는 보상이에요. 쿠폰은 복습·통계 탭에서 받아요.") {
+                                RewardEditor(game) { rewardCount = game.rewards.size; saved() }
+                            }
+                        }
+                    }
+                }
+                if (page == "parent") {
+                    Box(Modifier.padding(horizontal = 16.dp)) { UpdateCard() }
+                    Group(
+                        "🔐 설정 잠금·테스트 모드",
+                        (if (!hasPin) "비밀번호 없음" else listOfNotNull("비밀번호", "패턴".takeIf { hasPattern }, "지문".takeIf { useFinger }).joinToString("·") + " 켬") +
+                            (if (TestMode.isOn(context)) " · 🛠 테스트 모드 켬" else ""),
+                        open == "parent", { toggle("parent") },
+                    ) {
+                        Body {
+                            var testOn by remember { mutableStateOf(TestMode.isOn(context)) }
+                            var testKeep by remember { mutableStateOf(TestMode.keepsRecords(context)) }
+                            SwitchRow(
+                                "🛠 이 폰 테스트 모드",
+                                "부모님 폰에서 시험해 볼 때 켜요. 이 폰만 비밀번호를 묻지 않고, 오늘의 낚시는 목표·횟수 제한 없이 열리고, 원정 최종전도 미리 해볼 수 있어요. 아이 폰에는 옮겨 가지 않아요 (동기화·백업 안 됨)",
+                                testOn,
+                            ) { on -> TestMode.set(context, on); testOn = on; saved() }
+                            if (testOn) {
+                                SwitchRow(
+                                    "테스트 낚시도 기록 남기기",
+                                    if (testKeep) "낚은 물고기·선물·도감·작살이 진짜로 저장돼요 (가족 동기화로 아이 기록에도 들어가요)"
+                                    else "꺼 두면 연습이라 물고기·기록·도감·정답 기록이 하나도 안 남아요 (추천)",
+                                    testKeep,
+                                ) { keep -> TestMode.setKeepsRecords(context, keep); testKeep = keep; saved() }
+                            }
+                            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                            Text("비밀번호", style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                if (hasPattern) "설정을 열 때 패턴을 그려요 (비밀번호로도 열 수 있어요)" else "비밀번호 대신 점을 이어 그려서 열 수 있어요",
+                                if (hasPin) "설정을 열 때 비밀번호 4자리를 물어봐요" else "아이가 설정을 바꾸지 못하게 비밀번호를 걸 수 있어요",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
                             Row {
-                                TextButton(onClick = { settingPattern = true }) { Text(if (hasPattern) "패턴 바꾸기" else "패턴 정하기") }
-                                if (hasPattern) {
-                                    TextButton(onClick = { settings.setPattern(null); hasPattern = false; saved() }) { Text("패턴 끄기") }
+                                TextButton(onClick = { settingPin = true }) { Text(if (hasPin) "비밀번호 바꾸기" else "비밀번호 설정") }
+                                if (hasPin) {
+                                    TextButton(onClick = {
+                                        settings.clearLock(); hasPin = false; hasPattern = false; useFinger = false; saved()
+                                    }) { Text("비밀번호 끄기") }
                                 }
                             }
-                            if (fingerReady) {
-                                SwitchRow("지문으로 열기", "설정을 열 때 지문 창이 먼저 떠요", useFinger) { on ->
-                                    if (on) {
-                                        // Check once that this phone's fingerprint really works before switching it on.
-                                        Biometric.ask(context, "지문 확인", onSuccess = { settings.useBiometric = true; useFinger = true; saved() })
-                                    } else {
-                                        settings.useBiometric = false; useFinger = false; saved()
-                                    }
-                                }
-                            } else {
+                            if (hasPin) {
+                                Text("패턴", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
                                 Text(
-                                    "지문: 이 기기에 등록된 지문이 없어요. 폰 설정에서 지문을 먼저 등록하면 켤 수 있어요.",
+                                    if (hasPattern) "설정을 열 때 패턴을 그려요 (비밀번호로도 열 수 있어요)" else "비밀번호 대신 점을 이어 그려서 열 수 있어요",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.padding(top = 8.dp),
                                 )
+                                Row {
+                                    TextButton(onClick = { settingPattern = true }) { Text(if (hasPattern) "패턴 바꾸기" else "패턴 정하기") }
+                                    if (hasPattern) {
+                                        TextButton(onClick = { settings.setPattern(null); hasPattern = false; saved() }) { Text("패턴 끄기") }
+                                    }
+                                }
+                                if (fingerReady) {
+                                    SwitchRow("지문으로 열기", "설정을 열 때 지문 창이 먼저 떠요", useFinger) { on ->
+                                        if (on) {
+                                            // Check once that this phone's fingerprint really works before switching it on.
+                                            Biometric.ask(context, "지문 확인", onSuccess = { settings.useBiometric = true; useFinger = true; saved() })
+                                        } else {
+                                            settings.useBiometric = false; useFinger = false; saved()
+                                        }
+                                    }
+                                } else {
+                                    Text(
+                                        "지문: 이 기기에 등록된 지문이 없어요. 폰 설정에서 지문을 먼저 등록하면 켤 수 있어요.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.padding(top = 8.dp),
+                                    )
+                                }
                             }
                         }
-                        Labeled("보상 쿠폰", "아이가 단어를 외워 낚은 물고기로 받을 수 있는 보상이에요. 쿠폰은 복습·통계 탭에서 받아요.") {
-                            RewardEditor(game) { rewardCount = game.rewards.size; saved() }
+                    }
+                    Group(
+                        "📨 텔레그램 알림",
+                        if (settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()) "연결됨" else "연결 안 됨",
+                        open == "telegram", { toggle("telegram") },
+                    ) {
+                        Body {
+                            TelegramEditor(settings)
+                            ParentAlerts(settings)
                         }
                     }
-                }
-                Group(
-                    "🤖 AI 사진 인식",
-                    if (aiOn) "켜짐 · 제미나이" else "꺼짐 · 기존 방식",
-                    open == "ai", { toggle("ai") },
-                ) {
-                    Body { AiEditor { aiOn = com.wordbook.app.ml.AiKey.ready(context) } }
-                }
-                Group(
-                    "📨 텔레그램 알림",
-                    if (settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()) "연결됨" else "연결 안 됨",
-                    open == "telegram", { toggle("telegram") },
-                ) {
-                    Body {
-                        TelegramEditor(settings)
-                        ParentAlerts(settings)
-                    }
-                }
-                if (com.wordbook.app.sync.FirebaseConfig.ready) {
-                    val familyCode = com.wordbook.app.sync.FamilySync.code(context)
                     Group(
-                        "🔄 기기 동기화",
-                        if (familyCode != null) "연결됨 · 가족 코드 ${com.wordbook.app.sync.FamilySync.shown(familyCode)}" else "태블릿·폰 진도 맞추기",
+                        "🤖 AI 사진 인식",
+                        if (aiOn) "켜짐 · 제미나이" else "꺼짐 · 기존 방식",
+                        open == "ai", { toggle("ai") },
+                    ) {
+                        Body { AiEditor { aiOn = com.wordbook.app.ml.AiKey.ready(context) } }
+                    }
+                    val familyCode = if (com.wordbook.app.sync.FirebaseConfig.ready) com.wordbook.app.sync.FamilySync.code(context) else null
+                    Group(
+                        "🔄 기기 동기화·백업",
+                        if (familyCode != null) "동기화 연결됨 · 가족 코드 ${com.wordbook.app.sync.FamilySync.shown(familyCode)}" else "태블릿·폰 진도 맞추기 · 백업 파일",
                         open == "sync", { toggle("sync") },
                     ) {
-                        Body { SyncEditor() }
+                        Body {
+                            if (com.wordbook.app.sync.FirebaseConfig.ready) {
+                                SyncEditor()
+                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                            }
+                            Text("💾 백업 파일", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(
+                                "단어장, 학습 기록, 물고기·레벨, 설정을 파일 하나로 저장해요. 구글 드라이브나 카톡 나에게 보내기로 보관하세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SecondaryButton("💾 백업하기", { exportBackup.launch(Backup.fileName()) }, Modifier.weight(1f))
+                                SecondaryButton("📂 불러오기", { importBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, Modifier.weight(1f))
+                            }
+                            TextButton(
+                                onClick = {
+                                    scope.launch {
+                                        backupStatus = "보내는 중…"
+                                        backupStatus = Backup.sendToTelegram(context) ?: "텔레그램으로 백업을 보냈어요"
+                                    }
+                                },
+                                enabled = settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank(),
+                            ) { Text("지금 텔레그램으로 백업 보내기") }
+                            Text(
+                                "🔄 기기 동기화를 켜 두면 진도가 서버에 저장돼서 따로 백업할 필요가 없어요. " +
+                                    "휴대폰을 바꿔도 가족 코드만 넣으면 그대로 이어져요. 동기화를 안 쓸 때만 매주 자동 백업(📨 텔레그램 알림)을 켜 두세요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            backupStatus?.let {
+                                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
                     }
-                }
-                Group("💾 백업", "휴대폰을 바꿀 때를 대비해 저장해 둬요", open == "backup", { toggle("backup") }) {
-                    Body {
-                        Text(
-                            "단어장, 학습 기록, 물고기·레벨, 설정을 파일 하나로 저장해요. 구글 드라이브나 카톡 나에게 보내기로 보관하세요.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            SecondaryButton("💾 백업하기", { exportBackup.launch(Backup.fileName()) }, Modifier.weight(1f))
-                            SecondaryButton("📂 불러오기", { importBackup.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) }, Modifier.weight(1f))
-                        }
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    backupStatus = "보내는 중…"
-                                    backupStatus = Backup.sendToTelegram(context) ?: "텔레그램으로 백업을 보냈어요"
-                                }
-                            },
-                            enabled = settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank(),
-                        ) { Text("지금 텔레그램으로 백업 보내기") }
-                        Text(
-                            "🔄 기기 동기화를 켜 두면 진도가 서버에 저장돼서 따로 백업할 필요가 없어요. " +
-                                "휴대폰을 바꿔도 가족 코드만 넣으면 그대로 이어져요. 동기화를 안 쓸 때만 매주 자동 백업(📨 텔레그램 알림)을 켜 두세요.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        backupStatus?.let {
-                            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-                Group("🧹 진도 초기화", "처음부터 다시 하고 싶을 때", open == "reset", { toggle("reset") }) {
-                    Body { ResetEditor() }
-                }
-                Group(
-                    "⚙️ 고급",
-                    "카드 ${hand}장씩 돌리기 · 최근 단어 ${recentShare}% · ${idle}초 멈춤",
-                    open == "advanced", { toggle("advanced") },
-                ) {
-                    Body {
-                        Text("카드 반복", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            "카드 몇 장을 돌려 가며 보다가, 충분히 맞힌 카드는 빠지고 다음 카드가 들어와요",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Labeled("한 번에 돌리는 카드") {
-                            NumberChoice(hand, Opt.hand, "장", 100) { hand = it; settings.handSize = it }
-                        }
-                        Labeled("헷갈려요 몇 번이면 빠질까요?", "외웠어요는 1번이면 빠져요") {
-                            NumberChoice(leave, Opt.leave, "번", 9) { leave = it; settings.knownToLeave = it }
-                        }
-                        SwitchRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
-                            repeatMissed = it; settings.repeatMissed = it
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("종합단어장", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                        Text(
-                            "최근 넣은 단어를 얼마나 내고, 나머지는 복습할 때가 된 것과 자주 틀린 단어로 채워요.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                        Labeled("최근 추가 단어 비율", "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제") {
-                            NumberChoice(recentShare, Opt.recentShare, "%", 100) { recentShare = it; settings.recentShare = it }
-                        }
-                        Labeled("며칠 안에 넣은 단어를 '최근'으로 볼까요?") {
-                            NumberChoice(recentDays, Opt.recentDays, "일", 60) { recentDays = it; settings.recentDays = it }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("타이머 멈춤", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                        Labeled("이 시간 동안 화면을 안 건드리면 학습 시간이 멈춰요") {
-                            NumberChoice(idle, Opt.idle, "초", 600, min = 5) { idle = it; settings.idleSeconds = it }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                        Text("찍기 막기", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                        GuessLimitField(settings)
-                        Text(
-                            "맞힌 단어는 처음 1일 뒤에 복습으로 나오고, 맞힐 때마다 간격이 1.4배(외웠어요는 2.2배)로 늘어요. " +
-                                "틀리면 간격이 절반으로 줄고 오늘 다시 나와요.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.outline,
-                            modifier = Modifier.padding(top = 12.dp),
-                        )
+                    Group("🧹 진도 초기화", "처음부터 다시 하고 싶을 때", open == "reset", { toggle("reset") }) {
+                        Body { ResetEditor() }
                     }
                 }
             }
             Spacer(Modifier.height(24.dp))
         }
+    }
+}
+
+/** 설정 첫 화면: 단어 추가, the 3 big tiles (공부 / 게임과 보상 / 부모님 관리) and the 길잡이. */
+@Composable
+private fun SettingsHome(
+    onAdd: (AddKind) -> Unit,
+    onWizard: () -> Unit,
+    onPage: (String) -> Unit,
+    studySummary: String,
+    gameSummary: String,
+    parentSummary: String,
+) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth()) {
+        PrimaryButton("➕ 단어 추가하기", { onAdd(AddKind.ADD) }, Modifier.fillMaxWidth())
+        var showCheck by remember { mutableStateOf(false) }
+        if (showCheck) DeckCheckDialog(null, onDismiss = { showCheck = false })
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+            TextButton(onClick = { onAdd(AddKind.DECK) }) { Text("📒 빈 단어장") }
+            TextButton(onClick = { onAdd(AddKind.COLLECTION) }) { Text("📚 종합단어장") }
+            TextButton(onClick = { showCheck = true }) { Text("🔍 단어장 점검") }
+        }
+    }
+    if (com.wordbook.app.net.Updater.available.value != null) {
+        Box(Modifier.padding(horizontal = 16.dp)) { UpdateCard() }
+    }
+    HomeTile("📚", "공부 설정", "하루 목표 · 학습 순서 · 카드와 소리 · 잠금화면 단어", studySummary, Color(0xFFE3F0FF)) { onPage("study") }
+    HomeTile("🎣", "게임과 보상", "낚시 난이도 · 도전 횟수 · 대왕물고기 · 보상 쿠폰", gameSummary, Color(0xFFE2F7EF)) { onPage("game") }
+    HomeTile("👨‍👩‍👧", "부모님 관리", "잠금 · 테스트 모드 · 텔레그램 · AI 키 · 동기화·백업 · 초기화 · 업데이트", parentSummary, Color(0xFFFFF1DC)) { onPage("parent") }
+    Column(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(16.dp))
+            .clickable(onClick = onWizard)
+            .padding(16.dp),
+    ) {
+        Text("🧭 설정 길잡이로 한 번에 정하기", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimary)
+        Text(
+            "모든 설정을 팝업으로 한 장씩 차례로 정해요. ⭐ 추천 설정을 한 번에 맞출 수도 있어요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+    Text(
+        "바꾸면 바로 저장돼요. 설정을 나가면 연결된 다른 기기에도 저절로 보내요.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+    )
+}
+
+/** One big settings tile: emoji, name, what is inside, and the current values. */
+@Composable
+private fun HomeTile(emoji: String, title: String, inside: String, now: String, tint: Color, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .background(tint, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(emoji, style = MaterialTheme.typography.headlineLarge)
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = Color(0xFF10243A))
+            Text(inside, style = MaterialTheme.typography.bodySmall, color = Color(0xFF4A5B70))
+            if (now.isNotBlank()) Text(now, style = MaterialTheme.typography.labelMedium, color = Color(0xFF1565C0), modifier = Modifier.padding(top = 4.dp), maxLines = 2)
+        }
+        Text("›", style = MaterialTheme.typography.headlineMedium, color = Color(0xFF1565C0))
     }
 }
 
@@ -775,7 +879,7 @@ private fun SyncEditor() {
     } else {
         Text("가족 코드", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 8.dp))
         Text(com.wordbook.app.sync.FamilySync.shown(c), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text("다른 기기의 설정 > 🔄 기기 동기화에 이 코드를 넣으세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
+        Text("다른 기기의 설정 > 부모님 관리 > 🔄 기기 동기화·백업에 이 코드를 넣으세요.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         val last = com.wordbook.app.sync.FamilySync.lastSync(context)
         if (last > 0) {
             Text(
