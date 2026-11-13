@@ -27,7 +27,8 @@ import java.time.LocalDate
  * doesn't start showing cards too.
  */
 object LockCard {
-    private const val CHANNEL = "lockcard"
+    // "lockcard2": the first channel was shown as a silent notification, which many lock screens hide.
+    private const val CHANNEL = "lockcard2"
     private const val NOTIFY_ID = 7301
     const val ACTION_ANSWER = "com.wordbook.app.LOCKCARD_ANSWER"
     const val ACTION_REFRESH = "com.wordbook.app.LOCKCARD_REFRESH"
@@ -65,8 +66,29 @@ object LockCard {
 
     fun refreshAsync(context: Context) {
         val app = context.applicationContext
-        CoroutineScope(Dispatchers.IO).launch { runCatching { refresh(app) } }
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { refresh(app) }.onFailure { saveError(app, it) }
+        }
     }
+
+    fun saveError(context: Context, e: Throwable) {
+        prefs(context).edit().putString("error", "${e.javaClass.simpleName}: ${e.message}".take(200)).apply()
+    }
+
+    /** Why the card can't show, in words for the settings screen; null when all is fine. */
+    fun problem(context: Context): String? {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) return "이 앱의 알림이 꺼져 있어요"
+        val ch = context.getSystemService(NotificationManager::class.java).getNotificationChannel(CHANNEL)
+        if (ch != null && ch.importance == NotificationManager.IMPORTANCE_NONE) return "'잠금화면 단어 카드' 알림 종류가 꺼져 있어요"
+        if (ch != null && ch.lockscreenVisibility == Notification.VISIBILITY_SECRET) return "'잠금화면 단어 카드'가 잠금화면에서 숨겨져 있어요"
+        return prefs(context).getString("error", null)?.let { "오류: $it" }
+    }
+
+    /** Is the card in the notification shade right now? */
+    fun showing(context: Context): Boolean = runCatching {
+        context.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == NOTIFY_ID }
+    }.getOrDefault(false)
 
     /** Shows the card again (the same word until it is answered) and keeps the hourly alarm set. */
     suspend fun refresh(context: Context) {
@@ -136,6 +158,7 @@ object LockCard {
 
     private fun channel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java)
+        manager.deleteNotificationChannel("lockcard")
         val ch = NotificationChannel(CHANNEL, "잠금화면 단어 카드", NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = "폰을 켤 때마다 잠금화면에 단어 1개를 보여 줘요"
             setSound(null, null)
@@ -166,7 +189,7 @@ object LockCard {
             .setSmallIcon(R.drawable.ic_notify)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOngoing(true)
             .setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -186,6 +209,8 @@ object LockCard {
                 .addAction(0, "외웠어요", answerIntent(context, word.id, Srs.Result.EASY))
         }
         runCatching { manager.notify(NOTIFY_ID, builder.build()) }
+            .onSuccess { prefs(context).edit().remove("error").apply() }
+            .onFailure { saveError(context, it) }
     }
 
     private fun alarmIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
@@ -223,7 +248,7 @@ class LockCardReceiver : BroadcastReceiver() {
                     // Hourly alarm, phone restart, or app update.
                     else -> LockCard.refresh(app)
                 }
-            } catch (e: Exception) {
+            } catch (e: Exception) { LockCard.saveError(app, e)
             } finally {
                 pending.finish()
             }
