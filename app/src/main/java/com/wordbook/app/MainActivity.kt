@@ -85,6 +85,7 @@ class MainActivity : FragmentActivity() {
         }
         Reminder.schedule(applicationContext)
         com.wordbook.app.data.EveningReport.schedule(applicationContext)
+        com.wordbook.app.data.LockCard.refreshAsync(applicationContext)
         if (android.os.Build.VERSION.SDK_INT >= 33 && settings.reminderHour >= 0) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
         }
