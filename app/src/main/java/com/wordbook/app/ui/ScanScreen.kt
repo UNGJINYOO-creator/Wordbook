@@ -168,7 +168,7 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         val ai = com.wordbook.app.ml.AiKey.ready(getApplication())
         uris.forEachIndexed { i, uri ->
             val which = if (uris.size > 1) "사진 ${i + 1}/${uris.size}" else "사진"
-            status = if (ai) "AI가 $which 속 단어를 읽는 중… (10~30초)" else "${which}에서 영어 단어를 찾는 중…"
+            status = if (ai) "AI가 $which 속 단어를 읽는 중… (보통 10~40초)" else "${which}에서 영어 단어를 찾는 중…"
             try {
                 val r = WordExtractor.extract(getApplication(), uri)
                 extracted += r.words.map { it to i }
