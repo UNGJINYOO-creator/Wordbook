@@ -164,7 +164,7 @@ object GeminiVision {
     }
 
     /** JPEG of the photo, at most 2048 pixels on its longest side (enough for the print, small to send). */
-    fun encode(photo: Bitmap, maxSide: Int = 2048): String {
+    fun encode(photo: Bitmap, maxSide: Int = 1800): String {
         val longest = maxOf(photo.width, photo.height)
         val bmp = if (longest > maxSide) {
             val k = maxSide / longest.toFloat()
@@ -176,31 +176,61 @@ object GeminiVision {
         return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }
 
-    suspend fun read(key: String, jpegBase64: String): Outcome = withContext(Dispatchers.IO) {
-        val body = JSONObject()
+    private fun body(jpegBase64: String, lowThinking: Boolean): JSONObject {
+        val config = JSONObject().put("responseMimeType", "application/json")
+        // Little thinking is needed to copy words off a page, and a lot makes the answer slow.
+        if (lowThinking) config.put("thinkingConfig", JSONObject().put("thinkingLevel", "low"))
+        return JSONObject()
             .put("contents", JSONArray().put(JSONObject().put("parts", JSONArray()
                 .put(JSONObject().put("inline_data", JSONObject().put("mime_type", "image/jpeg").put("data", jpegBase64)))
                 .put(JSONObject().put("text", PROMPT)))))
-            .put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+            .put("generationConfig", config)
+    }
+
+    /** Why a request failed without an answer from Google, in words for a parent. */
+    fun explainNetwork(e: IOException): String = when (e) {
+        is java.net.UnknownHostException, is java.net.ConnectException, is java.net.NoRouteToHostException ->
+            "인터넷에 연결할 수 없어서"
+        is java.net.SocketTimeoutException -> "AI가 너무 오래 걸려서"
+        is javax.net.ssl.SSLException -> "보안 연결이 끊겨서 (${e.javaClass.simpleName})"
+        else -> "연결이 중간에 끊겨서 (${e.javaClass.simpleName})"
+    }
+
+    suspend fun read(key: String, jpegBase64: String): Outcome = withContext(Dispatchers.IO) {
         var last: Outcome.Failed = Outcome.Failed("AI가 응답하지 않았어요.")
         for (model in MODELS) {
-            try {
-                val text = request("$BASE/models/$model:generateContent", key, body, 120_000)
-                val words = parse(answerText(text)) ?: run {
+            var lowThinking = true
+            var attempt = 0
+            while (attempt < 2) {
+                attempt++
+                try {
+                    val text = request("$BASE/models/$model:generateContent", key, body(jpegBase64, lowThinking), 90_000)
+                    val words = parse(answerText(text))
+                    if (words != null) return@withContext Outcome.Words(words, model)
                     last = Outcome.Failed("AI의 답을 읽지 못했어요.")
-                    null
-                } ?: continue
-                return@withContext Outcome.Words(words, model)
-            } catch (e: HttpError) {
-                last = Outcome.Failed(explain(e))
-                // Out of today's quota, or this model isn't offered (any more): try the next one.
-                if (e.code == 429 || e.code == 404 || e.code >= 500) continue
-                return@withContext last
-            } catch (e: IOException) {
-                return@withContext Outcome.Failed("인터넷에 연결할 수 없어서 AI 대신 기존 방식으로 읽었어요.")
-            } catch (e: Exception) {
-                // An answer in an unexpected shape: try the next model.
-                last = Outcome.Failed("AI의 답을 읽지 못했어요.")
+                    break
+                } catch (e: HttpError) {
+                    last = Outcome.Failed(explain(e))
+                    // A model that doesn't take the thinking setting: ask again without it.
+                    if (e.code == 400 && lowThinking && !e.body.contains("API key", ignoreCase = true) && !e.body.contains("location", ignoreCase = true)) {
+                        lowThinking = false
+                        attempt = 0
+                        continue
+                    }
+                    // Out of today's quota, or this model isn't offered (any more): try the next one.
+                    if (e.code == 429 || e.code == 404 || e.code >= 500) break
+                    return@withContext last
+                } catch (e: IOException) {
+                    val why = explainNetwork(e)
+                    last = Outcome.Failed("$why AI 대신 기존 방식으로 읽었어요.")
+                    if (e is java.net.UnknownHostException || e is java.net.ConnectException) return@withContext last
+                    // A dropped connection gets one more try; a slow model gives way to the faster next one.
+                    if (e is java.net.SocketTimeoutException) break
+                } catch (e: Exception) {
+                    // An answer in an unexpected shape: try the next model.
+                    last = Outcome.Failed("AI의 답을 읽지 못했어요.")
+                    break
+                }
             }
         }
         last
