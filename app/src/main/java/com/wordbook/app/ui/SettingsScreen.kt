@@ -345,7 +345,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             }
                         }
                     }
-                    Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide), open == "lock", { toggle("lock") }) {
+                    Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide, com.wordbook.app.data.LockScreen.enabled(context)), open == "lock", { toggle("lock") }) {
                         Body { LockCardSettings(lockOn, lockHide, { lockOn = it }, { lockHide = it }) }
                     }
                     Group(

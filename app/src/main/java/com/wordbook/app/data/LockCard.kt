@@ -102,6 +102,13 @@ object LockCard {
 
     /** One of the lock-screen buttons: update the schedule, then show the next word. */
     suspend fun answer(context: Context, wordId: Long, result: Srs.Result) {
+        record(context, wordId, result)
+        prefs(context).edit().putLong("current", 0L).apply()
+        if (enabled(context)) show(context, pick(context)) else stop(context)
+    }
+
+    /** Puts one lock-screen answer into the review schedule (SRS only, like a 뜻 카드 swipe). */
+    suspend fun record(context: Context, wordId: Long, result: Srs.Result) {
         val dao = AppDatabase.get(context).wordDao()
         val word = dao.getWord(wordId)
         if (word != null) {
@@ -116,8 +123,18 @@ object LockCard {
             countOne(context)
             markShown(context, word.id)
         }
-        prefs(context).edit().putLong("current", 0L).apply()
-        if (enabled(context)) show(context, pick(context)) else stop(context)
+    }
+
+    /** [n] words for the big lock screen, picked the same way as the card, without repeats. */
+    suspend fun pickWords(context: Context, n: Int): List<Word> {
+        val dao = AppDatabase.get(context).wordDao()
+        val recent = recentIds(context)
+        val due = dao.getDueWords(System.currentTimeMillis()).sortedBy { it.dueAt }.filter { it.id !in recent }
+        val fresh = dao.getNewWords(40).filter { it.id !in recent }.shuffled()
+        val picked = (due + fresh).distinctBy { it.id }.take(n)
+        if (picked.size >= n) return picked
+        val rest = dao.getAllWords().filter { !it.excluded && !it.mastered && picked.none { p -> p.id == it.id } }.shuffled()
+        return (picked + rest).take(n)
     }
 
     /** Due reviews first (oldest first), then new words, then any word, skipping the last few shown. */
@@ -246,7 +263,10 @@ class LockCardReceiver : BroadcastReceiver() {
                         if (id > 0 && result != null) LockCard.answer(app, id, result)
                     }
                     // Hourly alarm, phone restart, or app update.
-                    else -> LockCard.refresh(app)
+                    else -> {
+                        if (intent.action != LockCard.ACTION_REFRESH) LockScreen.start(app)
+                        LockCard.refresh(app)
+                    }
                 }
             } catch (e: Exception) { LockCard.saveError(app, e)
             } finally {

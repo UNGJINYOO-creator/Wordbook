@@ -31,8 +31,13 @@ import com.wordbook.app.data.LockCard
 import kotlinx.coroutines.delay
 
 /** Short summary for the settings group header. */
-fun lockCardSummary(on: Boolean, hide: Boolean): String =
-    if (!on) "꺼짐" else "켜짐 · " + if (hide) "뜻 가리기" else "뜻 바로 보기"
+fun lockCardSummary(on: Boolean, hide: Boolean, big: Boolean = false): String {
+    val parts = listOfNotNull(
+        if (big) "큰 단어 화면" else null,
+        if (on) "알림 카드" + if (hide) "(뜻 가리기)" else "" else null,
+    )
+    return if (parts.isEmpty()) "꺼짐" else parts.joinToString(" · ") + " 켜짐"
+}
 
 /** Rows of the 🔒 잠금화면 단어 group: on/off, hide the meaning, a status line, and the phone's own settings. */
 @Composable
@@ -81,8 +86,15 @@ fun LockCardSettings(on: Boolean, hide: Boolean, onOn: (Boolean) -> Unit, onHide
         showing = LockCard.showing(context)
     }
     Column(Modifier.fillMaxWidth()) {
+        BigLockScreenSettings(tick) { tick++ }
+        Text(
+            "🔔 알림 카드",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 16.dp),
+        )
         SwitchRow(
-            "잠금화면에 단어 카드 띄우기",
+            "잠금화면 알림에 단어 카드 띄우기",
             "폰을 켤 때마다 단어 1개가 보여요. 몰라요·헷갈려요·외웠어요를 누르면 복습 일정에 들어가고 다음 단어로 바뀌어요",
             on,
         ) { want ->
@@ -140,5 +152,82 @@ fun LockCardSettings(on: Boolean, hide: Boolean, onOn: (Boolean) -> Unit, onHide
             Modifier.fillMaxWidth().padding(top = 6.dp),
         )
         SecondaryButton("🔔 이 앱 알림 설정 열기", openSettings, Modifier.fillMaxWidth().padding(top = 6.dp))
+    }
+}
+
+/** 큰 단어 화면 (B안): on/off, how many cards, how often, and the two permissions it needs. */
+@Composable
+private fun BigLockScreenSettings(tick: Int, onChange: () -> Unit) {
+    val context = LocalContext.current
+    var big by remember { mutableStateOf(com.wordbook.app.data.LockScreen.enabled(context)) }
+    var count by remember { mutableIntStateOf(com.wordbook.app.data.LockScreen.count(context)) }
+    var gap by remember { mutableIntStateOf(com.wordbook.app.data.LockScreen.gapMinutes(context)) }
+    // Re-read after coming back from the phone's settings (tick changes on resume).
+    val overlay = remember(tick) { com.wordbook.app.data.LockScreen.canOverlay(context) }
+    val battery = remember(tick) { com.wordbook.app.data.LockScreen.ignoresBattery(context) }
+    val openOverlay = {
+        context.startActivity(
+            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, android.net.Uri.parse("package:" + context.packageName))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+    Text("📱 큰 단어 화면", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 4.dp))
+    SwitchRow(
+        "화면을 켜면 큰 단어 카드 먼저 보기",
+        "잠금화면보다 먼저 단어가 나와요. 앱처럼 밀어서 공부하고, '닫고 폰 쓰기'를 누르면 원래 잠금화면으로 가요",
+        big,
+    ) { want ->
+        big = want
+        com.wordbook.app.data.LockScreen.setEnabled(context, want)
+        if (want && !com.wordbook.app.data.LockScreen.canOverlay(context)) {
+            Toast.makeText(context, "'낚아보카'를 찾아 '다른 앱 위에 표시'를 허용해 주세요", Toast.LENGTH_LONG).show()
+            openOverlay()
+        }
+        onChange()
+    }
+    if (big) {
+        Labeled("한 번에 볼 카드") {
+            Choice(count, listOf(1 to "1장", 3 to "3장", 5 to "5장", 10 to "10장")) {
+                count = it; com.wordbook.app.data.LockScreen.setCount(context, it)
+            }
+        }
+        Labeled("얼마나 자주", "매번이면 화면을 켤 때마다 나와요") {
+            Choice(gap, listOf(0 to "매번", 10 to "10분마다", 30 to "30분마다", 60 to "1시간마다")) {
+                gap = it; com.wordbook.app.data.LockScreen.setGapMinutes(context, it)
+            }
+        }
+        if (!overlay) {
+            Text(
+                "⚠️ '다른 앱 위에 표시' 권한이 없어서 아직 안 나와요",
+                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 6.dp),
+            )
+            SecondaryButton("✅ 다른 앱 위에 표시 허용하기", openOverlay, Modifier.fillMaxWidth().padding(top = 6.dp))
+        } else {
+            Text(
+                "✅ 준비 완료! 화면을 껐다 켜 보세요",
+                style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        if (!battery) {
+            Text(
+                "가끔 안 나오면 배터리 절약 때문이에요. 아래 버튼에서 '허용'을 눌러 주세요",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+            SecondaryButton(
+                "🔋 배터리 절약에서 빼기",
+                {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:" + context.packageName))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                },
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+        }
     }
 }
