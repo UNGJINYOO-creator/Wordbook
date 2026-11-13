@@ -237,6 +237,8 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 var recentShare by remember { mutableIntStateOf(settings.recentShare) }
                 var recentDays by remember { mutableIntStateOf(settings.recentDays) }
                 var idle by remember { mutableIntStateOf(settings.idleSeconds) }
+                var lockOn by remember { mutableStateOf(com.wordbook.app.data.LockCard.enabled(context)) }
+                var lockHide by remember { mutableStateOf(com.wordbook.app.data.LockCard.hideMeaning(context)) }
 
                 UpdateCard()
                 Group(
@@ -320,6 +322,9 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             }
                         }
                     }
+                }
+                Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide), open == "lock", { toggle("lock") }) {
+                    Body { LockCardSettings(lockOn, lockHide, { lockOn = it }, { lockHide = it }) }
                 }
                 Group(
                     "🎣 단어 낚시 게임",
