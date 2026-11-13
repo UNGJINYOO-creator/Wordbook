@@ -91,7 +91,7 @@ fun SetupWizard(settings: StudySettings, hasPin: Boolean, onSetPin: () -> Unit, 
         WizardStep(
             "① 학습 순서",
             "단어 하나를 어떤 방법으로, 어떤 순서로 공부할지 정해요.",
-            "묶음 하나를 고르세요. 세부 순서는 설정 > 📚 학습 방법에서 ▲▼로 바꿀 수 있어요.",
+            "묶음 하나를 고르세요. 세부 순서는 설정 > 📚 공부 설정 > 학습 방법에서 ▲▼로 바꿀 수 있어요.",
             "처음 외울 때: 훑어보고 → 카드 → 객관식 → 빈칸 → 듣고 쓰기로 점점 어려워져 오래 기억에 남아요.",
         ) {
             var modes by remember { mutableStateOf(settings.modes) }
@@ -232,7 +232,7 @@ fun SetupWizard(settings: StudySettings, hasPin: Boolean, onSetPin: () -> Unit, 
         WizardStep(
             "⑨ 단어 낚시 게임",
             "오늘 목표를 채우면 열리는 낚시 게임의 난이도예요.",
-            "맞히면 물고기를 끌어오고, 틀리거나 가만히 있으면 멀어져요. 세부 거리는 설정 > 🎣 낚시에서 바꿀 수 있어요.",
+            "맞히면 물고기를 끌어오고, 틀리거나 가만히 있으면 멀어져요. 세부 거리는 설정 > 🎣 게임과 보상에서 바꿀 수 있어요.",
             "보통 · 횟수 무제한",
         ) {
             var level by remember { mutableStateOf(settings.fishLevel()) }
@@ -271,7 +271,7 @@ fun SetupWizard(settings: StudySettings, hasPin: Boolean, onSetPin: () -> Unit, 
         WizardStep(
             "⑫ 부모님 비밀번호",
             "아이가 설정과 단어를 마음대로 바꾸지 못하게 4자리 비밀번호를 걸어요.",
-            "비밀번호를 걸면 설정을 열거나 단어를 고칠 때 비밀번호를 물어봐요. 비밀번호를 건 뒤 설정 > 비밀번호와 보상에서 패턴·지문으로도 열 수 있게 할 수 있어요.",
+            "비밀번호를 걸면 설정을 열거나 단어를 고칠 때 비밀번호를 물어봐요. 비밀번호를 건 뒤 설정 > 부모님 관리 > 🔐 설정 잠금에서 패턴·지문으로도 열 수 있게 할 수 있어요.",
             "걸어 두기: 아이가 목표나 단어를 임의로 바꾸지 못해요.",
         ) {
             if (hasPin) {
@@ -283,7 +283,7 @@ fun SetupWizard(settings: StudySettings, hasPin: Boolean, onSetPin: () -> Unit, 
         WizardStep(
             "다 됐어요!",
             "모든 설정을 마쳤어요.",
-            "나중에 바꾸고 싶으면 설정 화면에서 항목을 눌러 펼치거나, 이 길잡이를 다시 열면 돼요.",
+            "나중에 바꾸고 싶으면 설정에서 큰 칸(공부·게임·부모님)을 눌러 바꾸거나, 이 길잡이를 다시 열면 돼요.",
         ) {},
     )
     val step = steps[page]
