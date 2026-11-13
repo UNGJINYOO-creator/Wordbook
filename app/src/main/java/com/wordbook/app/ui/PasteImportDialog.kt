@@ -92,7 +92,7 @@ private class PasteDeck(name: String, val existingId: Long?, val rows: SnapshotS
  * deck already called that).
  */
 @Composable
-fun PasteImportDialog(targetDeckId: Long?, onDismiss: () -> Unit, onSaved: (firstDeckId: Long, deckCount: Int) -> Unit) {
+fun PasteImportDialog(targetDeckId: Long?, newName: String? = null, onDismiss: () -> Unit, onSaved: (firstDeckId: Long, deckCount: Int) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -110,7 +110,7 @@ fun PasteImportDialog(targetDeckId: Long?, onDismiss: () -> Unit, onSaved: (firs
         val allDecks = dao.getAllDecks().filter { !it.isCollection }
         val target = targetDeckId?.let { id -> allDecks.firstOrNull { it.id == id } }
         val parsed = withContext(Dispatchers.Default) {
-            val p = PasteImport.parse(text)
+            val p = if (newName.isNullOrBlank()) PasteImport.parse(text) else PasteImport.parse(text, newName)
             // Into one deck: the name lines only tidy the paste, every word goes in together.
             if (target != null) listOf(PasteImport.PastedDeck(target.name, p.flatMap { it.words }.distinctBy { it.text.lowercase() })) else p
         }

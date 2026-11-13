@@ -387,8 +387,9 @@ private fun LevelDialog(level: Int, known: Int, total: Int, stars: Int, totalMs:
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onPhoto: (List<Uri>) -> Unit,
+    onPhoto: (List<Uri>, AddTarget?) -> Unit,
     onOpenDeck: (Long) -> Unit,
+    onAddManual: (deckId: Long) -> Unit,
     onToday: () -> Unit,
     onStudyDeck: (Long) -> Unit,
     onWrongNote: () -> Unit,
@@ -402,7 +403,10 @@ fun HomeScreen(
     val newCount by vm.newCount.collectAsStateWithLifecycle()
     val sort by vm.sort.collectAsStateWithLifecycle()
     var pendingUri by rememberSaveable { mutableStateOf<String?>(null) }
+    // 단어 추가: first "어디에 넣을까요?" (showAdd), then the same three ways (target != null && showWays).
     var showAdd by rememberSaveable { mutableStateOf(false) }
+    var target by remember { mutableStateOf<AddTarget?>(null) }
+    var showWays by remember { mutableStateOf(false) }
     // With a password set, adding words or changing a deck asks for it once per visit.
     var unlocked by remember { mutableStateOf(false) }
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -428,24 +432,18 @@ fun HomeScreen(
 
     val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val uri = pendingUri
-        if (ok && uri != null) onPhoto(listOf(Uri.parse(uri)))
+        if (ok && uri != null) onPhoto(listOf(Uri.parse(uri)), target)
         pendingUri = null
     }
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(20)) { uris ->
-        if (uris.isNotEmpty()) onPhoto(uris)
+        if (uris.isNotEmpty()) onPhoto(uris, target)
     }
     // 단어 추가 lives in the settings (behind the password); it hands the chosen way over to this screen.
     LaunchedEffect(AddRequest.kind) {
         when (AddRequest.kind) {
-            AddKind.CAMERA -> {
-                val uri = newPhotoUri(context)
-                pendingUri = uri.toString()
-                takePicture.launch(uri)
-            }
-            AddKind.ALBUM -> pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            AddKind.ADD -> showAdd = true
             AddKind.DECK -> showNewDeck = true
             AddKind.COLLECTION -> showNewCollection = true
-            AddKind.PASTE -> showPaste = true
             null -> {}
         }
         AddRequest.kind = null
@@ -644,41 +642,39 @@ fun HomeScreen(
     }
 
     if (showAdd) {
-        ModalBottomSheet(onDismissRequest = { showAdd = false }, containerColor = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
-                Text(
-                    "단어 추가",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                )
-                SheetItem(Icons.Default.CameraAlt, "사진 찍기", "책이나 프린트를 바로 찍어요") {
-                    showAdd = false
-                    val uri = newPhotoUri(context)
-                    pendingUri = uri.toString()
-                    takePicture.launch(uri)
-                }
-                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "사진이나 스크린샷, 여러 장 한 번에 골라도 돼요") {
-                    showAdd = false
-                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }
-                SheetItem(Icons.Default.ContentPaste, "붙여넣기로 한 번에", "복사한 단어 목록을 붙여넣어요. 단어장 여러 개도 한 번에") {
-                    showAdd = false
-                    showPaste = true
-                }
-                SheetItem(Icons.Default.CreateNewFolder, "빈 단어장 만들기", "단어를 직접 입력할게요") {
-                    showAdd = false
-                    showNewDeck = true
-                }
-                SheetItem(Icons.Default.CollectionsBookmark, "종합단어장 만들기", "여러 단어장을 묶어서 한꺼번에 학습해요") {
-                    showAdd = false
-                    showNewCollection = true
-                }
-            }
-        }
+        DeckPickDialog(
+            decks = decks,
+            onPick = { t -> showAdd = false; target = t; showWays = true },
+            onDismiss = { showAdd = false },
+        )
+    }
+    val t = target
+    if (showWays && t != null) {
+        AddWordsSheet(
+            target = t.label,
+            isNew = t.isNew,
+            onCamera = {
+                showWays = false
+                val uri = newPhotoUri(context)
+                pendingUri = uri.toString()
+                takePicture.launch(uri)
+            },
+            onAlbum = {
+                showWays = false
+                pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onPaste = { showWays = false; showPaste = true },
+            onManual = {
+                showWays = false
+                if (t.isNew) vm.createEmptyDeck(t.newName, onAddManual) else onAddManual(t.deckId)
+            },
+            onDismiss = { showWays = false },
+        )
     }
     if (showPaste) {
         PasteImportDialog(
-            targetDeckId = null,
+            targetDeckId = target?.deckId?.takeIf { it >= 0 },
+            newName = target?.newName,
             onDismiss = { showPaste = false },
             onSaved = { first, count ->
                 showPaste = false
@@ -1273,7 +1269,7 @@ fun PinConfirmDialog(
     )
 }
 
-enum class AddKind { CAMERA, ALBUM, DECK, COLLECTION, PASTE }
+enum class AddKind { ADD, DECK, COLLECTION }
 
 /** A way of adding words picked in the settings, carried out by the home screen. */
 object AddRequest {

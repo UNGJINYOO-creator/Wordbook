@@ -169,8 +169,13 @@ private fun AppContent() {
                     ) {
                         composable("home") {
                             HomeScreen(
-                                onPhoto = { uris -> nav.navigate("scan?uri=${encodeUris(uris)}&deckId=-1") },
+                                onPhoto = { uris, target ->
+                                    val deckId = target?.deckId ?: -1L
+                                    val name = target?.newName.orEmpty().takeIf { it.isNotBlank() }?.let { "&name=" + android.net.Uri.encode(it) }.orEmpty()
+                                    nav.navigate("scan?uri=${encodeUris(uris)}&deckId=$deckId$name")
+                                },
                                 onOpenDeck = { id -> nav.navigate("deck/$id") },
+                                onAddManual = { id -> nav.navigate("deck/$id?manual=true") },
                                 onToday = { nav.navigate("study/-1?today=true") },
                                 onStudyDeck = { id -> nav.navigate("study/$id") },
                                 onWrongNote = { nav.navigate("study/-1?wrong=true") },
@@ -206,10 +211,11 @@ private fun AppContent() {
                             })
                         }
                         composable(
-                            "scan?uri={uri}&deckId={deckId}",
+                            "scan?uri={uri}&deckId={deckId}&name={name}",
                             arguments = listOf(
                                 navArgument("uri") { type = NavType.StringType },
                                 navArgument("deckId") { type = NavType.LongType; defaultValue = -1L },
+                                navArgument("name") { type = NavType.StringType; defaultValue = "" },
                             ),
                         ) {
                             ScanScreen(
@@ -238,8 +244,11 @@ private fun AppContent() {
                             MatchScreen(onBack = { nav.popBackStack() })
                         }
                         composable(
-                            "deck/{deckId}",
-                            arguments = listOf(navArgument("deckId") { type = NavType.LongType }),
+                            "deck/{deckId}?manual={manual}",
+                            arguments = listOf(
+                                navArgument("deckId") { type = NavType.LongType },
+                                navArgument("manual") { type = NavType.BoolType; defaultValue = false },
+                            ),
                         ) {
                             DeckScreen(
                                 onBack = { nav.popBackStack() },
