@@ -44,6 +44,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.animation.core.animate
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -181,48 +188,80 @@ private fun LockWordScreen(session: Int, onClose: () -> Unit) {
 @Composable
 private fun SwipeCard(word: Word, open: Boolean, onTap: () -> Unit, onAnswer: (Srs.Result) -> Unit) {
     val scope = rememberCoroutineScope()
-    val dx = remember(word.id) { Animatable(0f) }
-    val dy = remember(word.id) { Animatable(0f) }
-    val limit = 220f
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+    // Plain state follows the finger exactly; the earlier version lost movement between frames.
+    var ox by remember(word.id) { mutableFloatStateOf(0f) }
+    var oy by remember(word.id) { mutableFloatStateOf(0f) }
+    var armed by remember(word.id) { mutableStateOf(false) }
+    val threshold = with(density) { 48.dp.toPx() }
+    val minFling = with(density) { 14.dp.toPx() }
+    val flingSpeed = with(density) { 350.dp.toPx() }
+    val tracker = remember(word.id) { VelocityTracker() }
+
+    fun direction(x: Float, y: Float): Srs.Result? = when {
+        abs(y) >= abs(x) && y < 0 -> Srs.Result.EASY
+        abs(y) >= abs(x) && y > 0 -> Srs.Result.WRONG
+        abs(x) > abs(y) && x < 0 -> Srs.Result.RIGHT
+        else -> null
+    }
+    val dir = direction(ox, oy)
+    val progress = if (dir == null) 0f else (maxOf(abs(ox), abs(oy)) / threshold).coerceIn(0f, 1f)
+    val stamp = when (dir) {
+        Srs.Result.EASY -> "외웠어요" to Color(0xFF2E9E6B)
+        Srs.Result.RIGHT -> "헷갈려요" to Color(0xFFE08A1E)
+        Srs.Result.WRONG -> "몰라요" to Color(0xFFE5534B)
+        null -> "" to Color.Transparent
+    }
+    fun back() {
+        scope.launch { animate(ox, 0f) { v, _ -> ox = v } }
+        scope.launch { animate(oy, 0f) { v, _ -> oy = v } }
+        armed = false
+    }
+
+    Box(Modifier.fillMaxWidth().heightIn(max = 400.dp).fillMaxHeight()) {
     Surface(
         shape = RoundedCornerShape(28.dp),
-        color = Color.White,
+        color = androidx.compose.ui.graphics.lerp(Color.White, stamp.second.copy(alpha = 1f), 0.18f * progress),
         contentColor = Color(0xFF2B3A4F),
         shadowElevation = 12.dp,
+        border = if (progress > 0f) androidx.compose.foundation.BorderStroke(3.dp, stamp.second.copy(alpha = progress)) else null,
         modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 400.dp)
-            .fillMaxHeight()
+            .fillMaxSize()
             .graphicsLayer {
-                translationX = dx.value; translationY = dy.value
-                rotationZ = dx.value / 40f
+                translationX = ox; translationY = oy
+                rotationZ = ox / 40f
             }
             .pointerInput(word.id) { detectTapGestures(onTap = { onTap() }) }
             .pointerInput(word.id) {
                 detectDragGestures(
+                    onDragStart = { tracker.resetTracking() },
                     onDragEnd = {
-                        val x = dx.value; val y = dy.value
-                        val result = when {
-                            y < -limit && abs(y) > abs(x) -> Srs.Result.EASY
-                            y > limit && abs(y) > abs(x) -> Srs.Result.WRONG
-                            x < -limit && abs(x) > abs(y) -> Srs.Result.RIGHT
-                            else -> null
+                        val v = tracker.calculateVelocity()
+                        val d = direction(ox, oy)
+                        val dist = maxOf(abs(ox), abs(oy))
+                        // A quick flick in the same direction counts even when it's short.
+                        val speed = when (d) {
+                            Srs.Result.EASY -> -v.y
+                            Srs.Result.WRONG -> v.y
+                            Srs.Result.RIGHT -> -v.x
+                            null -> 0f
                         }
-                        if (result != null) {
-                            onAnswer(result)
+                        if (d != null && (dist >= threshold || (dist >= minFling && speed >= flingSpeed))) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onAnswer(d)
                         } else {
-                            scope.launch { dx.animateTo(0f) }
-                            scope.launch { dy.animateTo(0f) }
+                            back()
                         }
                     },
-                    onDragCancel = {
-                        scope.launch { dx.animateTo(0f) }
-                        scope.launch { dy.animateTo(0f) }
-                    },
+                    onDragCancel = { back() },
                 ) { change, drag ->
                     change.consume()
-                    scope.launch { dx.snapTo(dx.value + drag.x) }
-                    scope.launch { dy.snapTo(dy.value + drag.y) }
+                    tracker.addPointerInputChange(change)
+                    ox += drag.x; oy += drag.y
+                    val over = direction(ox, oy) != null && maxOf(abs(ox), abs(oy)) >= threshold
+                    if (over && !armed) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    armed = over
                 }
             },
     ) {
@@ -247,4 +286,15 @@ private fun SwipeCard(word: Word, open: Boolean, onTap: () -> Unit, onAnswer: (S
         }
     }
 }
+    if (progress > 0f) {
+        Text(
+            stamp.first,
+            color = stamp.second.copy(alpha = progress),
+            fontSize = 30.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)
+                .graphicsLayer { translationX = ox; translationY = oy; rotationZ = -8f },
+        )
+    }
+    }
 }
