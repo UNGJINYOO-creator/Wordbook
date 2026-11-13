@@ -97,6 +97,8 @@ import kotlinx.coroutines.launch
 class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).wordDao()
     val deckId: Long = checkNotNull(handle.get<Long>("deckId"))
+    /** Opened from 단어 추가 › 직접 입력: the add-card dialog opens right away. */
+    val openManual: Boolean = handle.get<Boolean>("manual") ?: false
 
     val deck = dao.observeDeck(deckId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
     val words = dao.observeWords(deckId).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -170,7 +172,7 @@ fun DeckScreen(
 
     var showAdd by rememberSaveable { mutableStateOf(false) }
     var showPaste by rememberSaveable { mutableStateOf(false) }
-    var showManual by rememberSaveable { mutableStateOf(false) }
+    var showManual by rememberSaveable { mutableStateOf(vm.openManual) }
     var showStudy by rememberSaveable { mutableStateOf(false) }
     var showOptions by rememberSaveable { mutableStateOf(false) }
     var showRename by rememberSaveable { mutableStateOf(false) }
@@ -336,29 +338,23 @@ fun DeckScreen(
     }
 
     if (showAdd) {
-        ModalBottomSheet(onDismissRequest = { showAdd = false }, containerColor = MaterialTheme.colorScheme.surface) {
-            Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp)) {
-                Text("단어 추가", style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp))
-                SheetItem(Icons.Default.CameraAlt, "사진 찍기", "찍은 사진에서 단어를 찾아 이 단어장에 넣어요") {
-                    showAdd = false
-                    val uri = newPhotoUri(context)
-                    pendingUri = uri.toString()
-                    takePicture.launch(uri)
-                }
-                SheetItem(Icons.Default.PhotoLibrary, "앨범에서 고르기", "사진이나 스크린샷, 여러 장 한 번에 골라도 돼요") {
-                    showAdd = false
-                    pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }
-                SheetItem(Icons.Default.Keyboard, "직접 입력", "단어와 뜻을 손으로 적어요 (뜻을 비우면 자동 번역)") {
-                    showAdd = false
-                    showManual = true
-                }
-                SheetItem(Icons.Default.ContentPaste, "붙여넣기로 여러 개", "복사한 단어 목록을 붙여넣어 한 번에 넣어요") {
-                    showAdd = false
-                    showPaste = true
-                }
-            }
-        }
+        AddWordsSheet(
+            target = deck?.name ?: "이",
+            isNew = false,
+            onCamera = {
+                showAdd = false
+                val uri = newPhotoUri(context)
+                pendingUri = uri.toString()
+                takePicture.launch(uri)
+            },
+            onAlbum = {
+                showAdd = false
+                pickImage.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onPaste = { showAdd = false; showPaste = true },
+            onManual = { showAdd = false; showManual = true },
+            onDismiss = { showAdd = false },
+        )
     }
     if (showStudy) {
         StudySheet(

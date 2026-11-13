@@ -27,6 +27,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -142,8 +145,11 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     var busy by mutableStateOf(true)
         private set
     var deckName by mutableStateOf(
-        SimpleDateFormat("M월 d일 HH:mm 단어장", Locale.KOREA).format(Date())
+        handle.get<String>("name").orEmpty().ifBlank { SimpleDateFormat("M월 d일 HH:mm 단어장", Locale.KOREA).format(Date()) }
     )
+    /** The existing deck's name when words go into one, for "'이름' 단어장에 넣어요". */
+    var targetName by mutableStateOf("")
+        private set
     val candidates = mutableStateListOf<Candidate>()
     /** Headwords left out for a strange spelling; one can be put back with [rescue]. */
     val dropped = mutableStateListOf<DroppedCandidate>()
@@ -154,6 +160,7 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         private set
 
     init {
+        if (targetDeckId >= 0) viewModelScope.launch { targetName = dao.getDeck(targetDeckId)?.name.orEmpty() }
         viewModelScope.launch { run() }
     }
 
@@ -326,8 +333,37 @@ class ScanViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
         dao.setCollection(deckId, id)
     }
 
+    /** The words of the last save, for "오늘 넣은 단어로 새 단어장도 만들기". */
+    private var lastSaved = listOf<Word>()
+
+    /**
+     * After saving, from the one 저장했어요 popup: link a new deck into a 종합단어장 ([collection] id, or -1 with
+     * [collectionName] for a new one), or copy the words just put into an existing deck into a new deck [copyName].
+     * Hands back the deck to study: the copy when one was made, else the saved deck.
+     */
+    fun finish(deckId: Long, collection: Long?, collectionName: String, copyName: String?, then: (Long) -> Unit) = viewModelScope.launch {
+        when {
+            collection != null && collection >= 0 -> dao.setCollection(deckId, collection)
+            collection != null -> {
+                val id = dao.insertDeck(Deck(name = collectionName.ifBlank { "종합 단어장" }, isCollection = true))
+                dao.setCollection(deckId, id)
+            }
+        }
+        if (copyName != null && lastSaved.isNotEmpty()) {
+            val id = db.withTransaction {
+                val id = dao.insertDeck(Deck(name = copyName.ifBlank { "새 단어장" }))
+                dao.insertWords(lastSaved.map { Word(deckId = id, text = it.text, meaning = it.meaning, pos = it.pos) })
+                id
+            }
+            then(id)
+        } else {
+            then(deckId)
+        }
+    }
+
     fun save(onSaved: (Long) -> Unit) = viewModelScope.launch {
         val chosen = candidates.filter { it.selected }.map { it to it.meaning.trim() }
+        lastSaved = chosen.map { (c, m) -> Word(deckId = 0, text = c.text, meaning = m, pos = c.pos) }
         val deckId = if (targetDeckId >= 0) {
             dao.insertWords(chosen.map { (c, m) -> Word(deckId = targetDeckId, text = c.text, meaning = m, pos = c.pos) })
             targetDeckId
@@ -358,20 +394,7 @@ fun ScanScreen(
 ) {
     val selectedCount = vm.candidates.count { it.selected }
     var savedDeckId by remember { mutableStateOf<Long?>(null) }
-    // A new deck from photos is offered to a 종합단어장 first, then 바로 학습할까요?
-    var askCollection by remember { mutableStateOf<Long?>(null) }
     val collections by vm.collections.collectAsStateWithLifecycle()
-    askCollection?.let { id ->
-        CollectionDialog(
-            title = "종합단어장에 추가할까요?",
-            collections = collections,
-            current = 0,
-            onPick = { c -> vm.link(id, c); askCollection = null; savedDeckId = id },
-            onCreate = { name -> vm.createCollectionAndLink(id, name); askCollection = null; savedDeckId = id },
-            onRemove = null,
-            onDismiss = { askCollection = null; savedDeckId = id },
-        )
-    }
     var editing by remember { mutableStateOf<Candidate?>(null) }
     editing?.let { c -> CandidateDialog(c, vm.crops[c.id], onDismiss = { editing = null }) }
     // 사진 전체 보기: which photo is open (index), -1 = none.
@@ -379,13 +402,18 @@ fun ScanScreen(
     if (mapOf >= 0) PhotoMapDialog(mapOf, vm.photos.size, vm::photoMap, onDismiss = { mapOf = -1 })
     var showAllStrips by remember { mutableStateOf(false) }
     var showDropped by remember { mutableStateOf(false) }
+    var showRaw by remember { mutableStateOf(false) }
+    var moreOpen by remember { mutableStateOf(false) }
     savedDeckId?.let { id ->
-        AlertDialog(
-            onDismissRequest = { savedDeckId = null; onHome() },
-            title = { Text("단어 ${selectedCount}개를 저장했어요") },
-            text = { Text("바로 학습할까요?") },
-            confirmButton = { TextButton(onClick = { savedDeckId = null; onStudy(id) }) { Text("예, 학습할래요") } },
-            dismissButton = { TextButton(onClick = { savedDeckId = null; onHome() }) { Text("아니오") } },
+        SavedDialog(
+            count = selectedCount,
+            deckName = if (vm.targetDeckId >= 0) vm.targetName else vm.deckName,
+            newDeck = vm.targetDeckId < 0,
+            collections = collections,
+            onDone = { study, collection, collectionName, copyName ->
+                savedDeckId = null
+                vm.finish(id, collection, collectionName, copyName) { deck -> if (study) onStudy(deck) else onHome() }
+            },
         )
     }
     Scaffold(
@@ -397,13 +425,37 @@ fun ScanScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로") }
                 },
+                actions = {
+                    if (vm.candidates.isNotEmpty() || vm.rawLines.isNotEmpty()) {
+                        Box {
+                        TextButton(onClick = { moreOpen = true }) { Text("더 보기 ▾") }
+                        DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                            DropdownMenuItem(text = { Text("전체 선택") }, onClick = { moreOpen = false; vm.setAll(true) })
+                            DropdownMenuItem(text = { Text("전체 해제") }, onClick = { moreOpen = false; vm.setAll(false) })
+                            if (vm.crops.isNotEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text(if (showAllStrips) "사진 조각 접기" else "모든 단어 사진 조각 보기") },
+                                    onClick = { moreOpen = false; showAllStrips = !showAllStrips },
+                                )
+                            }
+                            if (vm.photos.isNotEmpty()) {
+                                DropdownMenuItem(text = { Text("사진 전체 보기") }, onClick = { moreOpen = false; mapOf = 0 })
+                            }
+                            DropdownMenuItem(
+                                text = { Text(if (showRaw) "인식 원문 숨기기" else "빠진 단어? 인식 원문 보기") },
+                                onClick = { moreOpen = false; showRaw = !showRaw },
+                            )
+                        }
+                        }
+                    }
+                },
             )
         },
         bottomBar = {
             if (vm.candidates.isNotEmpty()) {
                 PrimaryButton(
                     "단어 ${selectedCount}개 저장",
-                    { vm.save { id -> if (vm.targetDeckId < 0) askCollection = id else savedDeckId = id } },
+                    { vm.save { id -> savedDeckId = id } },
                     Modifier.padding(16.dp).navigationBarsPadding(),
                     enabled = selectedCount > 0 && !vm.busy,
                 )
@@ -429,14 +481,17 @@ fun ScanScreen(
                 OutlinedTextField(
                     value = vm.deckName,
                     onValueChange = { vm.deckName = it },
-                    label = { Text("단어장 이름") },
+                    label = { Text("새 단어장 이름") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 )
-            }
-            Row(Modifier.padding(horizontal = 8.dp)) {
-                TextButton(onClick = { vm.setAll(true) }) { Text("전체 선택") }
-                TextButton(onClick = { vm.setAll(false) }) { Text("전체 해제") }
+            } else {
+                Text(
+                    "📒 '${vm.targetName}' 단어장에 넣어요 (새 단어장은 만들지 않아요)",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
             }
             if (!vm.busy) {
                 // 저장 전 요약: what goes in, what still needs a look, what was fixed or left out.
@@ -454,21 +509,10 @@ fun ScanScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
-            Row(Modifier.padding(horizontal = 8.dp)) {
-                if (vm.crops.isNotEmpty()) {
-                    TextButton(onClick = { showAllStrips = !showAllStrips }) {
-                        Text(if (showAllStrips) "사진 조각 접기" else "모든 단어 사진 보기")
-                    }
-                }
-                if (vm.photos.isNotEmpty()) {
-                    TextButton(onClick = { mapOf = 0 }) { Text("사진 전체 보기") }
-                }
-            }
             HorizontalDivider()
-            var showRaw by remember { mutableStateOf(false) }
             if (vm.candidates.any { it.needsCheck }) {
                 Text(
-                    "노란 줄은 사진 속 뜻이 깨졌거나 번역과 달라서 확인이 필요한 단어예요. 아래 사진 조각과 비교하고 탭해서 고쳐 주세요. (파란 칸 = 영어, 초록 칸 = 뜻)",
+                    "노란 줄은 확인이 필요한 단어예요. 사진 조각과 비교하고 탭해서 고쳐 주세요.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -533,11 +577,6 @@ fun ScanScreen(
                         }
                     }
                 }
-                item {
-                    TextButton(onClick = { showRaw = !showRaw }, modifier = Modifier.padding(8.dp)) {
-                        Text(if (showRaw) "인식 원문 숨기기" else "빠진 단어가 있나요? 인식 원문 보기")
-                    }
-                }
                 if (showRaw) {
                     items(vm.rawLines) { l ->
                         Text(
@@ -553,6 +592,70 @@ fun ScanScreen(
 }
 
 private val CheckYellow = Color(0x33FFC107)
+
+/**
+ * The one popup after saving: 바로 학습 or 홈으로. A new deck can also go into a 종합단어장; words put into an
+ * existing deck can also be copied into a new deck of their own. Both checkboxes start off.
+ */
+@Composable
+private fun SavedDialog(
+    count: Int,
+    deckName: String,
+    newDeck: Boolean,
+    collections: List<Deck>,
+    onDone: (study: Boolean, collection: Long?, collectionName: String, copyName: String?) -> Unit,
+) {
+    var extra by remember { mutableStateOf(false) }
+    var collection by remember { mutableStateOf(collections.firstOrNull()?.id ?: -1L) }
+    var collectionName by remember { mutableStateOf("종합 단어장") }
+    var copyName by remember { mutableStateOf(SimpleDateFormat("M월 d일 추가 단어", Locale.KOREA).format(Date())) }
+    fun done(study: Boolean) = onDone(
+        study,
+        if (newDeck && extra) collection else null,
+        collectionName,
+        if (!newDeck && extra) copyName else null,
+    )
+    AlertDialog(
+        onDismissRequest = { done(false) },
+        title = { Text("단어 ${count}개를 저장했어요") },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("'$deckName' 단어장에 들어갔어요.", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                Row(Modifier.fillMaxWidth().clickable { extra = !extra }, verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = extra, onCheckedChange = { extra = it })
+                    Text(if (newDeck) "종합단어장에도 넣기" else "오늘 넣은 단어로 새 단어장도 만들기", style = MaterialTheme.typography.bodyLarge)
+                }
+                if (extra && newDeck) {
+                    collections.forEach { c ->
+                        Row(Modifier.fillMaxWidth().clickable { collection = c.id }, verticalAlignment = Alignment.CenterVertically) {
+                            RadioButton(selected = collection == c.id, onClick = { collection = c.id })
+                            Text(c.name)
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth().clickable { collection = -1L }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = collection == -1L, onClick = { collection = -1L })
+                        Text("새 종합단어장")
+                    }
+                    if (collection == -1L) {
+                        OutlinedTextField(collectionName, { collectionName = it }, label = { Text("종합단어장 이름") }, singleLine = true)
+                    }
+                }
+                if (extra && !newDeck) {
+                    OutlinedTextField(copyName, { copyName = it }, label = { Text("새 단어장 이름") }, singleLine = true)
+                    Text(
+                        "이 단어들이 '$deckName'에도 그대로 있고, 새 단어장에도 따로 들어가요.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { done(true) }) { Text("바로 학습") } },
+        dismissButton = { TextButton(onClick = { done(false) }) { Text("홈으로") } },
+    )
+}
 
 /** A word's row cut out of the photo; tapping it opens the whole photo. */
 @Composable
