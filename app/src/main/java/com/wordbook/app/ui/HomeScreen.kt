@@ -123,6 +123,7 @@ import com.wordbook.app.data.StudySettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -164,8 +165,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // Counted when the home screen opens; good enough since reviews come due in whole days.
     val dueCount = dao.observeDueCount(System.currentTimeMillis())
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
-    val newCount = dao.observeNewCount()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    /** New words in 오늘 학습: every new 학원 word, plus built-in words up to the day's number (학원 단어 우선). */
+    val newCount = dao.observeAllWords().map { all ->
+        val fresh = all.filter { it.box == 0 && !it.mastered && !it.excluded }
+        val priority = com.wordbook.app.data.Priority(all, dao.getAllDecks(), settings.priorityOff)
+        com.wordbook.app.data.Priority.todayNew(
+            fresh, priority::first, StudyViewModel.newPerDay(settings), settings.academyMax, settings.fillBuiltIn, null,
+        ).size
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     var todayMs by mutableLongStateOf(0L)
         private set
@@ -243,7 +250,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             level = game.level
             stars = game.stars
         }
-        viewModelScope.launch { giant = giantStore.state(dao.getAllWords(), stats.learnedToday) }
+        viewModelScope.launch { giant = giantStore.state(dao.getAllWords(), stats.learnedToday, dao.getAllDecks()) }
     }
 
     fun setSort(s: DeckSort) {
@@ -493,7 +500,7 @@ fun HomeScreen(
                 TestBadge("🛠 이 폰은 테스트 모드예요 (비밀번호 없음 · 낚시 무제한) · 설정에서 끌 수 있어요")
             }
             item(key = "today", span = { GridItemSpan(maxLineSpan) }) {
-                TodayCard(dueCount, minOf(newCount, StudyViewModel.newPerDay(vm.settings)), vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.level, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
+                TodayCard(dueCount, newCount, vm.todayMs, vm.goalMs, vm.streak, vm.stars, vm.level, vm.known, vm.total, vm.learned, vm.goalWords, vm.totalMs, vm.totalLearned, onToday)
             }
             // The day's fishing and the giant hunt side by side; each opens its own screen.
             item(key = "fishing", span = { GridItemSpan(maxLineSpan) }) {

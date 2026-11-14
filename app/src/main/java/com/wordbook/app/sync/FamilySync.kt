@@ -265,14 +265,17 @@ object PrefCodec {
     private val DAY = Regex("\\d{4}-\\d{2}-\\d{2}")
 
     /** Keys whose value is a set of word ids. */
-    private val ID_SETS = setOf("giant/confirmed", "masterCheck/ids", "fishing/seen", "history/ever", "history/proven")
+    private val ID_SETS = setOf("giant/confirmed", "giant/tropicalRight", "masterCheck/ids", "fishing/seen", "history/ever", "history/proven")
+
+    /** Also the 학원 words landed on each giant (giant/extra_0, extra_1 …). */
+    private fun isIdSet(key: String) = key in ID_SETS || key.startsWith("giant/extra_")
 
     fun export(context: Context, file: String, keyOf: Map<Long, String>): JSONObject {
         val sp = context.applicationContext.getSharedPreferences(file, Context.MODE_PRIVATE)
         val out = JSONObject()
         sp.all.toSortedMap().forEach { (k, v) ->
             val tv = when {
-                "$file/$k" in ID_SETS && v is Set<*> ->
+                isIdSet("$file/$k") && v is Set<*> ->
                     JSONArray().put("set").put(JSONArray(v.mapNotNull { (it as String).toLongOrNull()?.let(keyOf::get) }.sorted()))
                 file == "daily" && k == "learned" && v is String ->
                     JSONArray().put("s").put(v.split(',').mapNotNull { it.toLongOrNull()?.let(keyOf::get) }.sorted().joinToString(","))
@@ -315,7 +318,7 @@ object PrefCodec {
                 "set" -> {
                     val a = tv.getJSONArray(1)
                     val items = (0 until a.length()).map { a.getString(it) }
-                    e.putStringSet(k, if ("$file/$k" in ID_SETS) items.mapNotNull { idOf[it]?.toString() }.toSet() else items.toSet())
+                    e.putStringSet(k, if (isIdSet("$file/$k")) items.mapNotNull { idOf[it]?.toString() }.toSet() else items.toSet())
                 }
             }
         }

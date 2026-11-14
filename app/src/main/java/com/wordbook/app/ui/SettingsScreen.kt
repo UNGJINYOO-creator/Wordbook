@@ -286,6 +286,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             }
                         }
                     }
+                    var academy by remember { mutableStateOf(academySummary(settings)) }
+                    Group("📚 학원 단어 우선", academy, open == "academy", { toggle("academy") }) {
+                        Body { AcademySettings(settings) { academy = academySummary(settings) } }
+                    }
                     Group(
                         "📚 학습 방법",
                         modes.joinToString(" → ") { it.label } + " · " + (if (size > 0) "${size}장씩" else "전부"),

@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
@@ -102,7 +104,7 @@ fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
                 when (tab) {
                     0 -> seaTab(fishing) { detail = it }
                     1 -> giantTab(giant, store) { detail = it }
-                    else -> tropicalTab(giant)
+                    else -> tropicalTab(giant) { detail = it }
                 }
             }
         }
@@ -117,7 +119,7 @@ fun FishBook(fishing: Fishing, giant: GiantState?, onDismiss: () -> Unit) {
                     }
                 },
                 text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         d.lines.forEach { Text(it, style = MaterialTheme.typography.bodyLarge) }
                     }
                 },
@@ -226,20 +228,38 @@ private fun LazyGridScope.giantTab(giant: GiantState?, store: Giant, onOpen: (De
     }
 }
 
-private fun LazyGridScope.tropicalTab(giant: GiantState?) {
-    val count = giant?.tropical ?: 0
+private fun LazyGridScope.tropicalTab(giant: GiantState?, onDetail: (Detail) -> Unit) {
+    val fish = giant?.tropicalFish.orEmpty()
+    val caught = fish.count { it.caught }
     header(
         "tropical",
-        "🌴 열대 바다 ${count}마리",
-        "직접 넣은 단어를 100개 외울 때마다 열대 물고기가 한 마리씩 찾아와요 (다음까지 ${Giant.BLOCK - (giant?.extraLearned ?: 0) % Giant.BLOCK}단어).",
+        "🌴 열대 바다 ${caught}/${fish.size}마리",
+        if (fish.isEmpty()) "단어장을 추가하면 그 단어들을 지키는 열대 물고기가 나타나요."
+        else "추가한 학원 단어를 지키는 물고기예요. 퀴즈에서 맞힌 단어마다 칸이 채워지고, 다 채우면 잡혀요. 누르면 단어 칸을 볼 수 있어요.",
     )
-    // Every kind once, with how many times it has come.
-    Giant.tropical.forEachIndexed { i, t ->
-        val times = if (count > i) (count - i - 1) / Giant.tropical.size + 1 else 0
-        val emoji = t.substringBefore(' ')
-        val name = t.substringAfter(' ')
-        item(key = "tropical_$i") {
-            Tile(emoji, if (times > 0) name else "???", if (times > 0) "${times}마리" else "", times > 0, Color(0xFF00ACC1), false) {}
+    fish.forEach { f ->
+        item(key = "tropical_${f.index}") {
+            Tile(
+                f.emoji,
+                if (f.caught) f.name else "${f.right}/${f.words.size}칸",
+                f.title,
+                f.caught,
+                Color(0xFF00ACC1),
+                false,
+            ) {
+                onDetail(
+                    Detail(
+                        f.emoji,
+                        if (f.caught) f.name else "??? (${f.right}/${f.words.size}칸)",
+                        f.title,
+                        listOf(
+                            if (f.caught) "단어 ${f.words.size}개를 모두 맞혀서 잡았어요! 🎉"
+                            else "맞힌 단어 ${f.right}개 · 남은 칸 ${f.words.size - f.right}개",
+                            f.words.chunked(10).joinToString("\n") { row -> row.joinToString("") { if (it.id in f.rightIds) "🟩" else "⬜" } },
+                        ) + f.words.map { w -> (if (w.id in f.rightIds) "✅ " else "⬜ ") + w.text + "  " + w.meaning.substringBefore(" /") },
+                    ),
+                )
+            }
         }
     }
 }
