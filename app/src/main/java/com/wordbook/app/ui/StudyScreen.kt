@@ -321,7 +321,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     val rank = com.wordbook.app.data.DefaultDecks.rank(getApplication())
                     val fresh = all.filter { it.box == 0 && !it.mastered && !it.excluded }
                         .sortedWith(
-                            compareByDescending<Word> { it.addedAt }
+                            // Added words in the order they were put in (1, 2, 3 …), built-in words in book order.
+                            compareBy<Word> { it.addedAt == 0L }
+                                .thenBy { it.addedAt }
                                 .thenBy { com.wordbook.app.data.DefaultDecks.bookRank(rank, it) }
                                 .thenBy { it.id },
                         )
@@ -359,7 +361,9 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 }
             }
             val limit = if (test) 0 else settings.sessionSize
-            sessionWords = order(sessionWords).let { if (limit > 0) it.take(limit) else it }
+            // 오늘 학습 keeps its numbered order when cut to the session size; the cards are mixed only after.
+            sessionWords = if (today) order(if (limit > 0) sessionWords.take(limit) else sessionWords)
+            else order(sessionWords).let { if (limit > 0) it.take(limit) else it }
             dao.touchDecks(sessionWords.map { it.deckId }.distinct(), System.currentTimeMillis())
             start(sessionWords)
             loading = false

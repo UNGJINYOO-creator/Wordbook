@@ -26,7 +26,7 @@ class Priority(words: List<Word>, decks: List<Deck>, offNames: Set<String>) {
     companion object {
         /**
          * The new words of the day's 오늘 학습: every new 학원 word (at most [max] when it is above 0), then, if [fill],
-         * other new words up to [limit] in all. [fresh] is newest first, the built-in words in book (DAY) order.
+         * other new words up to [limit] in all. [fresh] holds the added words in the order they were put in, then the built-in words in book (DAY) order.
          * In each part the weak part of speech comes first for up to half of it; for the built-in words only from the
          * next [WINDOW] in book order, so the 대양 원정 blocks of 100 still fill one after another.
          */
