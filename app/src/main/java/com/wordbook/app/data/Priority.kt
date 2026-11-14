@@ -26,14 +26,15 @@ class Priority(words: List<Word>, decks: List<Deck>, offNames: Set<String>) {
     companion object {
         /**
          * The new words of the day's 오늘 학습: every new 학원 word (at most [max] when it is above 0), then, if [fill],
-         * other new words up to [limit] in all. [fresh] is newest first. In each part the weak part of speech comes
-         * first for up to half of it.
+         * other new words up to [limit] in all. [fresh] is newest first, the built-in words in book (DAY) order.
+         * In each part the weak part of speech comes first for up to half of it; for the built-in words only from the
+         * next [WINDOW] in book order, so the 대양 원정 blocks of 100 still fill one after another.
          */
         fun todayNew(fresh: List<Word>, first: (Word) -> Boolean, limit: Int, max: Int, fill: Boolean, weakPos: String?): List<Word> {
             val (mine, rest) = fresh.partition(first)
             val minePick = weakFirst(mine, weakPos, if (max > 0) max else mine.size)
             val room = (limit - minePick.size).coerceAtLeast(0)
-            val restPick = if (fill) weakFirst(rest, weakPos, room) else emptyList()
+            val restPick = if (fill) weakFirst(rest.take(maxOf(WINDOW, room)), weakPos, room) else emptyList()
             return minePick + restPick
         }
 
@@ -56,6 +57,9 @@ class Priority(words: List<Word>, decks: List<Deck>, offNames: Set<String>) {
             }
             return w.indexOfLast { it > 0 }
         }
+
+        /** The built-in words that the weak part of speech may pick from: one 대양 원정 block. */
+        const val WINDOW = 100
 
         /** Words put in within this long of each other, in the same deck, are one 묶음. */
         const val BATCH_GAP = 30L * 60 * 1000

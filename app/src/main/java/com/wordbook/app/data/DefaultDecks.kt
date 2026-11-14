@@ -17,6 +17,15 @@ object DefaultDecks {
     /** The built-in words in DAY order (lowercase), for the 거대 물고기 blocks. */
     fun wordOrder(context: Context): List<String> = rows(context).map { it[0].trim().lowercase() }
 
+    @Volatile private var rankCache: Map<String, Int>? = null
+
+    /** Each built-in word's place in the book (0 = DAY 1's first word); other words are not in it. */
+    fun rank(context: Context): Map<String, Int> = rankCache ?: wordOrder(context).withIndex()
+        .associate { (i, t) -> t to i }.let { m -> rankCache = m; m }
+
+    /** Book order for built-in words (spelling first seen wins), after every word not in the book. */
+    fun bookRank(rank: Map<String, Int>, w: Word): Int = rank[w.text.trim().lowercase()] ?: -1
+
     /**
      * Adds the 중학 영단어 종합단어장 from assets/default_middle.tsv (word, part of speech, meaning, example),
      * and fills in examples for words that have none yet.

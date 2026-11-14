@@ -317,8 +317,14 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     // 학원 단어 우선: every new word of the added decks, then built-in words up to the day's number.
                     // 약점 맞춤: in each part the weak part of speech comes first.
                     val priority = com.wordbook.app.data.Priority(all, dao.getAllDecks(), settings.priorityOff)
+                    // Built-in words in book (DAY) order, so the 대양 원정 blocks of 100 fill one after another.
+                    val rank = com.wordbook.app.data.DefaultDecks.rank(getApplication())
                     val fresh = all.filter { it.box == 0 && !it.mastered && !it.excluded }
-                        .sortedWith(compareByDescending<Word> { it.addedAt }.thenBy { it.id })
+                        .sortedWith(
+                            compareByDescending<Word> { it.addedAt }
+                                .thenBy { com.wordbook.app.data.DefaultDecks.bookRank(rank, it) }
+                                .thenBy { it.id },
+                        )
                     val picked = com.wordbook.app.data.Priority.todayNew(
                         fresh, priority::first, newPerDay(settings), settings.academyMax, settings.fillBuiltIn, weakness.pos,
                     )
@@ -339,7 +345,10 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                         val limit = settings.sessionSize.takeIf { it > 0 } ?: COLLECTION_SESSION
                         val days = settings.recentDays
                         val share = settings.recentShare
-                        val picked = CollectionMix.pick(candidates, limit, share, days, System.currentTimeMillis())
+                        val rank = com.wordbook.app.data.DefaultDecks.rank(getApplication())
+                        val picked = CollectionMix.pick(candidates, limit, share, days, System.currentTimeMillis()) {
+                            com.wordbook.app.data.DefaultDecks.bookRank(rank, it)
+                        }
                         sessionWords = order(picked)
                         dao.touchDecks(listOf(deckId) + sessionWords.map { it.deckId }.distinct(), System.currentTimeMillis())
                         start(sessionWords)
