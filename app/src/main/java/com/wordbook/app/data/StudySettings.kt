@@ -298,11 +298,52 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("recentDays", 7)
         set(v) = prefs.edit().putInt("recentDays", v).apply()
 
+    // 학원 단어 우선: the decks the family adds (심슨단어장, 시험대비 …) come before the built-in 1800 words.
+
+    /** Added decks (by name) switched off in 학원 단어 우선; their words are treated like the built-in ones. */
+    var priorityOff: Set<String>
+        get() = prefs.getStringSet("priorityOff", emptySet())!!.toSet()
+        set(v) = prefs.edit().putStringSet("priorityOff", v).apply()
+
+    /** 오늘의 낚시 question shares in percent: today's words, other 학원 words, built-in words. */
+    var fishMix: List<Int>
+        get() = prefs.getString("fishMix", null)?.split(",")?.mapNotNull { it.trim().toIntOrNull() }
+            ?.takeIf { it.size == 3 && it.sum() > 0 } ?: FISH_MIX_DEFAULT
+        set(v) = prefs.edit().putString("fishMix", v.joinToString(",")).apply()
+
+    /** 학원 words learned (and landed with the day's catch) also hit the current 대양 원정 giant. */
+    var giantAcademy: Boolean
+        get() = prefs.getBoolean("giantAcademy", true)
+        set(v) = prefs.edit().putBoolean("giantAcademy", v).apply()
+
+    /** When 학원 words don't fill the day's new words, top up with built-in words. */
+    var fillBuiltIn: Boolean
+        get() = prefs.getBoolean("fillBuiltIn", true)
+        set(v) = prefs.edit().putBoolean("fillBuiltIn", v).apply()
+
+    /** In 오늘 학습, 학원 words (new and review) are dealt before the built-in ones. */
+    var academyFirst: Boolean
+        get() = prefs.getBoolean("academyFirst", true)
+        set(v) = prefs.edit().putBoolean("academyFirst", v).apply()
+
+    /** Most new 학원 words in one day's 오늘 학습, 0 = all of them. */
+    var academyMax: Int
+        get() = prefs.getInt("academyMax", 0)
+        set(v) = prefs.edit().putInt("academyMax", v).apply()
+
+    /** How the 열대 바다 fish split the 학원 words. */
+    var tropicalMode: TropicalMode
+        get() = runCatching { TropicalMode.valueOf(prefs.getString("tropicalMode", null)!!) }.getOrDefault(TropicalMode.BATCH)
+        set(v) = prefs.edit().putString("tropicalMode", v.name).apply()
+
     companion object {
         /** 1000 → "1", 1500 → "1.5". */
         fun secondsText(ms: Long): String = if (ms % 1000 == 0L) "${ms / 1000}" else "${ms / 1000}.${ms % 1000 / 100}"
     }
 }
+
+/** 오늘의 낚시: today 80 · 학원 20 · built-in 0 (형's choice, 2026-11-14). */
+val FISH_MIX_DEFAULT = listOf(80, 20, 0)
 
 /** The mix the giant battle used before it could be chosen. */
 val GIANT_MIX_DEFAULT = listOf(60, 25, 0, 15)

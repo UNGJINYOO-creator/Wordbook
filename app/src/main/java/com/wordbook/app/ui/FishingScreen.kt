@@ -117,6 +117,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     /** Words the questions are about: [pool] usually, only the newly learned words in the 새 단어 game. */
     private var questions = listOf<Word>()
     private var newSeaWords = listOf<Word>()
+    /** 학원 단어 우선: the pool split into today's words, other 학원 words and built-in words, picked by [StudySettings.fishMix]. */
+    private var groups = listOf<List<Word>>()
     val newSeaCount: Int get() = newSeaWords.size
     /** true while playing (or just finished) with only the words just learned. */
     var newSea by mutableStateOf(false)
@@ -136,7 +138,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         private set
 
     private suspend fun refreshGiant() {
-        giant = giantStore.state(dao.getAllWords(), stats.learnedToday)
+        giant = giantStore.state(dao.getAllWords(), stats.learnedToday, dao.getAllDecks())
     }
     private val recent = ArrayDeque<Long>()
 
@@ -220,6 +222,10 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             val studied = all.filter { it.box > 0 && it.id !in todayIds }.shuffled()
             pool = (today + studied).distinctBy { it.text.lowercase() }
             if (pool.size < 8) pool = (pool + all.shuffled()).distinctBy { it.text.lowercase() }.take(maxOf(pool.size, 30))
+            val priority = com.wordbook.app.data.Priority(all, dao.getAllDecks(), settings.priorityOff)
+            val (todayPart, older) = pool.partition { it.id in todayIds }
+            val (academy, builtIn) = older.partition { priority.first(it) }
+            groups = listOf(todayPart, academy, builtIn)
             val fresh = fishing.newSeaIds(stats.learnedToday)
             newSeaWords = all.filter { it.id in fresh }.distinctBy { it.text.lowercase() }
                 .takeIf { it.size >= Fishing.NEW_SEA_MIN } ?: emptyList()
@@ -276,7 +282,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         // A final battle before the 100 squares are full is only a test run, never saved.
         practice = com.wordbook.app.data.TestMode.practice(getApplication()) || !g.ready
         newSea = false
-        questions = g.words.filter { !it.excluded && it.meaning.isNotBlank() }.ifEmpty { g.words }
+        // 학원 words that landed on this giant fight in the final battle too.
+        questions = (g.words + g.extraHit).filter { !it.excluded && it.meaning.isNotBlank() }.distinctBy { it.id }.ifEmpty { g.words }
         fish = Fish(null, 3, f.emoji, f.name, f.minKg, f.maxKg)
         seconds = maxOf(1.0, goal - Giant.FINAL_START)
         begin()
@@ -310,7 +317,12 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         answered = null
         pickedId = null
         questionAt = System.currentTimeMillis()
-        val w = questions.filter { it.id !in recent }.randomOrNull() ?: questions.random()
+        // 오늘의 낚시: today's words, other 학원 words and built-in words in the parent's chosen shares.
+        val from = if (!giantMode && !newSea && questions === pool) {
+            com.wordbook.app.data.Priority.pickGroup(groups.map { it.size }, settings.fishMix, Math.random())?.let { groups[it] }
+        } else null
+        val w = from?.filter { it.id !in recent }?.randomOrNull()
+            ?: questions.filter { it.id !in recent }.randomOrNull() ?: questions.random()
         recent.addLast(w.id)
         if (recent.size > minOf(6, questions.size - 1)) recent.removeFirst()
         word = w
@@ -425,6 +437,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!practice) answerLog.add(AnswerEntry(System.currentTimeMillis(), w.id, w.text, w.pos, mode, correct, false, if (correct) "" else response, ms))
         if (!guessed && !practice) {
+            if (correct) giantStore.markRight(w.id)
             wrongNote.record(w.id, correct)
             stats.recordAnswer(w.text, correct)
         }
@@ -485,7 +498,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             fishing.markSeen(stats.learnedToday)
             // Today's words land their hit on the giant once the day's fish is in.
             giant?.let { st -> st.fish?.let { gf -> if (st.pending > 0) harpoon = Harpoon(gf, st.hp, st.total, st.pending) } }
-            giantStore.confirm(stats.learnedToday)
+            giantStore.land(giant, stats.learnedToday)
         }
         game.addStars(catchStars)
         viewModelScope.launch { refreshGiant() }
@@ -1065,14 +1078,12 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
             Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable { showWords = true }.padding(2.dp),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            g.words.chunked(10).forEach { row ->
+            // 학원 words fill the squares the block's own words left empty: green landed, yellow today.
+            val colors = giantColors(g)
+            g.words.chunked(10).forEachIndexed { r, row ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                    row.forEach { w ->
-                        val color = when (w.id) {
-                            in g.hitIds -> Color(0xFF7DB7F2)
-                            in g.pendingIds -> Color(0xFFFFD54F)
-                            else -> Color.White
-                        }
+                    row.forEachIndexed { c, _ ->
+                        val color = colors[r * 10 + c]
                         Box(Modifier.weight(1f).aspectRatio(1f).background(color, RoundedCornerShape(3.dp)))
                     }
                     repeat(10 - row.size) { Spacer(Modifier.weight(1f)) }
@@ -1080,7 +1091,8 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
             }
         }
         Text(
-            "🟦 작살 꽂힌 단어 ${g.hit} · 🟨 오늘 외운 단어 ${g.pending} · 남은 칸 ${g.hp}  (칸을 누르면 단어 목록)",
+            "🟦 작살 꽂힌 단어 ${g.hit - g.extraHit.size}" + (if (g.extraHit.isNotEmpty()) " · 🟩 학원 단어 작살 ${g.extraHit.size}" else "") +
+                " · 🟨 오늘 외운 단어 ${g.pending} · 남은 칸 ${g.hp}  (칸을 누르면 단어 목록)",
             color = com.wordbook.app.ui.theme.Sea.Ink,
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(top = 8.dp),
@@ -1110,6 +1122,21 @@ private fun GiantPanel(g: GiantState, f: GiantFish, vm: FishingViewModel) {
     }
 }
 
+/** One colour per square: the block's landed (blue) and today's (yellow) words, then 학원 words in the empty squares. */
+private fun giantColors(g: GiantState): List<Color> {
+    var extra = g.extraHit.size
+    var extraToday = g.extraPending.size
+    return g.words.map { w ->
+        when {
+            w.id in g.hitIds -> Color(0xFF7DB7F2)
+            w.id in g.pendingIds -> Color(0xFFFFD54F)
+            extra > 0 -> { extra--; Color(0xFF81C784) }
+            extraToday > 0 -> { extraToday--; Color(0xFFFFD54F) }
+            else -> Color.White
+        }
+    }
+}
+
 /** The 100 words the giant guards, each with its state. */
 @Composable
 private fun GiantWords(g: GiantState, f: GiantFish, onDismiss: () -> Unit) {
@@ -1122,6 +1149,11 @@ private fun GiantWords(g: GiantState, f: GiantFish, onDismiss: () -> Unit) {
                 g.words.forEachIndexed { i, w ->
                     val mark = when (w.id) { in g.hitIds -> "🟦"; in g.pendingIds -> "🟨"; else -> "⬜" }
                     Text("$mark ${i + 1}. ${w.text}  ${w.meaning.substringBefore(" /")}", style = MaterialTheme.typography.bodyMedium)
+                }
+                if (g.extraHit.isNotEmpty() || g.extraPending.isNotEmpty()) {
+                    Text("📚 학원 단어로 꽂은 작살", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+                    g.extraHit.forEach { w -> Text("🟩 ${w.text}  ${w.meaning.substringBefore(" /")}", style = MaterialTheme.typography.bodyMedium) }
+                    g.extraPending.forEach { w -> Text("🟨 ${w.text}  ${w.meaning.substringBefore(" /")}", style = MaterialTheme.typography.bodyMedium) }
                 }
             }
         },

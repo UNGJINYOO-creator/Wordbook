@@ -150,6 +150,11 @@ enum class Answer { KNOWN, MASTERED, UNKNOWN }
 class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).wordDao()
     private val settings = StudySettings(app)
+    /** For the 열대 바다 squares: words answered right in a quiz. */
+    private val giantStore = com.wordbook.app.data.Giant(app)
+    /** 오늘 학습 with 학원 단어 먼저: these words are dealt before the rest. */
+    private var firstIds = emptySet<Long>()
+
     /** -1 with [review] = today's reviews across all decks; -1 with [allDecks] = every deck together. */
     private val deckId: Long = checkNotNull(handle.get<Long>("deckId"))
     private val onlyUnknown: Boolean = handle.get<Boolean>("onlyUnknown") ?: false
@@ -309,13 +314,17 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 wrongOnly -> wrongNote.ids.let { ids -> all.filter { it.id in ids && !it.excluded } }
                 test -> (if (deckId > 0) dao.getWords(deckId) else all).filter { !it.excluded }.shuffled().take(settings.testSize)
                 today -> {
-                    // 약점 맞춤: among the next new words, the weak part of speech comes first.
-                    val limit = newPerDay(settings)
-                    val fresh = dao.getNewWords(limit * 3)
-                    val weakPos = weakness.pos
-                    val picked = if (weakPos == null) fresh.take(limit)
-                    else (fresh.filter { it.pos == weakPos }.take(limit / 2) + fresh).distinctBy { it.id }.take(limit)
-                    dao.getDueWords(System.currentTimeMillis()) + picked
+                    // 학원 단어 우선: every new word of the added decks, then built-in words up to the day's number.
+                    // 약점 맞춤: in each part the weak part of speech comes first.
+                    val priority = com.wordbook.app.data.Priority(all, dao.getAllDecks(), settings.priorityOff)
+                    val fresh = all.filter { it.box == 0 && !it.mastered && !it.excluded }
+                        .sortedWith(compareByDescending<Word> { it.addedAt }.thenBy { it.id })
+                    val picked = com.wordbook.app.data.Priority.todayNew(
+                        fresh, priority::first, newPerDay(settings), settings.academyMax, settings.fillBuiltIn, weakness.pos,
+                    )
+                    val words = dao.getDueWords(System.currentTimeMillis()) + picked
+                    if (settings.academyFirst) firstIds = words.filter { priority.first(it) }.map { it.id }.toSet()
+                    words
                 }
                 allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
                 else -> {
@@ -446,7 +455,12 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         if (telegramReady) viewModelScope.launch { EveningReport.goalPing(getApplication()) }
     }
 
-    private fun order(words: List<Word>) = if (shuffle) words.shuffled() else words.sortedBy { it.text.lowercase() }
+    private fun order(words: List<Word>): List<Word> {
+        fun plain(w: List<Word>) = if (shuffle) w.shuffled() else w.sortedBy { it.text.lowercase() }
+        if (firstIds.isEmpty()) return plain(words)
+        val (first, rest) = words.partition { it.id in firstIds }
+        return plain(first) + plain(rest)
+    }
 
     private fun start(words: List<Word>) {
         runWords = words
@@ -680,6 +694,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             }
             stats.recordAnswer(word.text, answer != Answer.UNKNOWN)
             // A word answered right for the first time today is one fish caught.
+            if (answer != Answer.UNKNOWN) giantStore.markRight(word.id)
             val caught = answer != Answer.UNKNOWN && stats.addLearned(word.id)
             reward(answer != Answer.UNKNOWN, caught)
             if (caught) {
