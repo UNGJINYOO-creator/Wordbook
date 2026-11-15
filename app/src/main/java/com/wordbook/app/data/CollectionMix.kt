@@ -10,7 +10,8 @@ import kotlin.math.roundToInt
 object CollectionMix {
     private const val DAY = 24L * 60 * 60 * 1000
 
-    fun pick(words: List<Word>, size: Int, share: Int, days: Int, now: Long): List<Word> {
+    /** [bookOrder] breaks ties among the older words (new built-in words come in DAY order). */
+    fun pick(words: List<Word>, size: Int, share: Int, days: Int, now: Long, bookOrder: (Word) -> Int = { 0 }): List<Word> {
         val since = now - days * DAY
         val (recent, old) = words.partition { it.addedAt >= since }
         val wantRecent = (size * share / 100.0).roundToInt().coerceIn(0, size)
@@ -19,7 +20,9 @@ object CollectionMix {
         val oldPick = old.sortedWith(
             compareByDescending<Word> { it.box > 0 && it.dueAt <= now }
                 .thenByDescending { it.wrongCount - it.correctCount }
-                .thenBy { it.dueAt },
+                .thenBy { it.dueAt }
+                .thenBy(bookOrder)
+                .thenBy { it.id },
         )
         val r = recentPick.take(wantRecent)
         val o = oldPick.take(size - r.size)

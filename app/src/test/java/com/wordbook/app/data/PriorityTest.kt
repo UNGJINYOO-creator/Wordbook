@@ -45,6 +45,15 @@ class PriorityTest {
     }
 
     @Test
+    fun weakPartOfSpeechStaysInsideTheNextHundredBuiltInWords() {
+        // 1800 built-in words in book order; only words 1000+ are verbs.
+        val book = (1L..1800L).map { Word(id = it, deckId = 1, text = "w$it", meaning = "", pos = if (it > 1000) "동사" else "명사", addedAt = 0) }
+        val p = Priority(book, decks, emptySet())
+        val picked = Priority.todayNew(book, p::first, 30, 0, true, "동사")
+        assertEquals((1L..30L).toList(), picked.map { it.id })
+    }
+
+    @Test
     fun switchedOffDeckIsLikeBuiltIn() {
         val exam = academy(2001, deck = 3)
         val p = Priority(builtIn + exam, decks, setOf("시험대비"))
