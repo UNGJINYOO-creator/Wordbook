@@ -166,6 +166,8 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
     var seconds by mutableDoubleStateOf(fishing.start)
         private set
     val goal: Double get() = fishing.goal
+    /** Where the 원정 최종전 starts, from its own 난이도. */
+    val giantStartMetres: Int get() = settings.giantFish.startDistance
     /** How many new words the 새 단어 더 배우기 button brings (the daily word goal). */
     val newWords: Int get() = StudyViewModel.newPerDay(settings)
 
@@ -263,6 +265,7 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         refreshLock()
         if (lockReason != null) return
         giantMode = false
+        fishing.giant = false
         practice = com.wordbook.app.data.TestMode.practice(getApplication())
         newSea = inNewSea && newSeaWords.isNotEmpty()
         questions = if (newSea) newSeaWords else pool
@@ -279,13 +282,14 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
         val f = g.fish ?: return
         if (!g.ready && !testMode) return
         giantMode = true
+        fishing.giant = true
         // A final battle before the 100 squares are full is only a test run, never saved.
         practice = com.wordbook.app.data.TestMode.practice(getApplication()) || !g.ready
         newSea = false
         // 학원 words that landed on this giant fight in the final battle too.
         questions = (g.words + g.extraHit).filter { !it.excluded && it.meaning.isNotBlank() }.distinctBy { it.id }.ifEmpty { g.words }
         fish = Fish(null, 3, f.emoji, f.name, f.minKg, f.maxKg)
-        seconds = maxOf(1.0, goal - Giant.FINAL_START)
+        seconds = fishing.start
         begin()
     }
 
@@ -1043,7 +1047,7 @@ private fun GiantIntro(vm: FishingViewModel, onBook: () -> Unit) {
         rules = listOf(
             "⛵ 중학 영단어 1800개를 100개씩 나눠, 100개마다 거대 물고기가 한 마리씩 기다려요",
             "⏳ 오늘 외운 단어는 노란 칸으로 보여요. 오늘의 낚시에 성공하는 순간 진짜 칸이 돼요",
-            "🏆 최종전은 그 100단어로만 문제가 나오고, 평소보다 먼 ${Giant.FINAL_START}m 앞에서 시작해요. 하루 도전 횟수는 안 써요",
+            "🏆 최종전은 그 100단어로만 문제가 나오고, ${vm.giantStartMetres}m 앞에서 시작해요. 하루 도전 횟수는 안 써요",
             "📖 최종전에서 놓치면 틀린 단어를 한 번 보고 다시 도전해요",
         ),
     ) {

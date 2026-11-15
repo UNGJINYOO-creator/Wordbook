@@ -128,37 +128,26 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("testSize", 20)
         set(v) = prefs.edit().putInt("testSize", v).apply()
 
-    /** 단어 낚시 도전 tuning (fishTries 0 = no limit), set by the parent: seconds at start and to catch, +/- per answer. */
-    var fishStart: Int
-        get() = prefs.getInt("fishStart", 100)
-        set(v) = prefs.edit().putInt("fishStart", v).apply()
-    var fishGoal: Int
-        get() = prefs.getInt("fishGoal", 200)
-        set(v) = prefs.edit().putInt("fishGoal", v).apply()
-    var fishRight: Int
-        get() = prefs.getInt("fishRight", 5)
-        set(v) = prefs.edit().putInt("fishRight", v).apply()
-    var fishWrong: Int
-        get() = prefs.getInt("fishWrong", 3)
-        set(v) = prefs.edit().putInt("fishWrong", v).apply()
-    /** 빈칸·듣고 쓰기 take longer to answer, so they have their own +/-; unset = 객관식 +2m / same −. */
-    var fishRightTyping: Int
-        get() = prefs.getInt("fishRightTyping", fishRight + 2)
-        set(v) = prefs.edit().putInt("fishRightTyping", v).apply()
-    var fishWrongTyping: Int
-        get() = prefs.getInt("fishWrongTyping", fishWrong)
-        set(v) = prefs.edit().putInt("fishWrongTyping", v).apply()
-    /** Extra metres on every 3rd right answer in a row ('릴 감기'). */
-    var fishCombo: Int
-        get() = prefs.getInt("fishCombo", 3)
-        set(v) = prefs.edit().putInt("fishCombo", v).apply()
-    /** How many tenths of a second the line loses each second, at the start and close to the catch. */
-    var fishDrainStart: Int
-        get() = prefs.getInt("fishDrainStart", 5)
-        set(v) = prefs.edit().putInt("fishDrainStart", v).apply()
-    var fishDrainEnd: Int
-        get() = prefs.getInt("fishDrainEnd", 12)
-        set(v) = prefs.edit().putInt("fishDrainEnd", v).apply()
+    /** 오늘의 낚시 tuning, set by the parent (stored under the old keys fishStart, fishRight, ...). */
+    val dailyFish: FishTune get() = FishTune(prefs, "")
+
+    /**
+     * 대양 원정 (대왕물고기 최종전) tuning, kept apart from 오늘의 낚시 so each can be harder or easier.
+     * The first time it is read it copies today's 낚시 numbers, 20m further out, which is how the final battle played before.
+     */
+    val giantFish: FishTune
+        get() {
+            val tune = FishTune(prefs, "giant_")
+            if (!prefs.contains("giant_fishGoal")) dailyFish.let { d ->
+                tune.goal = d.goal; tune.start = (d.start - FishTune.GIANT_FURTHER).coerceAtLeast(1)
+                tune.right = d.right; tune.wrong = d.wrong; tune.rightTyping = d.rightTyping; tune.wrongTyping = d.wrongTyping
+                tune.combo = d.combo; tune.drainStart = d.drainStart; tune.drainEnd = d.drainEnd
+            }
+            return tune
+        }
+
+    fun fishTune(giant: Boolean): FishTune = if (giant) giantFish else dailyFish
+
     var fishTries: Int
         get() = prefs.getInt("fishTries", 0)
         set(v) = prefs.edit().putInt("fishTries", v).apply()
@@ -347,3 +336,52 @@ val FISH_MIX_DEFAULT = listOf(80, 20, 0)
 
 /** The mix the giant battle used before it could be chosen. */
 val GIANT_MIX_DEFAULT = listOf(60, 25, 0, 15)
+
+/**
+ * One fishing game's numbers. Distances are stored as the old time values: distance = goal - start,
+ * and the line snaps once the fish is goal metres away. key prefix "" = 오늘의 낚시, "giant_" = 대양 원정.
+ */
+class FishTune(private val prefs: android.content.SharedPreferences, private val p: String) {
+    val isGiant: Boolean get() = p.isNotEmpty()
+    private fun int(key: String, def: Int) = prefs.getInt(p + key, def)
+    private fun put(key: String, v: Int) = prefs.edit().putInt(p + key, v).apply()
+
+    var start: Int
+        get() = int("fishStart", 100)
+        set(v) = put("fishStart", v)
+    var goal: Int
+        get() = int("fishGoal", 200)
+        set(v) = put("fishGoal", v)
+    var right: Int
+        get() = int("fishRight", 5)
+        set(v) = put("fishRight", v)
+    var wrong: Int
+        get() = int("fishWrong", 3)
+        set(v) = put("fishWrong", v)
+    /** 빈칸·듣고 쓰기 take longer to answer, so they have their own +/-; unset = 객관식 +2m / same −. */
+    var rightTyping: Int
+        get() = int("fishRightTyping", right + 2)
+        set(v) = put("fishRightTyping", v)
+    var wrongTyping: Int
+        get() = int("fishWrongTyping", wrong)
+        set(v) = put("fishWrongTyping", v)
+    /** Extra metres on every 3rd right answer in a row ('릴 감기'). */
+    var combo: Int
+        get() = int("fishCombo", 3)
+        set(v) = put("fishCombo", v)
+    /** How many tenths of a metre the line loses each second, at the start and close to the catch. */
+    var drainStart: Int
+        get() = int("fishDrainStart", 5)
+        set(v) = put("fishDrainStart", v)
+    var drainEnd: Int
+        get() = int("fishDrainEnd", 12)
+        set(v) = put("fishDrainEnd", v)
+
+    /** How far away the fish starts, in metres. */
+    val startDistance: Int get() = goal - start
+
+    companion object {
+        /** The 원정 최종전 starts this much further out than 오늘의 낚시 at the same 난이도. */
+        const val GIANT_FURTHER = 20
+    }
+}

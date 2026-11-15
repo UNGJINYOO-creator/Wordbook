@@ -63,7 +63,9 @@ object DeviceStatus {
         "rewards" to "보상 목록",
     )
 
-    fun label(key: String): String = LABELS[key] ?: "기타 설정 ($key)"
+    fun label(key: String): String = LABELS[key]
+        ?: key.removePrefix("giant_").takeIf { key.startsWith("giant_") }?.let { LABELS[it] }?.let { "원정 " + it.removePrefix("낚시 ") }
+        ?: "기타 설정 ($key)"
 
     private fun sha(s: String) = MessageDigest.getInstance("SHA-1").digest(s.toByteArray()).joinToString("") { "%02x".format(it) }
 
