@@ -187,6 +187,7 @@ private fun LockWordScreen(session: Int, onClose: () -> Unit) {
 
 @Composable
 private fun SwipeCard(word: Word, open: Boolean, onTap: () -> Unit, onAnswer: (Srs.Result) -> Unit) {
+    val mode = LockCard.show(LocalContext.current)
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
@@ -274,11 +275,18 @@ private fun SwipeCard(word: Word, open: Boolean, onTap: () -> Unit, onAnswer: (S
         ) {
             Text(word.text, fontSize = 40.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2B3A4F), textAlign = TextAlign.Center)
             Spacer(Modifier.height(24.dp))
-            if (open) {
+            // 설정 '보이는 방식': 전부 보이기 / 뜻만 (예문은 톡) / 가리기 (톡 하면 전부).
+            val showMeaning = open || mode != LockCard.Show.HIDE
+            val showExample = open || mode == LockCard.Show.ALL
+            if (showMeaning) {
                 PosMeaning(word.pos, word.meaning, fontSize = 22.sp, badgeSize = 13.sp)
                 if (word.example.isNotBlank()) {
                     Spacer(Modifier.height(14.dp))
-                    ExampleText(word.example, fontSize = 14.sp)
+                    if (showExample) {
+                        ExampleText(word.example, fontSize = 15.sp)
+                    } else {
+                        Text("톡 누르면 예문이 보여요", fontSize = 14.sp, color = Color(0xFF8A97AB))
+                    }
                 }
             } else {
                 Text("톡 누르면 뜻이 보여요", fontSize = 16.sp, color = Color(0xFF8A97AB))

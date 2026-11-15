@@ -685,6 +685,8 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         // A 객관식 answer picked faster than the 찍기 limit (설정, default 1초) is a guess: no stars, no goal, no right rate.
         val guessed = mode.isChoice && answerMs in 1 until settings.guessMs
         if (guessed && answer != Answer.UNKNOWN) celebrate("너무 빨라요! 뜻을 읽고 골라요 🙂", sound = false)
+        // 뜻 카드 swipes for the lock screen's 최근 공부한 단어 (quiz answers are read from the answer log).
+        if (mode == StudyMode.CARD && !test) com.wordbook.app.data.RecentStudy.note(app, word.id, answer != Answer.MASTERED)
         if (mode != StudyMode.CARD) {
             answerLog.add(
                 AnswerEntry(

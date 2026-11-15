@@ -86,6 +86,7 @@ fun LockCardSettings(on: Boolean, hide: Boolean, onOn: (Boolean) -> Unit, onHide
         showing = LockCard.showing(context)
     }
     Column(Modifier.fillMaxWidth()) {
+        LockWordChoices(onHide)
         BigLockScreenSettings(tick) { tick++ }
         Text(
             "🔔 알림 카드",
@@ -107,9 +108,6 @@ fun LockCardSettings(on: Boolean, hide: Boolean, onOn: (Boolean) -> Unit, onHide
             }
         }
         if (on) {
-            SwitchRow("뜻 가려 두기", "처음엔 단어만 보이고, 카드를 아래로 펼치면 뜻이 보여요", hide) {
-                LockCard.setHideMeaning(context, it); onHide(it)
-            }
             val status = when {
                 problem != null -> "⚠️ ${problem}. 아래 '알림 설정 열기'에서 켜 주세요."
                 showing -> "✅ 지금 알림창에 단어 카드가 있어요 · 오늘 잠금화면에서 ${LockCard.todayCount(context)}개 공부"
@@ -228,6 +226,32 @@ private fun BigLockScreenSettings(tick: Int, onChange: () -> Unit) {
                 },
                 Modifier.fillMaxWidth().padding(top = 6.dp),
             )
+        }
+    }
+}
+
+/** For both the big screen and the card: what shows before a tap, and which words come up. */
+@Composable
+private fun LockWordChoices(onHide: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    var show by remember { mutableStateOf(LockCard.show(context)) }
+    var recent by remember { mutableStateOf(LockCard.fromRecent(context)) }
+    var days by remember { mutableIntStateOf(LockCard.recentDays(context)) }
+    Labeled("보이는 방식", "전부 보이기 = 단어·뜻·예문이 처음부터 한 번에. 가리기는 톡 해야 뜻이 나와서 시험처럼 쓸 수 있어요") {
+        Choice(show, LockCard.Show.entries.map { it to it.label }) {
+            show = it; LockCard.setShow(context, it); onHide(it == LockCard.Show.HIDE)
+        }
+    }
+    Labeled("나오는 단어", "최근 공부한 단어는 틀리거나 헷갈린 단어가 먼저 나와요. 공부한 단어가 없으면 복습할 단어가 나와요") {
+        Choice(recent, listOf(true to "최근 공부한 단어", false to "복습 차례 단어")) {
+            recent = it; LockCard.setFromRecent(context, it)
+        }
+    }
+    if (recent) {
+        Labeled("최근 며칠") {
+            Choice(days, listOf(1 to "1일", 3 to "3일", 7 to "7일")) {
+                days = it; LockCard.setRecentDays(context, it)
+            }
         }
     }
 }
