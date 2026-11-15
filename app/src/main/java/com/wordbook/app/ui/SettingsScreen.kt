@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -88,6 +89,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
     var open by rememberSaveable { mutableStateOf<String?>(null) }
     // Settings home shows 3 tiles; a tile opens its page. Plain remember: coming back to the tab starts on the home again.
     var page by remember { mutableStateOf<String?>(null) }
+    // '자세한 설정도 보기': off = each page shows only the boxes most people use. Kept on this device only.
+    val uiPrefs = remember { context.getSharedPreferences("settings_ui", android.content.Context.MODE_PRIVATE) }
+    var detail by remember { mutableStateOf(uiPrefs.getBoolean("detail", false)) }
+    val setDetail = { on: Boolean -> detail = on; uiPrefs.edit().putBoolean("detail", on).apply() }
     BackHandler(enabled = page != null) { page = null; open = null }
     // Changes are kept at once; when the settings tab is left and something changed, send it to the family's other devices.
     val prefSnapshot = { listOf("study", "alerts", "rewards").joinToString("|") { context.getSharedPreferences(it, android.content.Context.MODE_PRIVATE).all.toString() } }
@@ -286,16 +291,37 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             }
                         }
                     }
-                    var academy by remember { mutableStateOf(academySummary(settings)) }
-                    Group("📚 학원 단어 우선", academy, open == "academy", { toggle("academy") }) {
-                        Body { AcademySettings(settings) { academy = academySummary(settings) } }
+                    val wordsSummary = {
+                        (if (settings.academyFirst) "학원 단어 먼저" else "학원·기본 섞어서") + " · " +
+                            (if (settings.gradOn) "졸업 단어 가끔만" else "졸업 단어 꺼 둠")
                     }
-                    var graduate by remember { mutableStateOf(graduateSummary(settings)) }
-                    Group("🎓 졸업 단어", graduate, open == "graduate", { toggle("graduate") }) {
-                        Body { GraduateSettings(settings) { graduate = graduateSummary(settings) } }
+                    var words by remember { mutableStateOf(wordsSummary()) }
+                    // 학원 단어 우선 + 졸업 단어 (+ 종합단어장 비율 when detailed): everything that decides which words come up.
+                    Group("📖 어떤 단어가 나올까", words, open == "words", { toggle("words") }) {
+                        Body {
+                            AcademySettings(settings, study = true, games = false) { words = wordsSummary() }
+                            HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                            Text("🎓 졸업 단어", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                            GraduateSettings(settings) { words = wordsSummary() }
+                            if (detail) {
+                                HorizontalDivider(Modifier.padding(vertical = 12.dp))
+                                Text("📚 종합단어장", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+                                Text(
+                                    "최근 넣은 단어를 얼마나 내고, 나머지는 복습할 때가 된 것과 자주 틀린 단어로 채워요.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline,
+                                )
+                                Labeled("최근 추가 단어 비율", "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제") {
+                                    NumberChoice(recentShare, Opt.recentShare, "%", 100) { recentShare = it; settings.recentShare = it }
+                                }
+                                Labeled("며칠 안에 넣은 단어를 '최근'으로 볼까요?") {
+                                    NumberChoice(recentDays, Opt.recentDays, "일", 60) { recentDays = it; settings.recentDays = it }
+                                }
+                            }
+                        }
                     }
                     Group(
-                        "📚 학습 방법",
+                        "✏️ 공부 순서",
                         modes.joinToString(" → ") { it.label } + " · " + (if (size > 0) "${size}장씩" else "전부"),
                         open == "study", { toggle("study") },
                     ) {
@@ -311,22 +337,27 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             modes = m; staged = st; settings.modes = m; settings.staged = st
                         }
                         Body {
-                            Labeled("빈칸 난이도", "자동은 잘 외운 단어일수록 빈칸이 늘어나요") {
+                            Labeled("한 번에 학습할 카드") {
+                                NumberChoice(size, Opt.session, "장", 999, min = 0) { size = it; settings.sessionSize = it }
+                            }
+                            if (detail) Labeled("빈칸 난이도", "자동은 잘 외운 단어일수록 빈칸이 늘어나요") {
                                 Choice(blank, BlankLevel.entries.map { it to it.label }) { blank = it; settings.blankLevel = it }
                             }
-                            if (StudyMode.DICTATION in modes) {
+                            if (detail && StudyMode.DICTATION in modes) {
                                 Labeled("듣고 쓰기에서 '패스'를 누르면 빈칸으로", "소리가 꺼져 있으면 듣고 쓰기는 자동으로 빈칸 문제로 바뀌어요") {
                                     Choice(pass, DictationPass.entries.map { it to it.label }) { pass = it; settings.dictationPass = it }
                                 }
                             }
-                            Labeled("한 번에 학습할 카드") {
-                                NumberChoice(size, Opt.session, "장", 999, min = 0) { size = it; settings.sessionSize = it }
-                            }
-                            Labeled("시험 문제 수") {
+                            if (detail) Labeled("시험 문제 수") {
                                 NumberChoice(testSize, Opt.test, "문제", 200) { testSize = it; settings.testSize = it }
                             }
                         }
                     }
+                    Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide, com.wordbook.app.data.LockScreen.enabled(context)), open == "lock", { toggle("lock") }) {
+                        Body { LockCardSettings(lockOn, lockHide, { lockOn = it }, { lockHide = it }) }
+                    }
+                    DetailSwitch(detail, "카드와 소리 · 학습 고급(카드 반복·타이머·찍기 막기) · 빈칸 난이도 · 시험 문제 수 · 종합단어장 비율", setDetail)
+                    if (detail) {
                     Group(
                         "🃏 카드와 소리",
                         listOf(
@@ -353,12 +384,9 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             }
                         }
                     }
-                    Group("🔒 잠금화면 단어", lockCardSummary(lockOn, lockHide, com.wordbook.app.data.LockScreen.enabled(context)), open == "lock", { toggle("lock") }) {
-                        Body { LockCardSettings(lockOn, lockHide, { lockOn = it }, { lockHide = it }) }
-                    }
                     Group(
                         "⚙️ 학습 고급",
-                        "카드 ${hand}장씩 돌리기 · 최근 단어 ${recentShare}% · ${idle}초 멈춤",
+                        "카드 ${hand}장씩 돌리기 · ${idle}초 멈춤 · 찍기 막기",
                         open == "advanced", { toggle("advanced") },
                     ) {
                         Body {
@@ -378,19 +406,6 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 repeatMissed = it; settings.repeatMissed = it
                             }
                             Spacer(Modifier.height(12.dp))
-                            Text("종합단어장", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                            Text(
-                                "최근 넣은 단어를 얼마나 내고, 나머지는 복습할 때가 된 것과 자주 틀린 단어로 채워요.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline,
-                            )
-                            Labeled("최근 추가 단어 비율", "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제") {
-                                NumberChoice(recentShare, Opt.recentShare, "%", 100) { recentShare = it; settings.recentShare = it }
-                            }
-                            Labeled("며칠 안에 넣은 단어를 '최근'으로 볼까요?") {
-                                NumberChoice(recentDays, Opt.recentDays, "일", 60) { recentDays = it; settings.recentDays = it }
-                            }
-                            Spacer(Modifier.height(12.dp))
                             Text("타이머 멈춤", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                             Labeled("이 시간 동안 화면을 안 건드리면 학습 시간이 멈춰요") {
                                 NumberChoice(idle, Opt.idle, "초", 600, min = 5) { idle = it; settings.idleSeconds = it }
@@ -406,6 +421,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 modifier = Modifier.padding(top = 12.dp),
                             )
                         }
+                    }
                     }
                 }
                 if (page == "game") {
@@ -441,6 +457,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             FishTuneEditor(settings.giantFish) { giantLevel = it }
                             GiantMixEditor(settings)
                         }
+                    }
+                    var academyGames by remember { mutableStateOf(academyGameSummary(settings)) }
+                    Group("🌴 학원 단어·열대 바다", academyGames, open == "academyGames", { toggle("academyGames") }) {
+                        Body { AcademySettings(settings, study = false, games = true) { academyGames = academyGameSummary(settings) } }
                     }
                     Group("🎁 보상 쿠폰", if (rewardCount > 0) "보상 ${rewardCount}개" else "아직 보상이 없어요", open == "reward", { toggle("reward") }) {
                         Body {
@@ -580,7 +600,8 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             }
                         }
                     }
-                    Group("🧹 진도 초기화", "처음부터 다시 하고 싶을 때", open == "reset", { toggle("reset") }) {
+                    DetailSwitch(detail, "🧹 진도 초기화", setDetail)
+                    if (detail) Group("🧹 진도 초기화", "처음부터 다시 하고 싶을 때", open == "reset", { toggle("reset") }) {
                         Body { ResetEditor() }
                     }
                 }
@@ -613,8 +634,8 @@ private fun SettingsHome(
     if (com.wordbook.app.net.Updater.available.value != null) {
         Box(Modifier.padding(horizontal = 16.dp)) { UpdateCard() }
     }
-    HomeTile("📚", "공부 설정", "하루 목표 · 학습 순서 · 카드와 소리 · 잠금화면 단어", studySummary, Color(0xFFE3F0FF)) { onPage("study") }
-    HomeTile("🎣", "게임과 보상", "낚시 난이도 · 도전 횟수 · 대왕물고기 · 보상 쿠폰", gameSummary, Color(0xFFE2F7EF)) { onPage("game") }
+    HomeTile("📚", "공부 설정", "하루 목표 · 어떤 단어 · 공부 순서 · 잠금화면 단어", studySummary, Color(0xFFE3F0FF)) { onPage("study") }
+    HomeTile("🎣", "게임과 보상", "오늘의 낚시 · 대양 원정 · 열대 바다 · 보상 쿠폰", gameSummary, Color(0xFFE2F7EF)) { onPage("game") }
     HomeTile("👨‍👩‍👧", "부모님 관리", "잠금 · 테스트 모드 · 텔레그램 · AI 키 · 동기화·백업 · 초기화 · 업데이트", parentSummary, Color(0xFFFFF1DC)) { onPage("parent") }
     Column(
         Modifier
@@ -637,6 +658,27 @@ private fun SettingsHome(
         color = MaterialTheme.colorScheme.outline,
         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
     )
+}
+
+/** '자세한 설정도 보기': one switch per page that shows the boxes most people never need. */
+@Composable
+private fun DetailSwitch(on: Boolean, inside: String, onChange: (Boolean) -> Unit) {
+    Row(
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxWidth()
+            .background(Color(0xFFFFF7E0), RoundedCornerShape(16.dp))
+            .clickable { onChange(!on) }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("🔧 자세한 설정도 보기", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = Color(0xFF7A5200))
+            Text(if (on) "아래에 나와 있어요: $inside" else "켜면 나와요: $inside", style = MaterialTheme.typography.bodySmall, color = Color(0xFF7A5200))
+        }
+        Spacer(Modifier.width(8.dp))
+        Switch(checked = on, onCheckedChange = onChange)
+    }
 }
 
 /** One big settings tile: emoji, name, what is inside, and the current values. */

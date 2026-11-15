@@ -106,6 +106,7 @@ restart()
 tap("복습·통계"); shot("16-review"); scroll(); shot("17-review-scrolled")
 tap("설정", exact=True); shot("18-settings")
 tap("부모님 관리"); shot("18b-settings-parent")
+tap("자세한 설정도 보기")
 if tap("진도 초기화"):
     shot("19-settings-reset")
 scroll(); shot("20-settings-bottom")

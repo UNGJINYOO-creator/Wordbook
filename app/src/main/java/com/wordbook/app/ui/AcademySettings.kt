@@ -35,12 +35,18 @@ fun academySummary(settings: StudySettings): String = listOf(
     "열대 " + if (settings.tropicalMode == TropicalMode.DECK) settings.tropicalMode.label else "${settings.tropicalChunk}단어마다",
 ).joinToString(" · ")
 
+/** The 학원 단어 parts that belong to the games: 낚시 문제 비율, 작살, 열대 바다. */
+fun academyGameSummary(settings: StudySettings): String = listOf(
+    "낚시 " + (FishMixes.firstOrNull { it.first == settings.fishMix }?.second ?: settings.fishMix.joinToString("·")),
+    "열대 " + if (settings.tropicalMode == TropicalMode.DECK) settings.tropicalMode.label else "${settings.tropicalChunk}단어마다",
+).joinToString(" · ")
+
 /**
  * 📚 학원 단어 우선: which added decks count, and how 오늘 학습, 오늘의 낚시, 대양 원정 and the 열대 바다 use them.
  * Every value is saved at once.
  */
 @Composable
-fun AcademySettings(settings: StudySettings, onChange: () -> Unit = {}) {
+fun AcademySettings(settings: StudySettings, study: Boolean = true, games: Boolean = true, onChange: () -> Unit = {}) {
     val context = LocalContext.current
     // Added decks (name → word count), read from the database.
     var decks by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
@@ -62,6 +68,7 @@ fun AcademySettings(settings: StudySettings, onChange: () -> Unit = {}) {
     var tropical by remember { mutableStateOf(settings.tropicalMode) }
     var chunk by remember { mutableIntStateOf(settings.tropicalChunk) }
     Column(Modifier.fillMaxWidth()) {
+        if (study) {
         Text(
             "직접 추가한 단어장(학원·시험대비 등)이 주 학습 단어예요. 기본 1800단어는 그 뒤에 채워져요.",
             style = MaterialTheme.typography.bodySmall,
@@ -86,6 +93,8 @@ fun AcademySettings(settings: StudySettings, onChange: () -> Unit = {}) {
                 max = it; settings.academyMax = it; onChange()
             }
         }
+        }
+        if (games) {
         Text("🎣 오늘의 낚시", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp))
         Labeled("문제 비율", "오늘 배운 단어 · 예전 학원 단어 · 기본 1800단어") {
             Choice(mix, FishMixes, recommended = FISH_MIX_DEFAULT) { mix = it; settings.fishMix = it; onChange() }
@@ -106,6 +115,7 @@ fun AcademySettings(settings: StudySettings, onChange: () -> Unit = {}) {
                     chunk = it; settings.tropicalChunk = it; onChange()
                 }
             }
+        }
         }
     }
 }
