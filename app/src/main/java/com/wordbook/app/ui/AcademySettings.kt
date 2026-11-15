@@ -31,13 +31,13 @@ private val FishMixes = listOf(
 
 fun academySummary(settings: StudySettings): String = listOf(
     if (settings.academyFirst) "학원 단어 먼저" else "섞어서",
-    FishMixes.firstOrNull { it.first == settings.fishMix }?.second ?: settings.fishMix.joinToString("·"),
+    FishMixes.firstOrNull { it.first == settings.fishMix }?.second ?: settings.fishMix.let { "오늘 ${it[0]} · 학원 ${it[1]} · 기본 ${it[2]}" },
     "열대 " + if (settings.tropicalMode == TropicalMode.DECK) settings.tropicalMode.label else "${settings.tropicalChunk}단어마다",
 ).joinToString(" · ")
 
 /** The 학원 단어 parts that belong to the games: 낚시 문제 비율, 작살, 열대 바다. */
 fun academyGameSummary(settings: StudySettings): String = listOf(
-    "낚시 " + (FishMixes.firstOrNull { it.first == settings.fishMix }?.second ?: settings.fishMix.joinToString("·")),
+    "낚시 " + (FishMixes.firstOrNull { it.first == settings.fishMix }?.second ?: settings.fishMix.let { "오늘 ${it[0]} · 학원 ${it[1]} · 기본 ${it[2]}" }),
     "열대 " + if (settings.tropicalMode == TropicalMode.DECK) settings.tropicalMode.label else "${settings.tropicalChunk}단어마다",
 ).joinToString(" · ")
 
@@ -97,7 +97,7 @@ fun AcademySettings(settings: StudySettings, study: Boolean = true, games: Boole
         if (games) {
         Text("🎣 오늘의 낚시", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp))
         Labeled("문제 비율", "오늘 배운 단어 · 예전 학원 단어 · 기본 1800단어") {
-            Choice(mix, FishMixes, recommended = FISH_MIX_DEFAULT) { mix = it; settings.fishMix = it; onChange() }
+            RatioBar(mix, listOf("오늘", "학원", "기본"), FISH_MIX_DEFAULT) { mix = it; settings.fishMix = it; onChange() }
         }
         Text("⛵ 대양 원정", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp))
         SwitchRow("학원 단어도 작살로", "학원 단어를 외우고 오늘의 낚시에 성공하면 지금 물고기의 빈칸이 🟩로 채워지고, 최종전에도 나와요", giant) {
