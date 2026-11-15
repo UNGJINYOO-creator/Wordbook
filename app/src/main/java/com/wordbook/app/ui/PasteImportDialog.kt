@@ -239,16 +239,17 @@ private fun PasteInput(text: String, onText: (String) -> Unit, intoOneDeck: Bool
             if (text.isNotEmpty()) TextButton(onClick = { onText("") }) { Text("지우기") }
             else TextButton(onClick = { onText(EXAMPLE) }) { Text("예시 보기") }
         }
+        // The next button sits above the text box (형: buttons at the top, not under the phone's bottom bar).
+        Button(onClick = onNext, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
+            Text("다음: 단어 확인하기")
+        }
+        Spacer(Modifier.height(10.dp))
         OutlinedTextField(
             value = text,
             onValueChange = onText,
             placeholder = { Text(EXAMPLE, color = MaterialTheme.colorScheme.outline) },
             modifier = Modifier.fillMaxWidth().weight(1f),
         )
-        Spacer(Modifier.height(10.dp))
-        Button(onClick = onNext, enabled = text.isNotBlank(), modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)) {
-            Text("다음: 단어 확인하기")
-        }
     }
 }
 
@@ -272,6 +273,12 @@ private fun PastePreview(
             )
             OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) { Text("다시 붙여넣기") }
             return@Column
+        }
+        Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("다시 붙여넣기") }
+            Button(onClick = onSave, enabled = chosen > 0, modifier = Modifier.weight(1.4f).heightIn(min = 52.dp)) {
+                Text("${chosen}개 저장")
+            }
         }
         Text(
             "단어장 ${deckCount}개 · 단어 ${chosen}개" + if (look > 0) " · 확인할 단어 ${look}개" else "",
@@ -306,12 +313,6 @@ private fun PastePreview(
                     }
                 }
                 itemsIndexed(d.rows, key = { j, _ -> "word-$di-$j" }) { _, r -> PasteRowView(r, onEdit) }
-            }
-        }
-        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onBack, modifier = Modifier.weight(1f).heightIn(min = 52.dp)) { Text("다시 붙여넣기") }
-            Button(onClick = onSave, enabled = chosen > 0, modifier = Modifier.weight(1.4f).heightIn(min = 52.dp)) {
-                Text("${chosen}개 저장")
             }
         }
     }

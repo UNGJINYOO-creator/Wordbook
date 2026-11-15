@@ -452,16 +452,6 @@ fun ScanScreen(
                 },
             )
         },
-        bottomBar = {
-            if (vm.candidates.isNotEmpty()) {
-                PrimaryButton(
-                    "단어 ${selectedCount}개 저장",
-                    { vm.save { id -> savedDeckId = id } },
-                    Modifier.padding(16.dp).navigationBarsPadding(),
-                    enabled = selectedCount > 0 && !vm.busy,
-                )
-            }
-        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Row(Modifier.padding(16.dp, 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -494,6 +484,13 @@ fun ScanScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
+            // 저장 sits at the top (형: not under the phone's bottom bar).
+            PrimaryButton(
+                "단어 ${selectedCount}개 저장",
+                { vm.save { id -> savedDeckId = id } },
+                Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                enabled = selectedCount > 0 && !vm.busy,
+            )
             if (!vm.busy) {
                 // 저장 전 요약: what goes in, what still needs a look, what was fixed or left out.
                 val parts = listOfNotNull(
