@@ -1,6 +1,27 @@
 package com.wordbook.app.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -11,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -63,8 +85,12 @@ fun CustomNumber(current: Int, presets: List<Int>, suffix: String, max: Int, min
     )
 }
 
-/** A few preset chips plus a 직접 입력 field; wraps onto the next line instead of being cut off. */
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * A number setting: at most two buttons ('전부'/'끔'/'무제한' and '정하기') and a slider for the number.
+ * The recommended value is shown beside the number ("⭐ 추천 20장", tap to use it) and as a ⭐ on the bar.
+ * [options] are the old preset chips: a value ≤ 0 is the special choice, the rest set the bar's range.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NumberChoice(
     current: Int,
@@ -75,19 +101,94 @@ fun NumberChoice(
     recommended: Int? = null,
     onSet: (Int) -> Unit,
 ) {
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.Center,
-    ) {
-        options.forEach { (n, label) ->
-            FilterChip(
-                selected = current == n,
-                onClick = { onSet(n) },
-                label = { Text(if (n == recommended) "⭐$label" else label) },
-                modifier = Modifier.align(Alignment.CenterVertically),
-            )
+    // The one non-number choice (끔 / 전부 / 무제한 / 필요 없음): -1, or 0 except for clock hours where 0 is midnight.
+    val special = options.firstOrNull { it.first < 0 } ?: options.firstOrNull { it.first == 0 && suffix != "시" }
+    val presets = options.map { it.first }.filter { it != special?.first }.ifEmpty { listOf(min.coerceAtLeast(1)) }
+    val top = presets.max()
+    // Bar range and step: about 2.5× the biggest old preset, in steps that keep the bar easy to hit.
+    val step: Int
+    val lo: Int
+    var hi: Int
+    when (suffix) {
+        "시" -> { step = 1; lo = 0; hi = 23 }
+        "%" -> { step = 10; lo = 10; hi = 100 }
+        else -> {
+            val raw = top * 5 / 2
+            step = when {
+                raw <= 40 -> 1
+                raw <= 100 -> 5
+                raw <= 300 -> 10
+                else -> 50
+            }
+            lo = if (step == 1) min.coerceAtLeast(1) else maxOf(step, min)
+            hi = minOf(max, ((raw + step - 1) / step) * step)
         }
-        CustomNumber(current, options.map { it.first }, suffix, max, min, onSet)
+    }
+    if (current > hi) hi = minOf(max, ((current + step - 1) / step) * step)
+    hi = maxOf(hi, lo + step)
+    fun label(v: Int): String = when {
+        special != null && v == special.first -> special.second
+        suffix == "시" -> Opt.reminderLabel(v)
+        else -> "$v$suffix"
+    }
+    val isSpecial = special != null && current == special.first
+    // The number used when 정하기 is tapped: the recommended one, else the middle preset.
+    val pick = recommended?.takeIf { it != special?.first } ?: presets.getOrNull(presets.size / 2) ?: lo
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (special != null) {
+                SingleChoiceSegmentedButtonRow(Modifier.weight(1f)) {
+                    SegmentedButton(
+                        selected = isSpecial,
+                        onClick = { onSet(special.first) },
+                        shape = SegmentedButtonDefaults.itemShape(0, 2),
+                    ) { Text(special.second) }
+                    SegmentedButton(
+                        selected = !isSpecial,
+                        onClick = { if (isSpecial) onSet(pick) },
+                        shape = SegmentedButtonDefaults.itemShape(1, 2),
+                    ) { Text(if (isSpecial) "정하기" else label(current)) }
+                }
+            } else {
+                Text(label(current), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            }
+            if (recommended != null) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "⭐ 추천 " + label(recommended),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF7A5200),
+                    modifier = Modifier
+                        .background(Color(0xFFFFF3C4), RoundedCornerShape(10.dp))
+                        .clickable { onSet(recommended) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        if (!isSpecial) {
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+                val rec = recommended?.takeIf { it != special?.first && it in lo..hi }
+                if (rec != null) {
+                    // Slider thumbs travel inside about 10dp of padding on each side.
+                    val travel = maxWidth - 20.dp
+                    val x = 10.dp + travel * ((rec - lo).toFloat() / (hi - lo)) - 7.dp
+                    Text("⭐", style = MaterialTheme.typography.labelSmall, modifier = Modifier.offset(x = x, y = 36.dp))
+                }
+                Slider(
+                    value = current.coerceIn(lo, hi).toFloat(),
+                    onValueChange = { f ->
+                        val v = (lo + Math.round((f - lo) / step) * step).coerceIn(lo, hi).coerceIn(min, max)
+                        if (v != current) onSet(v)
+                    },
+                    valueRange = lo.toFloat()..hi.toFloat(),
+                    steps = ((hi - lo) / step - 1).coerceAtLeast(0),
+                )
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
+                Text(label(lo), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline, modifier = Modifier.weight(1f))
+                Text(label(hi), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            }
+        }
     }
 }
 
@@ -311,7 +412,7 @@ fun ParentAlerts(settings: StudySettings) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Column {
         Labeled("🌙 저녁 리포트 보내는 시간", "하루 한 통: 세 줄 요약, 약한 부분, 낚시·원정·시험 결과를 짧게 모아서 보내요") {
-            NumberChoice(reportHour, Opt.reportHour, "시", 23, min = 0) {
+            NumberChoice(reportHour, Opt.reportHour, "시", 23, min = 0, recommended = 21) {
                 reportHour = it; settings.reportHour = it; com.wordbook.app.data.EveningReport.schedule(context)
             }
         }
@@ -613,5 +714,89 @@ fun AiEditor(onChange: () -> Unit = {}) {
             }) { Text("🗑 키 지우기") }
         }
         status?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+    }
+}
+
+/**
+ * Three shares that always add up to 100, as one coloured bar with two handles (steps of 10).
+ * Drag or tap near a handle to move it; the ⭐ tag puts back the recommended split.
+ */
+@Composable
+fun RatioBar(values: List<Int>, names: List<String>, recommended: List<Int>?, onSet: (List<Int>) -> Unit) {
+    val colors = listOf(Color(0xFF1565C0), Color(0xFF2E9E6E), Color(0xFFE89A1A))
+    val total = values.sum().coerceAtLeast(1)
+    // Handle positions in percent: end of the 1st share, end of the 2nd.
+    val a = Math.round(values[0] * 100f / total / 10) * 10
+    val b = (Math.round((values[0] + values[1]) * 100f / total / 10) * 10).coerceAtLeast(a)
+    val cur = rememberUpdatedState(a to b)
+    val set = rememberUpdatedState(onSet)
+    Column(Modifier.fillMaxWidth()) {
+        if (recommended != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Text(
+                    "⭐ 추천 " + recommended.joinToString("·"),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color(0xFF7A5200),
+                    modifier = Modifier
+                        .background(Color(0xFFFFF3C4), RoundedCornerShape(10.dp))
+                        .clickable { onSet(recommended) }
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                )
+            }
+        }
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .height(40.dp)
+                .pointerInput(Unit) {
+                    var which = 0
+                    fun pct(x: Float) = (Math.round(x / size.width * 10) * 10).coerceIn(0, 100)
+                    fun move(p: Int) {
+                        val (ca, cb) = cur.value
+                        val na = if (which == 0) p.coerceAtMost(cb) else ca
+                        val nb = if (which == 1) p.coerceAtLeast(ca) else cb
+                        if (na != ca || nb != cb) set.value(listOf(na, nb - na, 100 - nb))
+                    }
+                    fun pickHandle(x: Float) {
+                        val p = x / size.width * 100
+                        val (ca, cb) = cur.value
+                        // Both handles on one spot: go the way of the drag start side.
+                        which = if (kotlin.math.abs(p - ca) < kotlin.math.abs(p - cb) || (ca == cb && p < ca)) 0 else 1
+                    }
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        pickHandle(down.position.x)
+                        move(pct(down.position.x))
+                        drag(down.id) { change -> move(pct(change.position.x)); change.consume() }
+                    }
+                },
+        ) {
+            Row(Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp))) {
+                listOf(a, b - a, 100 - b).forEachIndexed { i, share ->
+                    if (share > 0) {
+                        Box(Modifier.weight(share.toFloat()).fillMaxHeight().background(colors[i]), contentAlignment = Alignment.Center) {
+                            Text(if (share >= 20) "${names[i]} $share" else "$share", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
+                        }
+                    }
+                }
+            }
+            listOf(a, b).forEach { p ->
+                Box(
+                    Modifier
+                        .offset(x = maxWidth * (p / 100f) - 5.dp)
+                        .width(10.dp)
+                        .fillMaxHeight()
+                        .background(Color.White, RoundedCornerShape(4.dp))
+                        .border(2.dp, Color(0xFF10243A), RoundedCornerShape(4.dp)),
+                )
+            }
+        }
+        Text(
+            names.mapIndexed { i, n -> listOf("🟦", "🟩", "🟧")[i] + " " + n }.joinToString("  ") + " · 손잡이를 밀어서 나눠요",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = 4.dp),
+        )
     }
 }

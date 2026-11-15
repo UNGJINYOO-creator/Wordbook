@@ -279,13 +279,13 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                     ) {
                         Body {
                             Labeled("하루 외울 단어", "객관식·빈칸·듣고 쓰기에서 맞힌 단어만 세요. 오늘 학습에 새 단어도 이만큼 나와요.") {
-                                NumberChoice(dailyWords, Opt.dailyWords, "개", 300, min = 0) { dailyWords = it; settings.dailyWords = it }
+                                NumberChoice(dailyWords, Opt.dailyWords, "개", 300, min = 0, recommended = 20) { dailyWords = it; settings.dailyWords = it }
                             }
                             Labeled("하루 최소 학습 시간", "채우면 오늘 목표 달성, 텔레그램으로 결과가 가요") {
-                                NumberChoice(goal, Opt.minutes, "분", 180, min = 0) { goal = it; settings.dailyGoalMinutes = it }
+                                NumberChoice(goal, Opt.minutes, "분", 180, min = 0, recommended = 20) { goal = it; settings.dailyGoalMinutes = it }
                             }
                             Labeled("저녁 알림", "이 시간까지 목표를 못 채우면 알림을 띄워요. 직접 칸은 24시간제 (예: 18)") {
-                                NumberChoice(reminderHour, Opt.reminder, "시", 23, min = 0) {
+                                NumberChoice(reminderHour, Opt.reminder, "시", 23, min = 0, recommended = 20) {
                                     reminderHour = it; settings.reminderHour = it; Reminder.schedule(context)
                                 }
                             }
@@ -312,10 +312,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                     color = MaterialTheme.colorScheme.outline,
                                 )
                                 Labeled("최근 추가 단어 비율", "10문제 중 새 단어 ${recentShare / 10}문제 · 기존 단어 ${10 - recentShare / 10}문제") {
-                                    NumberChoice(recentShare, Opt.recentShare, "%", 100) { recentShare = it; settings.recentShare = it }
+                                    NumberChoice(recentShare, Opt.recentShare, "%", 100, recommended = 90) { recentShare = it; settings.recentShare = it }
                                 }
                                 Labeled("며칠 안에 넣은 단어를 '최근'으로 볼까요?") {
-                                    NumberChoice(recentDays, Opt.recentDays, "일", 60) { recentDays = it; settings.recentDays = it }
+                                    NumberChoice(recentDays, Opt.recentDays, "일", 60, recommended = 7) { recentDays = it; settings.recentDays = it }
                                 }
                             }
                         }
@@ -338,7 +338,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                         }
                         Body {
                             Labeled("한 번에 학습할 카드") {
-                                NumberChoice(size, Opt.session, "장", 999, min = 0) { size = it; settings.sessionSize = it }
+                                NumberChoice(size, Opt.session, "장", 999, min = 0, recommended = 20) { size = it; settings.sessionSize = it }
                             }
                             if (detail) Labeled("빈칸 난이도", "자동은 잘 외운 단어일수록 빈칸이 늘어나요") {
                                 Choice(blank, BlankLevel.entries.map { it to it.label }) { blank = it; settings.blankLevel = it }
@@ -349,7 +349,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 }
                             }
                             if (detail) Labeled("시험 문제 수") {
-                                NumberChoice(testSize, Opt.test, "문제", 200) { testSize = it; settings.testSize = it }
+                                NumberChoice(testSize, Opt.test, "문제", 200, recommended = 20) { testSize = it; settings.testSize = it }
                             }
                         }
                     }
@@ -397,10 +397,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 color = MaterialTheme.colorScheme.outline,
                             )
                             Labeled("한 번에 돌리는 카드") {
-                                NumberChoice(hand, Opt.hand, "장", 100) { hand = it; settings.handSize = it }
+                                NumberChoice(hand, Opt.hand, "장", 100, recommended = 20) { hand = it; settings.handSize = it }
                             }
                             Labeled("헷갈려요 몇 번이면 빠질까요?", "외웠어요는 1번이면 빠져요") {
-                                NumberChoice(leave, Opt.leave, "번", 9) { leave = it; settings.knownToLeave = it }
+                                NumberChoice(leave, Opt.leave, "번", 9, recommended = 3) { leave = it; settings.knownToLeave = it }
                             }
                             SwitchRow("틀린 카드 반복", "모르는 카드는 알 때까지 다시 나와요 (끄면 한 번씩만)", repeatMissed) {
                                 repeatMissed = it; settings.repeatMissed = it
@@ -408,7 +408,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             Spacer(Modifier.height(12.dp))
                             Text("타이머 멈춤", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
                             Labeled("이 시간 동안 화면을 안 건드리면 학습 시간이 멈춰요") {
-                                NumberChoice(idle, Opt.idle, "초", 600, min = 5) { idle = it; settings.idleSeconds = it }
+                                NumberChoice(idle, Opt.idle, "초", 600, min = 5, recommended = 20) { idle = it; settings.idleSeconds = it }
                             }
                             Spacer(Modifier.height(12.dp))
                             Text("찍기 막기", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -438,7 +438,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             )
                             FishTuneEditor(settings.dailyFish) { fishLevel = it }
                             Labeled("하루 도전 횟수") {
-                                NumberChoice(fishTries, Opt.tries, "번", 20, min = 0) { fishTries = it; settings.fishTries = it }
+                                NumberChoice(fishTries, Opt.tries, "번", 20, min = 0, recommended = 0) { fishTries = it; settings.fishTries = it }
                             }
                         }
                     }
