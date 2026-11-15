@@ -32,7 +32,7 @@ private val FishMixes = listOf(
 fun academySummary(settings: StudySettings): String = listOf(
     if (settings.academyFirst) "학원 단어 먼저" else "섞어서",
     FishMixes.firstOrNull { it.first == settings.fishMix }?.second ?: settings.fishMix.joinToString("·"),
-    "열대 ${settings.tropicalMode.label}",
+    "열대 " + if (settings.tropicalMode == TropicalMode.DECK) settings.tropicalMode.label else "${settings.tropicalChunk}단어마다",
 ).joinToString(" · ")
 
 /**
@@ -60,6 +60,7 @@ fun AcademySettings(settings: StudySettings, onChange: () -> Unit = {}) {
     var mix by remember { mutableStateOf(settings.fishMix) }
     var giant by remember { mutableStateOf(settings.giantAcademy) }
     var tropical by remember { mutableStateOf(settings.tropicalMode) }
+    var chunk by remember { mutableIntStateOf(settings.tropicalChunk) }
     Column(Modifier.fillMaxWidth()) {
         Text(
             "직접 추가한 단어장(학원·시험대비 등)이 주 학습 단어예요. 기본 1800단어는 그 뒤에 채워져요.",
@@ -97,6 +98,13 @@ fun AcademySettings(settings: StudySettings, onChange: () -> Unit = {}) {
         Labeled("물고기 한 마리가 지키는 단어", tropical.description) {
             Choice(tropical, TropicalMode.entries.map { it to it.label }, recommended = TropicalMode.BATCH) {
                 tropical = it; settings.tropicalMode = it; onChange()
+            }
+        }
+        if (tropical != TropicalMode.DECK) {
+            Labeled("물고기 한 마리당 단어 수", "단어를 넣으면 이 숫자마다 열대 물고기가 저절로 생겨요. 종류는 30가지예요.") {
+                NumberChoice(chunk, listOf(20 to "20개", 50 to "50개", 100 to "100개"), "개", 1000, min = 5, recommended = Priority.CHUNK) {
+                    chunk = it; settings.tropicalChunk = it; onChange()
+                }
             }
         }
     }

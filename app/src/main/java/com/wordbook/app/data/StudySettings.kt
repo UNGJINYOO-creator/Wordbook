@@ -325,6 +325,11 @@ class StudySettings(context: Context) {
         get() = runCatching { TropicalMode.valueOf(prefs.getString("tropicalMode", null)!!) }.getOrDefault(TropicalMode.BATCH)
         set(v) = prefs.edit().putString("tropicalMode", v.name).apply()
 
+    /** Words per 열대 바다 fish (a big 묶음 is split into fish of this size). */
+    var tropicalChunk: Int
+        get() = prefs.getInt("tropicalChunk", Priority.CHUNK).coerceAtLeast(1)
+        set(v) = prefs.edit().putInt("tropicalChunk", v.coerceAtLeast(1)).apply()
+
     companion object {
         /** 1000 → "1", 1500 → "1.5". */
         fun secondsText(ms: Long): String = if (ms % 1000 == 0L) "${ms / 1000}" else "${ms / 1000}.${ms % 1000 / 100}"

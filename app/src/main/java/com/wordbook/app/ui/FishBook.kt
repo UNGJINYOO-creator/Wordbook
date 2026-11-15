@@ -235,7 +235,7 @@ private fun LazyGridScope.tropicalTab(giant: GiantState?, onDetail: (Detail) -> 
         "tropical",
         "🌴 열대 바다 ${caught}/${fish.size}마리",
         if (fish.isEmpty()) "단어장을 추가하면 그 단어들을 지키는 열대 물고기가 나타나요."
-        else "추가한 학원 단어를 지키는 물고기예요. 퀴즈에서 맞힌 단어마다 칸이 채워지고, 다 채우면 잡혀요. 누르면 단어 칸을 볼 수 있어요.",
+        else "추가한 학원 단어를 지키는 물고기예요. 단어를 넣으면 새 물고기가 저절로 생겨요. 퀴즈에서 맞힌 단어마다 칸이 채워지고, 다 채우면 잡혀요. 누르면 단어 칸을 볼 수 있어요.",
     )
     fish.forEach { f ->
         item(key = "tropical_${f.index}") {

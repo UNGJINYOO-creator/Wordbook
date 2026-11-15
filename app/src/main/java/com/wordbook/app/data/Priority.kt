@@ -2,8 +2,9 @@ package com.wordbook.app.data
 
 /** How the 열대 바다 fish split the 학원 words. */
 enum class TropicalMode(val label: String, val description: String) {
-    BATCH("추가한 묶음마다", "한 번에 넣은 단어(예: 심슨 50개)마다 물고기 한 마리"),
-    EVERY_30("30단어씩", "추가한 순서대로 30개씩 끊어서 한 마리"),
+    BATCH("추가한 묶음마다", "한 번에 넣은 단어마다 물고기가 생기고, 묶음이 크면 정한 단어 수마다 한 마리씩 (심슨 3000개 → 100단어씩이면 30마리)"),
+    /** Kept as EVERY_30 so saved choices still read; the size is [StudySettings.tropicalChunk]. */
+    EVERY_30("정한 단어 수씩", "단어장과 상관없이 추가한 순서대로 정한 단어 수마다 한 마리"),
     DECK("단어장마다", "단어장 하나에 물고기 한 마리 (단어가 늘면 칸도 늘어요)"),
 }
 
@@ -63,13 +64,15 @@ class Priority(words: List<Word>, decks: List<Deck>, offNames: Set<String>) {
 
         /** Words put in within this long of each other, in the same deck, are one 묶음. */
         const val BATCH_GAP = 30L * 60 * 1000
-        const val CHUNK = 30
+        /** Words per 열대 바다 fish unless the parent sets another number. */
+        const val CHUNK = 100
 
         /** The 열대 바다 groups of the added words, oldest first; each group is one fish. */
-        fun tropicalGroups(words: List<Word>, mode: TropicalMode): List<List<Word>> {
+        fun tropicalGroups(words: List<Word>, mode: TropicalMode, chunk: Int = CHUNK): List<List<Word>> {
+            val size = chunk.coerceAtLeast(1)
             val sorted = words.sortedWith(compareBy({ it.addedAt }, { it.id }))
             return when (mode) {
-                TropicalMode.EVERY_30 -> sorted.chunked(CHUNK)
+                TropicalMode.EVERY_30 -> sorted.chunked(size)
                 TropicalMode.DECK -> sorted.groupBy { it.deckId }.values.toList()
                 TropicalMode.BATCH -> {
                     val out = mutableListOf<MutableList<Word>>()
@@ -81,7 +84,8 @@ class Priority(words: List<Word>, decks: List<Deck>, offNames: Set<String>) {
                         }
                         if (cur.isNotEmpty()) out += cur
                     }
-                    out.sortedBy { it.first().addedAt }
+                    // A big 묶음 (3000 words at once) becomes one fish per [size] words.
+                    out.sortedBy { it.first().addedAt }.flatMap { it.chunked(size) }
                 }
             }
         }
