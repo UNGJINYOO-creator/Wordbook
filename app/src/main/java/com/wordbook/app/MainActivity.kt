@@ -75,6 +75,8 @@ class MainActivity : FragmentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             com.wordbook.app.data.ProgressReset.finishUndo(applicationContext)
             DefaultDecks.seed(applicationContext)
+            // 🎓 졸업 단어: the easy words and words already right many days in a row, once.
+            com.wordbook.app.data.Graduate.seed(applicationContext)
             // After seeding, so built-in words are matched rather than added twice.
             com.wordbook.app.sync.FamilySync.run(applicationContext)
             // Times set on the other device (reminder, evening report) take effect here too.

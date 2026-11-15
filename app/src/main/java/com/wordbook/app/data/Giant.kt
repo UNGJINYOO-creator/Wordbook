@@ -120,9 +120,10 @@ class Giant(private val context: Context) {
         val builtInIds = builtIn.map { it.id }.toSet()
         val byId = all.associateBy { it.id }
         val extraHit = extra(index).mapNotNull { byId[it] }.take(words.size)
-        val blockHit = words.count { it.id in done }
+        // 🎓 졸업 words (the easy ones) count as hit, since they no longer come up in 오늘 학습.
+        val blockHit = words.count { it.id in done || it.graduated }
         val hit = (blockHit + extraHit.size).coerceAtMost(words.size)
-        val pendingIds = words.filter { it.id in learnedToday && it.id !in done }.map { it.id }.toSet()
+        val pendingIds = words.filter { it.id in learnedToday && it.id !in done && !it.graduated }.map { it.id }.toSet()
         val credited = (species.indices).flatMap { extra(it) }.toSet()
         val todayAcademy = if (settings.giantAcademy && words.isNotEmpty()) {
             all.filter { it.id in learnedToday && it.id !in builtInIds && it.id !in credited && !it.excluded && priority.first(it) }
@@ -149,7 +150,7 @@ class Giant(private val context: Context) {
             hit = hit,
             pending = pendingIds.size + extraPending.size,
             caught = (0 until species.size).count { caughtAt(it) > 0 },
-            hitIds = words.filter { it.id in done }.map { it.id }.toSet(),
+            hitIds = words.filter { it.id in done || it.graduated }.map { it.id }.toSet(),
             pendingIds = pendingIds,
             extraHit = extraHit,
             extraPending = extraPending,

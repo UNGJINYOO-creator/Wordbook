@@ -330,6 +330,26 @@ class StudySettings(context: Context) {
         get() = prefs.getInt("tropicalChunk", Priority.CHUNK).coerceAtLeast(1)
         set(v) = prefs.edit().putInt("tropicalChunk", v.coerceAtLeast(1)).apply()
 
+    /** 🎓 졸업 단어 on; off (e.g. before a test) treats graduated words like any other word for a while. */
+    var gradOn: Boolean
+        get() = prefs.getBoolean("gradOn", true)
+        set(v) = prefs.edit().putBoolean("gradOn", v).apply()
+
+    /** Days in a row a word must be answered right to graduate. */
+    var gradStreak: Int
+        get() = prefs.getInt("gradStreak", 10)
+        set(v) = prefs.edit().putInt("gradStreak", v).apply()
+
+    /** Full spellings needed in that run. */
+    var gradSpell: Int
+        get() = prefs.getInt("gradSpell", 5)
+        set(v) = prefs.edit().putInt("gradSpell", v).apply()
+
+    /** Graduated words left out completely instead of coming up rarely. */
+    var gradHide: Boolean
+        get() = prefs.getBoolean("gradHide", false)
+        set(v) = prefs.edit().putBoolean("gradHide", v).apply()
+
     companion object {
         /** 1000 → "1", 1500 → "1.5". */
         fun secondsText(ms: Long): String = if (ms % 1000 == 0L) "${ms / 1000}" else "${ms / 1000}.${ms % 1000 / 100}"

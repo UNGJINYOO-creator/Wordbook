@@ -146,6 +146,8 @@ object LockCard {
         val word = dao.getWord(wordId)
         if (word != null) {
             var updated = Srs.apply(word, result)
+            // 몰라요 on a 🎓 졸업 word: back to normal study.
+            if (result == Srs.Result.WRONG) updated = Graduate.miss(updated)
             // Like a card swipe, 외웠어요 is only a claim until a quiz answer on a later day confirms it.
             if (result == Srs.Result.EASY) {
                 MasterCheck(context).add(word.id)
@@ -168,7 +170,7 @@ object LockCard {
         if (ids.isEmpty()) return emptyList()
         val dao = AppDatabase.get(context).wordDao()
         val byId = dao.getAllWords().filter { !it.excluded }.associateBy { it.id }
-        val words = ids.mapNotNull { byId[it] }
+        val words = Graduate.thin(ids.mapNotNull { byId[it] }, Graduate.rules(context))
         if (words.isEmpty()) return emptyList()
         val skip = recentIds(context).take((words.size - n).coerceIn(0, 8)).toSet()
         val fresh = words.filter { it.id !in skip }
@@ -180,11 +182,12 @@ object LockCard {
         recentWords(context, n).takeIf { it.isNotEmpty() }?.let { return it }
         val dao = AppDatabase.get(context).wordDao()
         val recent = recentIds(context)
-        val due = dao.getDueWords(System.currentTimeMillis()).sortedBy { it.dueAt }.filter { it.id !in recent }
+        val grad = Graduate.rules(context)
+        val due = Graduate.reviews(dao.getDueWords(System.currentTimeMillis()), grad).sortedBy { it.dueAt }.filter { it.id !in recent }
         val fresh = dao.getNewWords(40).filter { it.id !in recent }.shuffled()
         val picked = (due + fresh).distinctBy { it.id }.take(n)
         if (picked.size >= n) return picked
-        val rest = dao.getAllWords().filter { !it.excluded && !it.mastered && picked.none { p -> p.id == it.id } }.shuffled()
+        val rest = Graduate.thin(dao.getAllWords().filter { !it.excluded && !it.mastered && picked.none { p -> p.id == it.id } }, grad).shuffled()
         return (picked + rest).take(n)
     }
 
@@ -193,11 +196,12 @@ object LockCard {
         recentWords(context, 1).firstOrNull()?.let { return it }
         val dao = AppDatabase.get(context).wordDao()
         val recent = recentIds(context)
-        val due = dao.getDueWords(System.currentTimeMillis()).sortedBy { it.dueAt }
+        val grad = Graduate.rules(context)
+        val due = Graduate.reviews(dao.getDueWords(System.currentTimeMillis()), grad).sortedBy { it.dueAt }
         due.firstOrNull { it.id !in recent }?.let { return it }
         dao.getNewWords(30).filter { it.id !in recent }.randomOrNull()?.let { return it }
         val all = dao.getAllWords().filter { !it.excluded }
-        return all.filter { !it.mastered && it.id !in recent }.randomOrNull()
+        return Graduate.thin(all.filter { !it.mastered && it.id !in recent }, grad).randomOrNull()
             ?: all.filter { it.id !in recent }.randomOrNull()
             ?: all.randomOrNull()
     }
