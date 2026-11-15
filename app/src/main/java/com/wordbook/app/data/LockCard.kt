@@ -41,7 +41,36 @@ object LockCard {
     fun enabled(context: Context) = prefs(context).getBoolean("on", false)
 
     /** Keep the meaning folded: the collapsed card shows only the word, the meaning when opened. */
-    fun hideMeaning(context: Context) = prefs(context).getBoolean("hide", false)
+    fun hideMeaning(context: Context) = show(context) == Show.HIDE
+
+    /** What the lock screen shows before a tap: everything, the meaning only, or only the word. */
+    enum class Show(val label: String) { ALL("전부 보이기"), MEANING("뜻만"), HIDE("가리기") }
+
+    fun show(context: Context): Show {
+        val p = prefs(context)
+        p.getString("show", null)?.let { v -> Show.entries.firstOrNull { it.name == v }?.let { return it } }
+        // Before this setting: '뜻 가려 두기' on means HIDE.
+        return if (p.getBoolean("hide", false)) Show.HIDE else Show.ALL
+    }
+
+    fun setShow(context: Context, v: Show) {
+        prefs(context).edit().putString("show", v.name).apply()
+        refreshAsync(context)
+    }
+
+    /** Where the words come from: recently studied in the app (default), or the review schedule. */
+    fun fromRecent(context: Context) = prefs(context).getBoolean("recentSource", true)
+    fun setFromRecent(context: Context, v: Boolean) {
+        prefs(context).edit().putBoolean("recentSource", v).putLong("current", 0L).apply()
+        refreshAsync(context)
+    }
+
+    /** How many days back counts as 최근: 1, 3 or 7. */
+    fun recentDays(context: Context) = prefs(context).getInt("recentDays", 3)
+    fun setRecentDays(context: Context, d: Int) {
+        prefs(context).edit().putInt("recentDays", d).putLong("current", 0L).apply()
+        refreshAsync(context)
+    }
 
     fun setEnabled(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean("on", on).apply()
@@ -96,7 +125,11 @@ object LockCard {
         scheduleAlarm(context)
         val dao = AppDatabase.get(context).wordDao()
         val current = prefs(context).getLong("current", 0L).takeIf { it > 0 }?.let { dao.getWord(it) }
-        val word = current?.takeIf { !it.excluded } ?: pick(context)
+        // With 최근 공부한 단어, a card left from before the latest study gives way to a recent word.
+        val keep = current?.takeIf { w ->
+            !w.excluded && (!fromRecent(context) || RecentStudy.ordered(context, recentDays(context)).let { it.isEmpty() || w.id in it })
+        }
+        val word = keep ?: pick(context)
         show(context, word)
     }
 
@@ -125,8 +158,26 @@ object LockCard {
         }
     }
 
+    /**
+     * Recently studied words for the lock screen, missed and 헷갈려요 first, skipping the last few shown
+     * (fewer when there are only a few recent words, so they still come round). Empty when nothing was studied.
+     */
+    private suspend fun recentWords(context: Context, n: Int): List<Word> {
+        if (!fromRecent(context)) return emptyList()
+        val ids = RecentStudy.ordered(context, recentDays(context))
+        if (ids.isEmpty()) return emptyList()
+        val dao = AppDatabase.get(context).wordDao()
+        val byId = dao.getAllWords().filter { !it.excluded }.associateBy { it.id }
+        val words = ids.mapNotNull { byId[it] }
+        if (words.isEmpty()) return emptyList()
+        val skip = recentIds(context).take((words.size - n).coerceIn(0, 8)).toSet()
+        val fresh = words.filter { it.id !in skip }
+        return (fresh + words).distinctBy { it.id }.take(n)
+    }
+
     /** [n] words for the big lock screen, picked the same way as the card, without repeats. */
     suspend fun pickWords(context: Context, n: Int): List<Word> {
+        recentWords(context, n).takeIf { it.isNotEmpty() }?.let { return it }
         val dao = AppDatabase.get(context).wordDao()
         val recent = recentIds(context)
         val due = dao.getDueWords(System.currentTimeMillis()).sortedBy { it.dueAt }.filter { it.id !in recent }
@@ -139,6 +190,7 @@ object LockCard {
 
     /** Due reviews first (oldest first), then new words, then any word, skipping the last few shown. */
     private suspend fun pick(context: Context): Word? {
+        recentWords(context, 1).firstOrNull()?.let { return it }
         val dao = AppDatabase.get(context).wordDao()
         val recent = recentIds(context)
         val due = dao.getDueWords(System.currentTimeMillis()).sortedBy { it.dueAt }
@@ -150,8 +202,9 @@ object LockCard {
             ?: all.randomOrNull()
     }
 
-    private fun recentIds(context: Context): Set<Long> =
-        prefs(context).getString("recent", "")!!.split(",").mapNotNull { it.toLongOrNull() }.toSet()
+    /** Last shown first. */
+    private fun recentIds(context: Context): List<Long> =
+        prefs(context).getString("recent", "")!!.split(",").mapNotNull { it.toLongOrNull() }
 
     private fun markShown(context: Context, id: Long) {
         val list = (listOf(id) + prefs(context).getString("recent", "")!!.split(",").mapNotNull { it.toLongOrNull() })
@@ -217,9 +270,10 @@ object LockCard {
         } else {
             prefs(context).edit().putLong("current", word.id).apply()
             val meaning = meaningText(word.pos, word.meaning)
-            val example = word.example.takeIf { it.isNotBlank() }?.let { "\n\n$it" } ?: ""
+            val mode = show(context)
+            val example = word.example.takeIf { it.isNotBlank() && mode != Show.MEANING }?.let { "\n$it" } ?: ""
             builder.setContentTitle(word.text)
-                .setContentText(if (hideMeaning(context)) "👀 아래로 펼치면 뜻이 보여요" else meaning)
+                .setContentText(if (mode == Show.HIDE) "👀 아래로 펼치면 뜻이 보여요" else meaning)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(meaning + example).setBigContentTitle(word.text))
                 .addAction(0, "몰라요", answerIntent(context, word.id, Srs.Result.WRONG))
                 .addAction(0, "헷갈려요", answerIntent(context, word.id, Srs.Result.RIGHT))
