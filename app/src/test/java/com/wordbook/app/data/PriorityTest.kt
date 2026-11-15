@@ -78,7 +78,16 @@ class PriorityTest {
         val exam = (81L..90L).map { academy(it, deck = 3, at = 900_000_000 + it) }
         val groups = Priority.tropicalGroups(monday + friday + exam, TropicalMode.BATCH)
         assertEquals(listOf(50, 30, 10), groups.map { it.size })
-        assertEquals(listOf(30, 30, 30), Priority.tropicalGroups(monday + friday + exam, TropicalMode.EVERY_30).map { it.size })
+        assertEquals(listOf(30, 30, 30), Priority.tropicalGroups(monday + friday + exam, TropicalMode.EVERY_30, 30).map { it.size })
         assertEquals(listOf(80, 10), Priority.tropicalGroups(monday + friday + exam, TropicalMode.DECK).map { it.size })
+    }
+
+    @Test
+    fun threeThousandSimpsonWordsMakeThirtyFish() {
+        val simpson = (1L..3000L).map { academy(it, at = 1_000_000 + it) }
+        val groups = Priority.tropicalGroups(simpson, TropicalMode.BATCH)
+        assertEquals(30, groups.size)
+        assertTrue(groups.all { it.size == 100 })
+        assertEquals(listOf(50), Priority.tropicalGroups(simpson.take(50), TropicalMode.BATCH).map { it.size })
     }
 }

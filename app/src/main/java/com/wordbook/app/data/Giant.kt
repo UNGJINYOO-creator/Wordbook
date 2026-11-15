@@ -131,7 +131,7 @@ class Giant(private val context: Context) {
         val room = (words.size - hit - pendingIds.size).coerceAtLeast(0)
         val extraPending = todayAcademy.take(room)
         val right = tropicalRight
-        val groups = Priority.tropicalGroups(all.filter { priority.added(it) && !it.excluded }, settings.tropicalMode)
+        val groups = Priority.tropicalGroups(all.filter { priority.added(it) && !it.excluded }, settings.tropicalMode, settings.tropicalChunk)
         val deckNames = decks.associate { it.id to it.name }
         val day = java.text.SimpleDateFormat("M월 d일", java.util.Locale.KOREA)
         val tropicalFish = groups.mapIndexed { i, g ->
@@ -195,6 +195,12 @@ class Giant(private val context: Context) {
         )
 
         /** 열대 바다: one fish for each group of 학원 words, round and round. */
-        val tropical = listOf("🐠 흰동가리", "🐡 가시복", "🐠 나비고기", "🦐 공작갯가재", "🐙 파란고리문어", "🦞 닭새우", "🐠 쏠배감펭", "🐠 블루탱")
+        val tropical = listOf(
+            // The first 8 stay in place so fish already caught keep their names.
+            "🐠 흰동가리", "🐡 가시복", "🐠 나비고기", "🦐 공작갯가재", "🐙 파란고리문어", "🦞 닭새우", "🐠 쏠배감펭", "🐠 블루탱",
+            "🐠 해마", "🐟 만타가오리", "🐢 푸른바다거북", "🐠 엔젤피시", "🐠 파랑비늘돔", "🐠 만다린피시", "🐡 노랑거북복",
+            "🦐 청소새우", "🐙 흉내문어", "🐟 곰치", "🐟 바라쿠다", "🦈 흑기흉상어", "🐬 스피너돌고래", "🐢 매부리바다거북",
+            "🐌 갯민숭달팽이", "⭐ 불가사리", "🦀 유령게", "🐠 놀래기", "🐟 날치", "🐠 트리거피시", "🦑 갑오징어", "🐚 앵무조개",
+        )
     }
 }
