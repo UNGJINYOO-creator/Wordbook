@@ -171,8 +171,6 @@ class Giant(private val context: Context) {
         /** The one-line story of the current hunt. */
         fun story(f: GiantFish): String =
             "${subject(f.name)} ${f.ocean.title}에서 영단어 100개를 지키고 있어요. 단어를 하나 외울 때마다 작살 한 방!"
-        /** The final battle starts this far out (the line snaps at the usual distance). */
-        const val FINAL_START = 120
         const val CATCH_GIFT = 50
 
         val species = listOf(

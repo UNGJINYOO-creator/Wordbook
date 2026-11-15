@@ -102,18 +102,22 @@ class Fishing(context: Context) {
         return kg > best
     }
 
-    val start: Double get() = settings.fishStart.toDouble()
-    val goal: Double get() = maxOf(settings.fishGoal, settings.fishStart + 10).toDouble()
-    val right: Double get() = settings.fishRight.toDouble()
-    val wrong: Double get() = settings.fishWrong.toDouble()
-    val rightTyping: Double get() = settings.fishRightTyping.toDouble()
-    val wrongTyping: Double get() = settings.fishWrongTyping.toDouble()
-    val comboBonus: Double get() = settings.fishCombo.toDouble()
+    /** true while the 대양 원정 final battle is played: it has its own 난이도. */
+    var giant = false
+    private val tune: FishTune get() = settings.fishTune(giant)
+
+    val start: Double get() = tune.start.toDouble()
+    val goal: Double get() = tune.let { maxOf(it.goal, it.start + 10) }.toDouble()
+    val right: Double get() = tune.right.toDouble()
+    val wrong: Double get() = tune.wrong.toDouble()
+    val rightTyping: Double get() = tune.rightTyping.toDouble()
+    val wrongTyping: Double get() = tune.wrongTyping.toDouble()
+    val comboBonus: Double get() = tune.combo.toDouble()
 
     /** How fast the line runs out: faster as the fish gets close, since it fights harder. */
     fun drainPerSecond(seconds: Double): Double {
-        val from = settings.fishDrainStart / 10.0
-        val to = settings.fishDrainEnd / 10.0
+        val from = tune.drainStart / 10.0
+        val to = tune.drainEnd / 10.0
         return from + (to - from) * ((seconds - start) / (goal - start)).coerceIn(0.0, 1.0)
     }
 

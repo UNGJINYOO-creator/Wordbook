@@ -61,6 +61,7 @@ import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.Backup
 import com.wordbook.app.data.BlankLevel
 import com.wordbook.app.data.DictationPass
+import com.wordbook.app.data.FishTune
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Reminder
 import com.wordbook.app.data.Sfx
@@ -230,9 +231,8 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 var soundEffects by remember { mutableStateOf(settings.soundEffects) }
                 var comboSound by remember { mutableIntStateOf(settings.comboSound) }
                 var fishLevel by remember { mutableStateOf(settings.fishLevel()) }
+                var giantLevel by remember { mutableStateOf(settings.giantFish.level()) }
                 var fishTries by remember { mutableIntStateOf(settings.fishTries) }
-                var fishDetail by remember { mutableStateOf(false) }
-                var fishReset by remember { mutableIntStateOf(0) }
                 var rewardCount by remember { mutableIntStateOf(game.rewards.size) }
                 var aiOn by remember { mutableStateOf(com.wordbook.app.ml.AiKey.ready(context)) }
                 var hand by remember { mutableIntStateOf(settings.handSize) }
@@ -254,7 +254,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                             if (goal > 0) "${goal}분" else null,
                             modes.joinToString("→") { it.label },
                         ).filterNotNull().joinToString(" · "),
-                        gameSummary = "낚시 ${fishLevel?.name ?: "직접 조정"} · " + (if (fishTries > 0) "하루 ${fishTries}번" else "횟수 무제한") + " · 보상 ${rewardCount}개",
+                        gameSummary = "낚시 ${fishLevel?.name ?: "직접 조정"} · 원정 ${giantLevel?.name ?: "직접 조정"} · " + (if (fishTries > 0) "하루 ${fishTries}번" else "횟수 무제한") + " · 보상 ${rewardCount}개",
                         parentSummary = listOf(
                             if (hasPin) "잠금 켬" else "잠금 없음",
                             if (settings.telegramToken.isNotBlank() && settings.telegramChatId.isNotBlank()) "텔레그램 연결" else "텔레그램 없음",
@@ -406,7 +406,7 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                 }
                 if (page == "game") {
                     Group(
-                        "🎣 단어 낚시 게임",
+                        "🎣 오늘의 낚시",
                         "난이도 ${fishLevel?.name ?: "직접 조정"} · " + (if (fishTries > 0) "하루 ${fishTries}번" else "횟수 무제한"),
                         open == "fish", { toggle("fish") },
                     ) {
@@ -416,53 +416,26 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline,
                             )
-                            Labeled("난이도") {
-                                Choice(fishLevel, FishLevels.map { it to it.name }) { level ->
-                                    fishLevel = level; level?.let(settings::applyFish); fishReset++
-                                }
-                            }
+                            FishTuneEditor(settings.dailyFish) { fishLevel = it }
                             Labeled("하루 도전 횟수") {
                                 NumberChoice(fishTries, Opt.tries, "번", 20, min = 0) { fishTries = it; settings.fishTries = it }
                             }
+                        }
+                    }
+                    Group(
+                        "⛵ 대양 원정 (대왕물고기)",
+                        "최종전 난이도 ${giantLevel?.name ?: "직접 조정"}",
+                        open == "giant", { toggle("giant") },
+                    ) {
+                        Body {
+                            Text(
+                                "100칸을 다 채우면 하는 대왕물고기 최종전이에요. 오늘의 낚시와 따로 난이도를 정해요. " +
+                                    "같은 난이도라도 ${FishTune.GIANT_FURTHER}m 더 멀리서 시작해요.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
+                            FishTuneEditor(settings.giantFish) { giantLevel = it }
                             GiantMixEditor(settings)
-                            // The numbers stay folded: picking 난이도 is enough for most days.
-                            TextButton(onClick = { fishDetail = !fishDetail }) {
-                                Text(if (fishDetail) "▾ 숫자 직접 조정 접기" else "▸ 숫자 직접 조정 (끌어오는 거리·도망 속도)")
-                            }
-                            if (fishDetail) key(fishReset) {
-                                val changed = { fishLevel = settings.fishLevel() }
-                                Text("✅ 맞히면 끌어오는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                                FishNumber("객관식", "m", settings.fishRight, 0, 60) { settings.fishRight = it; changed() }
-                                FishNumber("빈칸·듣고 쓰기", "m", settings.fishRightTyping, 0, 60) { settings.fishRightTyping = it; changed() }
-                                FishNumber("3개 연속 맞히면 더", "m", settings.fishCombo, 0, 60) { settings.fishCombo = it; changed() }
-                                Text("❌ 틀리면 멀어지는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
-                                FishNumber("객관식", "m", settings.fishWrong, 0, 60) { settings.fishWrong = it; changed() }
-                                FishNumber("빈칸·듣고 쓰기", "m", settings.fishWrongTyping, 0, 60) { settings.fishWrongTyping = it; changed() }
-                                Text(
-                                    "숫자를 지우고 새로 쓰면 바로 저장돼요. 틀릴 때를 크게, 맞힐 때를 작게 하면 어려워져요.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                )
-                            }
-                            if (fishDetail) key(fishReset) {
-                                Text(
-                                    "맞혀서 끌어오는 거리가 도망가는 거리보다 넉넉해야 낚을 수 있어요.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline,
-                                )
-                                val changed = { fishLevel = settings.fishLevel() }
-                                // Stored as the old time values: distance = fishGoal - time, so the line snaps at fishGoal metres.
-                                FishNumber("시작 거리", "m", settings.fishGoal - settings.fishStart, 5, 1190) {
-                                    settings.fishStart = (settings.fishGoal - it).coerceAtLeast(1); changed()
-                                }
-                                FishNumber("이만큼 멀어지면 줄이 끊어져요", "m", settings.fishGoal, 20, 1200) {
-                                    val start = settings.fishGoal - settings.fishStart
-                                    settings.fishGoal = it
-                                    settings.fishStart = (it - start).coerceAtLeast(1); changed()
-                                }
-                                FishNumber("처음: 10초마다 도망가는 거리", "m", settings.fishDrainStart, 0, 50) { settings.fishDrainStart = it; changed() }
-                                FishNumber("가까울 때: 10초마다 도망가는 거리", "m", settings.fishDrainEnd, 0, 50) { settings.fishDrainEnd = it; changed() }
-                            }
                         }
                     }
                     Group("🎁 보상 쿠폰", if (rewardCount > 0) "보상 ${rewardCount}개" else "아직 보상이 없어요", open == "reward", { toggle("reward") }) {
@@ -715,6 +688,55 @@ private fun Group(title: String, summary: String, open: Boolean, onToggle: () ->
 @Composable
 private fun Body(content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp), content = content)
+}
+
+/** 난이도 chips plus the folded numbers for one fishing game (오늘의 낚시 or 원정 최종전). */
+@Composable
+private fun FishTuneEditor(tune: FishTune, onLevel: (FishLevel?) -> Unit) {
+    var level by remember { mutableStateOf(tune.level()) }
+    var detail by remember { mutableStateOf(false) }
+    var reset by remember { mutableIntStateOf(0) }
+    val changed = { level = tune.level(); onLevel(level) }
+    Labeled("난이도") {
+        Choice(level, FishLevels.map { it to it.name }) { picked ->
+            picked?.let(tune::applyLevel); changed(); reset++
+        }
+        Text(
+            "${tune.startDistance}m에서 시작 · 맞히면 ${tune.right}m 끌어오고 틀리면 ${tune.wrong}m 멀어져요",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    // The numbers stay folded: picking 난이도 is enough for most days.
+    TextButton(onClick = { detail = !detail }) {
+        Text(if (detail) "▾ 숫자 직접 조정 접기" else "▸ 숫자 직접 조정 (끌어오는 거리·도망 속도)")
+    }
+    if (detail) key(reset) {
+        Text("✅ 맞히면 끌어오는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+        FishNumber("객관식", "m", tune.right, 0, 60) { tune.right = it; changed() }
+        FishNumber("빈칸·듣고 쓰기", "m", tune.rightTyping, 0, 60) { tune.rightTyping = it; changed() }
+        FishNumber("3개 연속 맞히면 더", "m", tune.combo, 0, 60) { tune.combo = it; changed() }
+        Text("❌ 틀리면 멀어지는 거리", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp))
+        FishNumber("객관식", "m", tune.wrong, 0, 60) { tune.wrong = it; changed() }
+        FishNumber("빈칸·듣고 쓰기", "m", tune.wrongTyping, 0, 60) { tune.wrongTyping = it; changed() }
+        Text(
+            "숫자를 지우고 새로 쓰면 바로 저장돼요. 틀릴 때를 크게, 맞힐 때를 작게 하면 어려워져요. " +
+                "맞혀서 끌어오는 거리가 도망가는 거리보다 넉넉해야 낚을 수 있어요.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.outline,
+        )
+        // Stored as the old time values: distance = goal - start, so the line snaps at goal metres.
+        FishNumber("시작 거리", "m", tune.startDistance, 5, 1190) {
+            tune.start = (tune.goal - it).coerceAtLeast(1); changed()
+        }
+        FishNumber("이만큼 멀어지면 줄이 끊어져요", "m", tune.goal, 20, 1200) {
+            val start = tune.startDistance
+            tune.goal = it
+            tune.start = (it - start).coerceAtLeast(1); changed()
+        }
+        FishNumber("처음: 10초마다 도망가는 거리", "m", tune.drainStart, 0, 50) { tune.drainStart = it; changed() }
+        FishNumber("가까울 때: 10초마다 도망가는 거리", "m", tune.drainEnd, 0, 50) { tune.drainEnd = it; changed() }
+    }
 }
 
 /** A labelled number field for the fishing game; the number is saved as it is typed. */

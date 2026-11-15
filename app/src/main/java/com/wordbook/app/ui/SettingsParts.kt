@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.wordbook.app.data.GIANT_MIX_DEFAULT
+import com.wordbook.app.data.FishTune
 import com.wordbook.app.data.Game
 import com.wordbook.app.data.Reward
 import com.wordbook.app.data.StudySettings
@@ -138,19 +139,25 @@ val FishLevels = listOf(
     FishLevel("아주 어려움", 130, 3, 6, 9, 18, rightTyping = 5, wrongTyping = 5, combo = 2),
 )
 
-fun StudySettings.applyFish(level: FishLevel) {
-    // Stored as the old time values: distance = fishGoal - time.
-    fishGoal = 200; fishStart = 200 - level.start
-    fishRight = level.right; fishWrong = level.wrong
-    fishRightTyping = level.rightTyping; fishWrongTyping = level.wrongTyping; fishCombo = level.combo
-    fishDrainStart = level.drainStart; fishDrainEnd = level.drainEnd
+/** The 원정 최종전 keeps the old rule of starting further out than 오늘의 낚시 at the same 난이도. */
+private val FishTune.extraStart: Int get() = if (isGiant) FishTune.GIANT_FURTHER else 0
+
+fun FishTune.applyLevel(level: FishLevel) {
+    goal = 200; start = 200 - level.start - extraStart
+    right = level.right; wrong = level.wrong
+    rightTyping = level.rightTyping; wrongTyping = level.wrongTyping; combo = level.combo
+    drainStart = level.drainStart; drainEnd = level.drainEnd
 }
 
-fun StudySettings.fishLevel(): FishLevel? = FishLevels.firstOrNull {
-    fishGoal == 200 && fishGoal - fishStart == it.start && fishRight == it.right && fishWrong == it.wrong &&
-        fishRightTyping == it.rightTyping && fishWrongTyping == it.wrongTyping && fishCombo == it.combo &&
-        fishDrainStart == it.drainStart && fishDrainEnd == it.drainEnd
+fun FishTune.level(): FishLevel? = FishLevels.firstOrNull {
+    goal == 200 && goal - start == it.start + extraStart && right == it.right && wrong == it.wrong &&
+        rightTyping == it.rightTyping && wrongTyping == it.wrongTyping && combo == it.combo &&
+        drainStart == it.drainStart && drainEnd == it.drainEnd
 }
+
+/** 오늘의 낚시 난이도 (the 설정 길잡이 sets this one; the 원정 has its own in 설정). */
+fun StudySettings.applyFish(level: FishLevel) = dailyFish.applyLevel(level)
+fun StudySettings.fishLevel(): FishLevel? = dailyFish.level()
 
 /** The list of 보상 쿠폰 with a row to add one. */
 @Composable

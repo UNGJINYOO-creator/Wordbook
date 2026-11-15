@@ -55,7 +55,7 @@ private fun applyRecommended(settings: StudySettings) = with(settings) {
     shuffle = true; backFirst = false; textScale = 1f; autoSpeak = true; soundEffects = true
     handSize = 20; knownToLeave = 3; repeatMissed = true
     recentShare = 90; recentDays = 7; idleSeconds = 20
-    applyFish(FishLevels[1]); fishTries = 0
+    applyFish(FishLevels[1]); giantFish.applyLevel(FishLevels[1]); fishTries = 0
 }
 
 /**
