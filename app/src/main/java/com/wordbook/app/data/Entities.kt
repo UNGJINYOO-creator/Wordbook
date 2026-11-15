@@ -70,6 +70,15 @@ data class Word(
     val example: String = "",
     /** ⭐ starred by the child to study on its own; separate from [flagged] (needs a fix). */
     val bookmarked: Boolean = false,
+    /** 🎓 Right quiz answers in a row, at most one a day (see [com.wordbook.app.data.Graduate]). */
+    val streak: Int = 0,
+    /** Words spelled in full (빈칸 with every letter blank, 듣고 쓰기) in that run, at most one a day. */
+    val spellRight: Int = 0,
+    /** Local day numbers of the last counted right answer and full spelling. */
+    val streakDay: Int = 0,
+    val spellDay: Int = 0,
+    /** 🎓 졸업: too easy now, comes up only rarely as a check. */
+    val graduated: Boolean = false,
 )
 
 /** Deck row with counts for the home screen. */

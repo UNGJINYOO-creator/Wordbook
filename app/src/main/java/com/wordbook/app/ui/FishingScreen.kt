@@ -222,8 +222,11 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             val todayIds = stats.learnedToday + wrongNote.ids
             val today = all.filter { it.id in todayIds }
             val studied = all.filter { it.box > 0 && it.id !in todayIds }.shuffled()
-            pool = (today + studied).distinctBy { it.text.lowercase() }
-            if (pool.size < 8) pool = (pool + all.shuffled()).distinctBy { it.text.lowercase() }.take(maxOf(pool.size, 30))
+            // 🎓 졸업 words: only about one in 20 makes it into a game.
+            val grad = com.wordbook.app.data.Graduate.rules(settings)
+            pool = com.wordbook.app.data.Graduate.thin((today + studied).distinctBy { it.text.lowercase() }, grad)
+            if (pool.size < 8) pool = (pool + com.wordbook.app.data.Graduate.thin(all.shuffled(), grad)).distinctBy { it.text.lowercase() }.take(maxOf(pool.size, 30))
+            if (pool.size < 4) pool = (pool + all.shuffled()).distinctBy { it.text.lowercase() }.take(maxOf(pool.size, 30))
             val priority = com.wordbook.app.data.Priority(all, dao.getAllDecks(), settings.priorityOff)
             val (todayPart, older) = pool.partition { it.id in todayIds }
             val (academy, builtIn) = older.partition { priority.first(it) }
@@ -444,6 +447,14 @@ class FishingViewModel(app: Application) : AndroidViewModel(app) {
             if (correct) giantStore.markRight(w.id)
             wrongNote.record(w.id, correct)
             stats.recordAnswer(w.text, correct)
+            // 🎓 졸업 단어: the run of right answers (or a miss) is kept on the word.
+            val spelled = mode == StudyMode.DICTATION || (mode == StudyMode.SPELLING && pattern.none { it.isLetter() })
+            viewModelScope.launch {
+                dao.getWord(w.id)?.let { word ->
+                    val updated = com.wordbook.app.data.Graduate.record(word, correct, spelled, com.wordbook.app.data.Graduate.rules(settings))
+                    if (updated != word) dao.updateWord(updated)
+                }
+            }
         }
         when {
             seconds >= goal -> win()

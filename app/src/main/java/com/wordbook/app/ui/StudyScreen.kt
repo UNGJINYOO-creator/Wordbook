@@ -150,6 +150,9 @@ enum class Answer { KNOWN, MASTERED, UNKNOWN }
 class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewModel(app) {
     private val dao = AppDatabase.get(app).wordDao()
     private val settings = StudySettings(app)
+    /** 🎓 졸업 단어 rules from 설정. */
+    private val grad = com.wordbook.app.data.Graduate.rules(settings)
+    private fun graduated(w: Word) = com.wordbook.app.data.Graduate.active(w, grad)
     /** For the 열대 바다 squares: words answered right in a quiz. */
     private val giantStore = com.wordbook.app.data.Giant(app)
     /** 오늘 학습 with 학원 단어 먼저: these words are dealt before the rest. */
@@ -310,7 +313,7 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             val all = dao.getAllWords()
             pool = all
             sessionWords = when {
-                review -> dao.getDueWords(System.currentTimeMillis())
+                review -> com.wordbook.app.data.Graduate.reviews(dao.getDueWords(System.currentTimeMillis()), grad)
                 wrongOnly -> wrongNote.ids.let { ids -> all.filter { it.id in ids && !it.excluded } }
                 test -> (if (deckId > 0) dao.getWords(deckId) else all).filter { !it.excluded }.shuffled().take(settings.testSize)
                 today -> {
@@ -330,18 +333,18 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                     val picked = com.wordbook.app.data.Priority.todayNew(
                         fresh, priority::first, newPerDay(settings), settings.academyMax, settings.fillBuiltIn, weakness.pos,
                     )
-                    val words = dao.getDueWords(System.currentTimeMillis()) + picked
+                    val words = com.wordbook.app.data.Graduate.reviews(dao.getDueWords(System.currentTimeMillis()), grad) + picked
                     if (settings.academyFirst) firstIds = words.filter { priority.first(it) }.map { it.id }.toSet()
                     words
                 }
-                allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered }.ifEmpty { w } }
+                allDecks -> all.filter { !it.excluded }.let { w -> w.filter { !it.mastered && !graduated(it) }.ifEmpty { w } }
                 else -> {
                     val words = dao.getWords(deckId).filter { !it.excluded }
                     if (words.size >= 4) pool = words
                     // Mastered cards are skipped, unless that leaves nothing to study.
                     val candidates = if (starredOnly) words.filter { it.bookmarked }
                     else if (onlyUnknown) words.filter { !it.known }
-                    else words.filter { !it.mastered }.ifEmpty { words }
+                    else words.filter { !it.mastered && !graduated(it) }.ifEmpty { words }
                     if (dao.getDeck(deckId)?.isCollection == true) {
                         // 종합단어장: mostly recent words, plus the old words that most need a look.
                         val limit = settings.sessionSize.takeIf { it > 0 } ?: COLLECTION_SESSION
@@ -735,6 +738,17 @@ class StudyViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
             )
             answer == Answer.MASTERED -> word.copy(mastered = true, known = true)
             else -> word
+        }.let { w ->
+            // 🎓 졸업 단어: quiz answers count toward the run; a miss anywhere ends it (and graduation).
+            when {
+                mode != StudyMode.CARD && !guessed -> com.wordbook.app.data.Graduate.record(
+                    w, answer != Answer.UNKNOWN,
+                    fullSpelling = mode == StudyMode.DICTATION || (mode == StudyMode.SPELLING && pattern.none { it.isLetter() }),
+                    rules = grad,
+                ).also { if (it.graduated && !w.graduated) celebrate("🎓 졸업! 이제 아주 가끔만 나와요") }
+                mode == StudyMode.CARD && answer == Answer.UNKNOWN && (w.graduated || w.streak > 0) -> com.wordbook.app.data.Graduate.miss(w)
+                else -> w
+            }
         }.let { w ->
             when {
                 // 외웠어요 on a card is only a claim: check it with a quiz question next time.

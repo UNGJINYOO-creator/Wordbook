@@ -36,7 +36,8 @@ object ProgressReset {
         if (choice.words) {
             val words = if (choice.deckIds == null) dao.getAllWords() else choice.deckIds.flatMap { dao.getWords(it) }.distinctBy { it.id }
             dao.updateWords(words.map {
-                it.copy(known = false, mastered = false, correctCount = 0, box = 0, dueAt = 0, wrongCount = 0, intervalMs = 0)
+                it.copy(known = false, mastered = false, correctCount = 0, box = 0, dueAt = 0, wrongCount = 0, intervalMs = 0,
+                    streak = 0, spellRight = 0, streakDay = 0, spellDay = 0, graduated = false)
             })
             val ids = words.map { it.id.toString() }.toSet()
             val history = prefs(context, "history")

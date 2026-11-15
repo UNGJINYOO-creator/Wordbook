@@ -290,6 +290,10 @@ fun SettingsScreen(onAdd: (AddKind) -> Unit = {}) {
                     Group("📚 학원 단어 우선", academy, open == "academy", { toggle("academy") }) {
                         Body { AcademySettings(settings) { academy = academySummary(settings) } }
                     }
+                    var graduate by remember { mutableStateOf(graduateSummary(settings)) }
+                    Group("🎓 졸업 단어", graduate, open == "graduate", { toggle("graduate") }) {
+                        Body { GraduateSettings(settings) { graduate = graduateSummary(settings) } }
+                    }
                     Group(
                         "📚 학습 방법",
                         modes.joinToString(" → ") { it.label } + " · " + (if (size > 0) "${size}장씩" else "전부"),

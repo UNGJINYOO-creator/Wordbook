@@ -126,6 +126,12 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
 
     fun setExcluded(word: Word, excluded: Boolean) = viewModelScope.launch { dao.updateWord(word.copy(excluded = excluded)) }
 
+    /** 🎓 졸업시키기 by hand, or 졸업 취소 (back to normal study, the run started over). */
+    fun setGraduated(word: Word, on: Boolean) = viewModelScope.launch {
+        val now = System.currentTimeMillis()
+        dao.updateWord(if (on) com.wordbook.app.data.Graduate.stretch(word.copy(graduated = true), now) else com.wordbook.app.data.Graduate.miss(word, now))
+    }
+
     fun toggleBookmark(word: Word) = viewModelScope.launch { dao.updateWord(word.copy(bookmarked = !word.bookmarked)) }
 
     fun deleteDeck(onDone: () -> Unit) = viewModelScope.launch {
@@ -151,7 +157,7 @@ class DeckViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMod
     }
 }
 
-private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모르는 것"), STARRED("⭐ 별표"), FLAGGED("수정 필요"), EXCLUDED("뺀 카드") }
+private enum class WordFilter(val label: String) { ALL("전체"), UNKNOWN("모르는 것"), STARRED("⭐ 별표"), FLAGGED("수정 필요"), EXCLUDED("뺀 카드"), GRADUATED("🎓 졸업") }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,6 +264,7 @@ fun DeckScreen(
             WordFilter.STARRED -> words.filter { it.bookmarked }
             WordFilter.FLAGGED -> words.filter { it.flagged }
             WordFilter.EXCLUDED -> words.filter { it.excluded }
+            WordFilter.GRADUATED -> words.filter { it.graduated }
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -289,6 +296,7 @@ fun DeckScreen(
                                 WordFilter.STARRED -> words.count { it.bookmarked }
                                 WordFilter.FLAGGED -> words.count { it.flagged }
                                 WordFilter.EXCLUDED -> words.count { it.excluded }
+                                WordFilter.GRADUATED -> words.count { it.graduated }
                             }
                             if (f == WordFilter.ALL || count > 0 || filter == f) {
                                 FilterChip(
@@ -324,6 +332,7 @@ fun DeckScreen(
                     onToggleMastered = { guard { vm.toggleMastered(word) } },
                     onFlag = { guard { vm.setFlagged(word, !word.flagged) } },
                     onExclude = { guard { vm.setExcluded(word, !word.excluded) } },
+                    onGraduate = { guard { vm.setGraduated(word, !word.graduated) } },
                     onDelete = { guard { vm.deleteWord(word) } },
                 )
             }
@@ -441,6 +450,7 @@ private fun WordRow(
     onToggleMastered: () -> Unit,
     onFlag: () -> Unit,
     onExclude: () -> Unit,
+    onGraduate: () -> Unit,
     onDelete: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -452,6 +462,7 @@ private fun WordRow(
                 else Text(word.text, style = MaterialTheme.typography.titleMedium, modifier = Modifier.alpha(dim))
                 if (word.flagged) Text("  ⚑ 수정 필요", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 if (word.excluded) Text("  학습에서 뺌", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                if (word.graduated) Text("  🎓 졸업", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary)
             }
         },
         supportingContent = {
@@ -494,6 +505,11 @@ private fun WordRow(
                         text = { Text(if (word.excluded) "학습에 다시 넣기" else "학습에서 빼기") },
                         leadingIcon = { Icon(Icons.Default.Block, null) },
                         onClick = { menu = false; onExclude() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (word.graduated) "졸업 취소 (다시 공부하기)" else "🎓 졸업시키기 (아주 가끔만)") },
+                        leadingIcon = { Text("🎓") },
+                        onClick = { menu = false; onGraduate() },
                     )
                     DropdownMenuItem(
                         text = { Text("삭제", color = MaterialTheme.colorScheme.error) },

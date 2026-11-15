@@ -109,7 +109,10 @@ object FamilySync {
             "known" to w.known, "mastered" to w.mastered, "correctCount" to w.correctCount, "box" to w.box,
             "dueAt" to w.dueAt, "wrongCount" to w.wrongCount, "intervalMs" to w.intervalMs, "excluded" to w.excluded,
             "flagged" to w.flagged, "addedAt" to w.addedAt,
-        ) + if (w.bookmarked) mapOf("bookmarked" to true) else emptyMap() // only when set, so older words keep their hash
+        ) + (if (w.bookmarked) mapOf("bookmarked" to true) else emptyMap()) + // only when set, so older words keep their hash
+            (if (w.streak != 0 || w.spellRight != 0 || w.graduated) mapOf(
+                "streak" to w.streak, "spellRight" to w.spellRight, "streakDay" to w.streakDay, "spellDay" to w.spellDay, "graduated" to w.graduated,
+            ) else emptyMap())
         fun wordHash(w: Word, byId: Map<Long, Deck>) = sha(wordFields(w, byId[w.deckId]?.name).values.joinToString("|"))
 
         // 1. Pull what the other devices changed.
@@ -160,6 +163,8 @@ object FamilySync {
                 box = long("box").toInt(), dueAt = long("dueAt"), wrongCount = long("wrongCount").toInt(),
                 intervalMs = long("intervalMs"), excluded = r["excluded"] == true, flagged = r["flagged"] == true,
                 addedAt = long("addedAt"), bookmarked = r["bookmarked"] == true,
+                streak = long("streak").toInt(), spellRight = long("spellRight").toInt(), streakDay = long("streakDay").toInt(),
+                spellDay = long("spellDay").toInt(), graduated = r["graduated"] == true,
             )
             if (local == null) {
                 if (stored(key) != null) return@forEach // deleted here; the deletion goes up below
@@ -204,7 +209,7 @@ object FamilySync {
             // Built-in words nobody has touched yet are the same on every device: not sent until studied,
             // so a new family or a newly joined device doesn't write all 1800 of them.
             val untouched = w.addedAt == 0L && w.text.trim().lowercase() in builtIn && w.box == 0 && !w.known && !w.mastered &&
-                w.correctCount == 0 && w.wrongCount == 0 && !w.excluded && !w.flagged && !w.bookmarked
+                w.correctCount == 0 && w.wrongCount == 0 && !w.excluded && !w.flagged && !w.bookmarked && !w.graduated
             if (untouched && stored(key) == null) {
                 hashes.put(key, h)
             } else if (stored(key) != h) {
