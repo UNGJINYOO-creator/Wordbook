@@ -251,16 +251,6 @@ fun DeckScreen(
                 },
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { guard { showAdd = true } },
-                shape = ButtonShape,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                icon = { Icon(Icons.Default.Add, null) },
-                text = { Text("단어 추가") },
-            )
-        },
     ) { padding ->
         val shown = when (filter) {
             WordFilter.ALL -> words
@@ -271,7 +261,7 @@ fun DeckScreen(
         }
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(bottom = 120.dp),
+            contentPadding = PaddingValues(bottom = 32.dp),
         ) {
             item {
                 Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
@@ -281,6 +271,9 @@ fun DeckScreen(
                         color = MaterialTheme.colorScheme.outline,
                     )
                     Spacer(Modifier.height(12.dp))
+                    // 단어 추가 sits at the top with the other buttons (형: not at the bottom of the screen).
+                    SecondaryButton("➕ 단어 추가", { guard { showAdd = true } }, Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(8.dp))
                     PrimaryButton("학습 시작", { showStudy = true }, enabled = active.isNotEmpty())
                     Spacer(Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -312,7 +305,7 @@ fun DeckScreen(
             if (words.isEmpty()) {
                 item {
                     Text(
-                        "카드가 없어요. 아래 '단어 추가'로 사진을 찍거나 직접 입력해 보세요.",
+                        "카드가 없어요. 위 '➕ 단어 추가'로 사진을 찍거나 직접 입력해 보세요.",
                         modifier = Modifier.padding(24.dp),
                         style = MaterialTheme.typography.bodyMedium,
                     )
