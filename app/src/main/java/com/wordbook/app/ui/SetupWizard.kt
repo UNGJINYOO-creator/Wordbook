@@ -91,7 +91,7 @@ fun SetupWizard(settings: StudySettings, hasPin: Boolean, onSetPin: () -> Unit, 
         WizardStep(
             "① 학습 순서",
             "단어 하나를 어떤 방법으로, 어떤 순서로 공부할지 정해요.",
-            "묶음 하나를 고르세요. 세부 순서는 설정 > 📚 공부 설정 > 학습 방법에서 ▲▼로 바꿀 수 있어요.",
+            "묶음 하나를 고르세요. 세부 순서는 설정 > 📚 공부 설정 > ✏️ 공부 순서에서 ▲▼로 바꿀 수 있어요.",
             "처음 외울 때: 훑어보고 → 카드 → 객관식 → 빈칸 → 듣고 쓰기로 점점 어려워져 오래 기억에 남아요.",
         ) {
             var modes by remember { mutableStateOf(settings.modes) }
